@@ -807,11 +807,11 @@ img{max-width:100%;}
             <input type="file" accept="image/*,.pdf" onchange="handlePuzzleUpload(this)">
             <div class="uz-icon">+</div><strong style="font-size:.8rem;">Upload map image or PDF</strong><p>PNG, JPG or PDF</p>
           </div>
-          <div class="fg"><label>Puzzle name</label><input type="text" id="new-puzzle-name" placeholder="e.g. Africa Map"></div>
+          <div class="fg"><label>Puzzle name</label><input type="text" id="admin-npn" placeholder="e.g. Africa Map"></div>
           <div class="pc-btns">
-            <button class="pc-btn on" id="pub-60" data-pieces="60" onclick="this.classList.toggle('on')"><span class="pn">60</span><span class="pl">Begin</span></button>
-            <button class="pc-btn on" id="pub-100" data-pieces="100" onclick="this.classList.toggle('on')"><span class="pn">100</span><span class="pl">Std</span></button>
-            <button class="pc-btn on" id="pub-500" data-pieces="500" onclick="this.classList.toggle('on')"><span class="pn">500</span><span class="pl">Expert</span></button>
+            <button class="pc-btn on" id="admin-p60" data-pieces="60" onclick="this.classList.toggle('on')"><span class="pn">60</span><span class="pl">Begin</span></button>
+            <button class="pc-btn on" id="admin-p100" data-pieces="100" onclick="this.classList.toggle('on')"><span class="pn">100</span><span class="pl">Std</span></button>
+            <button class="pc-btn on" id="admin-p500" data-pieces="500" onclick="this.classList.toggle('on')"><span class="pn">500</span><span class="pl">Expert</span></button>
           </div>
           <button class="btn btn-gn btn-sm" style="width:100%;margin-top:.6rem;" onclick="adminPublishPuzzle()">Publish →</button>
         </div>
@@ -983,18 +983,15 @@ function adminAssignToSchool(){
   renderPublishedPuzzles();
   alert('Puzzle assigned to school! (demo)');
 }
-// Populate the assign puzzle dropdown when admin puzzles tab opens
-document.addEventListener('DOMContentLoaded',()=>{
+// Refresh admin dropdowns — called explicitly, no polling
+function refreshAdminDropdowns() {
   const sel=document.getElementById('assign-pz-sel');
-  if(sel) setInterval(()=>{
-    sel.innerHTML=PUZZLES.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  },2000);
-  // Populate override user dropdown
+  if(sel) sel.innerHTML=PUZZLES.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const sel2=document.getElementById('assign-school-sel');
   const ou=document.getElementById('override-user');
-  if(ou) setTimeout(()=>{
-    ou.innerHTML='<option value="">Select…</option>'+Object.entries(USERS).filter(([,u])=>u.role!=='admin').map(([em,u])=>`<option value="${em}">${u.name}</option>`).join('');
-  },500);
-});
+  if(ou) ou.innerHTML='<option value="">Select…</option>'+Object.entries(USERS).filter(([,u])=>u.role!=='admin').map(([em,u])=>`<option value="${em}">${u.name}</option>`).join('');
+}
+document.addEventListener('DOMContentLoaded',()=>{ setTimeout(refreshAdminDropdowns, 400); });
 </script>
 
 <script>
@@ -1443,6 +1440,7 @@ function launchPuzzle() {
   PZ.placed = new Array(PZ.total).fill(false);
   PZ.np=0; PZ.nf=0; PZ.refOn=false;
   PZ.factQueue=[...ALL_FACTS].sort(()=>Math.random()-.5); PZ.factIdx=0;
+  PZ.factCycle=0;
 
   // Reset UI
   ['pz-placed','pz-facts'].forEach(id=>document.getElementById(id).textContent='0');
@@ -1673,12 +1671,15 @@ function placePiece(idx,el) {
   document.getElementById('prog-fill').style.width=pct+'%';
   document.getElementById('prog-pct').textContent=pct+'% complete';
   document.getElementById('prog-frac').textContent=PZ.np+'/'+PZ.total;
-  const ev=Math.max(3,Math.floor(PZ.total/ALL_FACTS.length));
-  if (PZ.np===1||PZ.np%ev===0) {
-    const f=PZ.factQueue[PZ.factIdx%PZ.factQueue.length]; PZ.factIdx++; PZ.nf++;
+  // Show a fun fact after EVERY piece placed — reshuffle when queue loops
+  {
+    const qi = PZ.factIdx % PZ.factQueue.length;
+    if(qi === 0 && PZ.factIdx > 0) PZ.factQueue=[...ALL_FACTS].sort(()=>Math.random()-.5);
+    const f = PZ.factQueue[qi];
+    PZ.factIdx++; PZ.nf++;
     document.getElementById('pz-facts').textContent=PZ.nf;
     CU_PROGRESS.factsFound++;
-    showFactToast(f.e,f.t);
+    showFactToast(f.e, f.t);
   }
   if (PZ.np===PZ.total) {
     CU_PROGRESS.puzzlesCompleted++;
@@ -1703,11 +1704,16 @@ function resetPuzzle() {
   launchPuzzle();
 }
 function showFactToast(em,t) {
-  document.getElementById('ft-em').textContent=em;
-  document.getElementById('ft-txt').textContent=t;
-  document.getElementById('fact-toast').classList.add('on');
   if(factTimer) clearTimeout(factTimer);
-  factTimer=setTimeout(hideFactToast,7500);
+  const ft = document.getElementById('fact-toast');
+  // Reset briefly if already showing so animation re-triggers
+  ft.classList.remove('on');
+  requestAnimationFrame(()=>{
+    document.getElementById('ft-em').textContent=em;
+    document.getElementById('ft-txt').textContent=t;
+    ft.classList.add('on');
+    factTimer=setTimeout(hideFactToast, 5000);
+  });
 }
 function hideFactToast(){document.getElementById('fact-toast').classList.remove('on');}
 
@@ -2142,24 +2148,39 @@ function renderPublishedPuzzles() {
 }
 
 function adminPublishPuzzle() {
-  const name=document.getElementById('new-puzzle-name').value.trim();
-  if(!name){alert('Please enter a puzzle name.');return;}
+  // Read from whichever upload form is currently visible (puzzle panel or admin tab)
+  const nameEl = document.getElementById('admin-npn') || document.getElementById('new-puzzle-name');
+  const name = (nameEl ? nameEl.value.trim() : '');
+  if(!name){alert('Please enter a puzzle name before publishing.');return;}
   const pieces=[];
-  if(document.getElementById('pub-60').classList.contains('on'))pieces.push(60);
-  if(document.getElementById('pub-100').classList.contains('on'))pieces.push(100);
-  if(document.getElementById('pub-500').classList.contains('on'))pieces.push(500);
+  const p60  = document.getElementById('admin-p60')  || document.getElementById('pub-60');
+  const p100 = document.getElementById('admin-p100') || document.getElementById('pub-100');
+  const p500 = document.getElementById('admin-p500') || document.getElementById('pub-500');
+  if(p60  && p60.classList.contains('on'))  pieces.push(60);
+  if(p100 && p100.classList.contains('on')) pieces.push(100);
+  if(p500 && p500.classList.contains('on')) pieces.push(500);
   if(!pieces.length){alert('Select at least one piece count.');return;}
   const id='pz'+Date.now();
   PUZZLES.push({id,name,pieces,assignedSchools:[],assignedTeachers:[],img:PZ.img||null,plays:0,uploadDate:new Date().toISOString().split('T')[0]});
-  document.getElementById('new-puzzle-name').value='';
+  if(nameEl) nameEl.value='';
   renderPublishedPuzzles();
   buildAdminCharts();
-  // Refresh player view too
+  refreshAdminDropdowns();
+  // Refresh player library if visible
   if(document.getElementById('player-puzzle-library')) renderPlayerPuzzleLib();
-  alert(`"${name}" published with ${pieces.join('/')} piece counts!`);
+  alert('"' + name + '" published with ' + pieces.join('/') + ' piece counts!');
 }
 function adminEditPuzzle(id){alert('Edit puzzle '+id+' (demo — connect to DB for persistence)');}
-function adminDeletePuzzle(id){if(confirm('Delete this puzzle?')){PUZZLES=PUZZLES.filter(p=>p.id!==id);renderPublishedPuzzles();buildAdminCharts();}}
+function adminDeletePuzzle(id){
+  if(!confirm('Delete this puzzle? This cannot be undone.')) return;
+  const idx = PUZZLES.findIndex(p=>p.id===id);
+  if(idx !== -1) PUZZLES.splice(idx, 1);
+  renderPublishedPuzzles();
+  buildAdminCharts();
+  refreshAdminDropdowns();
+  // Also refresh player library if visible
+  if(document.getElementById('player-puzzle-library')) renderPlayerPuzzleLib();
+}
 
 function buildModesManager() {
   const mm=document.getElementById('modes-manager'); if(!mm) return;
