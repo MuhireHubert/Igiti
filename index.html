@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Igiti — Where Learning Meets Playing</title>
 <style>
+@keyframes spin{to{transform:rotate(360deg)}}
+
 
 @import url('https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=Playfair+Display:ital,wght@0,600;0,700;1,700&display=swap');
 
@@ -541,7 +543,11 @@ img{max-width:100%;}
   .cb-grid{grid-template-columns:1fr;}
 }
 
+
 </style>
+</head>
+<body>
+
 </head>
 <body>
 
@@ -983,295 +989,229 @@ img{max-width:100%;}
 </div>
 
 <script>
-/* ── EMBEDDED DATA ── */
 const CTRS = [{"name": "Rwanda", "region": "East Africa", "capital": "Kigali", "area": "26,338 km²", "lang": "Kinyarwanda, French, English", "religion": "Christianity, Traditional, Islam", "pop": "~14 million", "crop": "Coffee, Tea", "minerals": "Tin, Tantalum, Tungsten, Gold", "currency": "Rwandan Franc (RWF)", "fact": "Rwanda is known for its incredibly hilly landscape, earning it the nickname 'Land of a Thousand Hills.'", "flag": "🇷🇼"}, {"name": "Nigeria", "region": "West Africa", "capital": "Abuja", "area": "923,768 km²", "lang": "English, Hausa, Yoruba, Igbo", "religion": "Islam, Christianity", "pop": "~220 million", "crop": "Cocoa, Palm Oil, Cassava", "minerals": "Oil, Natural Gas, Coal", "currency": "Nigerian Naira (NGN)", "fact": "Nigeria is Africa's most populous country and has the continent's largest economy by GDP.", "flag": "🇳🇬"}, {"name": "Kenya", "region": "East Africa", "capital": "Nairobi", "area": "580,367 km²", "lang": "Swahili, English", "religion": "Christianity, Islam, Traditional", "pop": "~56 million", "crop": "Tea, Coffee, Flowers", "minerals": "Soda Ash, Fluorspar, Gold", "currency": "Kenyan Shilling (KES)", "fact": "Kenya's Maasai Mara hosts the world's greatest wildlife migration every year.", "flag": "🇰🇪"}, {"name": "Ethiopia", "region": "East Africa", "capital": "Addis Ababa", "area": "1,104,300 km²", "lang": "Amharic, Oromo, Tigrinya", "religion": "Christianity, Islam, Traditional", "pop": "~128 million", "crop": "Coffee, Teff, Sesame", "minerals": "Gold, Tantalum, Potash", "currency": "Ethiopian Birr (ETB)", "fact": "Ethiopia is the birthplace of coffee and one of the oldest nations with over 3,000 years of recorded history.", "flag": "🇪🇹"}, {"name": "Egypt", "region": "North Africa", "capital": "Cairo", "area": "1,002,450 km²", "lang": "Arabic", "religion": "Islam, Christianity", "pop": "~104 million", "crop": "Cotton, Wheat, Rice", "minerals": "Oil, Natural Gas, Phosphate", "currency": "Egyptian Pound (EGP)", "fact": "Egypt is home to the Great Pyramid of Giza — the last surviving original Wonder of the Ancient World.", "flag": "🇪🇬"}, {"name": "South Africa", "region": "Southern Africa", "capital": "Pretoria", "area": "1,219,090 km²", "lang": "11 official languages", "religion": "Christianity, Traditional, Islam", "pop": "~60 million", "crop": "Maize, Sugarcane, Wine Grapes", "minerals": "Gold, Diamonds, Platinum", "currency": "South African Rand (ZAR)", "fact": "South Africa is the only country that voluntarily dismantled its nuclear weapons programme.", "flag": "🇿🇦"}, {"name": "Ghana", "region": "West Africa", "capital": "Accra", "area": "238,533 km²", "lang": "English, Akan, Ewe", "religion": "Christianity, Islam, Traditional", "pop": "~33 million", "crop": "Cocoa, Palm Oil, Cassava", "minerals": "Gold, Diamonds, Bauxite", "currency": "Ghanaian Cedi (GHS)", "fact": "Ghana was the first sub-Saharan African country to gain independence in 1957, under Kwame Nkrumah.", "flag": "🇬🇭"}, {"name": "Tanzania", "region": "East Africa", "capital": "Dodoma", "area": "945,087 km²", "lang": "Swahili, English", "religion": "Christianity, Islam, Traditional", "pop": "~62 million", "crop": "Coffee, Sisal, Tea", "minerals": "Gold, Diamonds, Tanzanite", "currency": "Tanzanian Shilling (TZS)", "fact": "Tanzania is home to both Mount Kilimanjaro — Africa's highest peak — and the Serengeti National Park.", "flag": "🇹🇿"}, {"name": "Uganda", "region": "East Africa", "capital": "Kampala", "area": "241,038 km²", "lang": "English, Swahili, Luganda", "religion": "Christianity, Islam, Traditional", "pop": "~49 million", "crop": "Coffee, Tea, Fish", "minerals": "Oil, Gold, Coltan", "currency": "Ugandan Shilling (UGX)", "fact": "Uganda is home to half of the world's remaining mountain gorillas in Bwindi Impenetrable Forest.", "flag": "🇺🇬"}, {"name": "Morocco", "region": "North Africa", "capital": "Rabat", "area": "710,850 km²", "lang": "Arabic, Berber, French", "religion": "Islam", "pop": "~37 million", "crop": "Olives, Citrus, Wheat", "minerals": "Phosphate, Iron Ore, Zinc", "currency": "Moroccan Dirham (MAD)", "fact": "Morocco holds the world's largest known reserves of phosphate rock, a key ingredient in fertilisers.", "flag": "🇲🇦"}, {"name": "Senegal", "region": "West Africa", "capital": "Dakar", "area": "196,722 km²", "lang": "French, Wolof", "religion": "Islam, Christianity", "pop": "~18 million", "crop": "Groundnuts, Millet, Cotton", "minerals": "Phosphate, Iron Ore, Zircon", "currency": "West African CFA Franc (XOF)", "fact": "Senegal is nicknamed the 'Gateway to Africa' and celebrated for its Teranga — the spirit of hospitality.", "flag": "🇸🇳"}, {"name": "Côte d'Ivoire", "region": "West Africa", "capital": "Yamoussoukro", "area": "322,463 km²", "lang": "French", "religion": "Islam, Christianity, Traditional", "pop": "~27 million", "crop": "Cocoa, Coffee, Palm Oil", "minerals": "Oil, Gold, Diamonds", "currency": "West African CFA Franc (XOF)", "fact": "Côte d'Ivoire produces over 40% of the world's cocoa supply, making it the global cocoa capital.", "flag": "🇨🇮"}, {"name": "Angola", "region": "Central Africa", "capital": "Luanda", "area": "1,246,700 km²", "lang": "Portuguese, Bantu languages", "religion": "Christianity, Traditional", "pop": "~35 million", "crop": "Cassava, Corn, Cotton", "minerals": "Oil, Diamonds, Iron Ore", "currency": "Angolan Kwanza (AOA)", "fact": "Angola's Kalandula Falls is one of the largest waterfalls in Africa by volume of water.", "flag": "🇦🇴"}, {"name": "Mozambique", "region": "Southern Africa", "capital": "Maputo", "area": "801,590 km²", "lang": "Portuguese, Emakhuwa", "religion": "Christianity, Islam, Traditional", "pop": "~32 million", "crop": "Cashews, Cotton, Sugarcane", "minerals": "Coal, Natural Gas, Titanium", "currency": "Mozambican Metical (MZN)", "fact": "Mozambique has one of Africa's longest coastlines — over 2,500 km along the Indian Ocean.", "flag": "🇲🇿"}, {"name": "Cameroon", "region": "Central Africa", "capital": "Yaoundé", "area": "475,442 km²", "lang": "French, English", "religion": "Christianity, Islam, Traditional", "pop": "~27 million", "crop": "Cocoa, Coffee, Banana", "minerals": "Oil, Bauxite, Iron Ore", "currency": "Central African CFA Franc (XAF)", "fact": "Cameroon is called 'Africa in Miniature' because it contains nearly every landscape found across the continent.", "flag": "🇨🇲"}, {"name": "Madagascar", "region": "East Africa", "capital": "Antananarivo", "area": "587,041 km²", "lang": "Malagasy, French", "religion": "Christianity, Traditional", "pop": "~28 million", "crop": "Vanilla, Cloves, Coffee", "minerals": "Nickel, Cobalt, Graphite", "currency": "Malagasy Ariary (MGA)", "fact": "Madagascar is the world's fourth largest island and home to over 90% of species found nowhere else on Earth.", "flag": "🇲🇬"}, {"name": "Zambia", "region": "Southern Africa", "capital": "Lusaka", "area": "752,618 km²", "lang": "English, Bemba, Nyanja", "religion": "Christianity, Traditional", "pop": "~19 million", "crop": "Maize, Tobacco, Cotton", "minerals": "Copper, Cobalt, Zinc", "currency": "Zambian Kwacha (ZMW)", "fact": "Zambia and Zimbabwe share Victoria Falls — the world's largest sheet of falling water.", "flag": "🇿🇲"}, {"name": "Zimbabwe", "region": "Southern Africa", "capital": "Harare", "area": "390,757 km²", "lang": "Shona, Ndebele, English", "religion": "Christianity, Traditional", "pop": "~16 million", "crop": "Tobacco, Maize, Cotton", "minerals": "Platinum, Chrome, Gold", "currency": "Zimbabwean Dollar (ZWL)", "fact": "Zimbabwe is home to the ancient stone city of Great Zimbabwe, which gives the country its name.", "flag": "🇿🇼"}, {"name": "Mali", "region": "West Africa", "capital": "Bamako", "area": "1,240,192 km²", "lang": "French, Bambara", "religion": "Islam, Traditional", "pop": "~22 million", "crop": "Cotton, Millet, Sorghum", "minerals": "Gold, Salt, Phosphate", "currency": "West African CFA Franc (XOF)", "fact": "The ancient city of Timbuktu was a major centre of Islamic scholarship and trans-Saharan trade.", "flag": "🇲🇱"}, {"name": "Niger", "region": "West Africa", "capital": "Niamey", "area": "1,267,000 km²", "lang": "French, Hausa, Zarma", "religion": "Islam, Traditional", "pop": "~25 million", "crop": "Millet, Sorghum, Cowpeas", "minerals": "Uranium, Oil, Gold", "currency": "West African CFA Franc (XOF)", "fact": "Niger is the world's largest producer of uranium by reserves and one of the hottest countries on Earth.", "flag": "🇳🇪"}, {"name": "Burkina Faso", "region": "West Africa", "capital": "Ouagadougou", "area": "274,200 km²", "lang": "French, Mooré, Dyula", "religion": "Islam, Christianity, Traditional", "pop": "~22 million", "crop": "Sorghum, Cotton, Millet", "minerals": "Gold, Manganese, Zinc", "currency": "West African CFA Franc (XOF)", "fact": "Burkina Faso means 'Land of the Upright People' — a name given by leader Thomas Sankara in 1984.", "flag": "🇧🇫"}, {"name": "Chad", "region": "Central Africa", "capital": "N'Djamena", "area": "1,284,000 km²", "lang": "French, Arabic", "religion": "Islam, Christianity, Traditional", "pop": "~17 million", "crop": "Sorghum, Millet, Cotton", "minerals": "Oil, Uranium, Gold", "currency": "Central African CFA Franc (XAF)", "fact": "Lake Chad has shrunk by over 90% since the 1960s due to climate change and overuse of water.", "flag": "🇹🇩"}, {"name": "Sudan", "region": "North Africa", "capital": "Khartoum", "area": "1,861,484 km²", "lang": "Arabic, English", "religion": "Islam, Christianity", "pop": "~45 million", "crop": "Sorghum, Cotton, Sesame", "minerals": "Oil, Gold, Iron Ore", "currency": "Sudanese Pound (SDG)", "fact": "Sudan has more ancient pyramids than Egypt — over 200 Nubian pyramids rise from the desert.", "flag": "🇸🇩"}, {"name": "Algeria", "region": "North Africa", "capital": "Algiers", "area": "2,381,741 km²", "lang": "Arabic, Tamazight, French", "religion": "Islam", "pop": "~45 million", "crop": "Wheat, Barley, Olives", "minerals": "Oil, Natural Gas, Iron Ore", "currency": "Algerian Dinar (DZD)", "fact": "Algeria is Africa's largest country by area, covering most of the northern Sahara Desert.", "flag": "🇩🇿"}, {"name": "Libya", "region": "North Africa", "capital": "Tripoli", "area": "1,759,540 km²", "lang": "Arabic, Berber", "religion": "Islam", "pop": "~7 million", "crop": "Olives, Dates, Wheat", "minerals": "Oil, Natural Gas, Gypsum", "currency": "Libyan Dinar (LYD)", "fact": "Libya has the largest proven oil reserves in Africa and sits above one of the world's greatest aquifer systems.", "flag": "🇱🇾"}, {"name": "Tunisia", "region": "North Africa", "capital": "Tunis", "area": "163,610 km²", "lang": "Arabic, French", "religion": "Islam", "pop": "~12 million", "crop": "Olives, Grains, Tomatoes", "minerals": "Phosphate, Iron Ore, Zinc", "currency": "Tunisian Dinar (TND)", "fact": "Tunisia was the site of ancient Carthage — once the most powerful city in the Mediterranean world.", "flag": "🇹🇳"}, {"name": "Somalia", "region": "East Africa", "capital": "Mogadishu", "area": "637,657 km²", "lang": "Somali, Arabic", "religion": "Islam", "pop": "~17 million", "crop": "Sorghum, Corn, Sugarcane", "minerals": "Oil, Uranium, Iron Ore", "currency": "Somali Shilling (SOS)", "fact": "Somalia has the longest coastline of any country in mainland Africa — over 3,300 km.", "flag": "🇸🇴"}, {"name": "South Sudan", "region": "East Africa", "capital": "Juba", "area": "619,745 km²", "lang": "English, Arabic, Dinka", "religion": "Christianity, Traditional", "pop": "~11 million", "crop": "Sorghum, Maize, Cassava", "minerals": "Oil, Gold, Iron Ore", "currency": "South Sudanese Pound (SSP)", "fact": "South Sudan is the world's newest country, gaining independence from Sudan on 9 July 2011.", "flag": "🇸🇸"}, {"name": "DR Congo", "region": "Central Africa", "capital": "Kinshasa", "area": "2,344,858 km²", "lang": "French, Lingala, Swahili", "religion": "Christianity, Traditional", "pop": "~100 million", "crop": "Cassava, Yams, Coffee", "minerals": "Coltan, Cobalt, Diamonds", "currency": "Congolese Franc (CDF)", "fact": "The DRC contains the Congo Rainforest — the world's second largest tropical forest and the lungs of Africa.", "flag": "🇨🇩"}, {"name": "Republic of Congo", "region": "Central Africa", "capital": "Brazzaville", "area": "342,000 km²", "lang": "French, Lingala, Kituba", "religion": "Christianity, Traditional", "pop": "~6 million", "crop": "Cassava, Sugar, Palm Oil", "minerals": "Oil, Potash, Iron Ore", "currency": "Central African CFA Franc (XAF)", "fact": "Brazzaville and Kinshasa are the world's closest capital cities, separated only by the Congo River.", "flag": "🇨🇬"}, {"name": "Gabon", "region": "Central Africa", "capital": "Libreville", "area": "267,668 km²", "lang": "French", "religion": "Christianity, Traditional", "pop": "~2 million", "crop": "Cassava, Yams, Cocoa", "minerals": "Oil, Manganese, Iron Ore", "currency": "Central African CFA Franc (XAF)", "fact": "Gabon has one of the world's highest forest cover rates — over 85% of the country is rainforest.", "flag": "🇬🇦"}, {"name": "Equatorial Guinea", "region": "Central Africa", "capital": "Malabo", "area": "28,051 km²", "lang": "Spanish, French, Portuguese", "religion": "Christianity, Traditional", "pop": "~1.5 million", "crop": "Cocoa, Coffee, Rice", "minerals": "Oil, Natural Gas, Gold", "currency": "Central African CFA Franc (XAF)", "fact": "Equatorial Guinea is the only African country with Spanish as an official language.", "flag": "🇬🇶"}, {"name": "Central African Republic", "region": "Central Africa", "capital": "Bangui", "area": "622,984 km²", "lang": "French, Sango", "religion": "Christianity, Islam, Traditional", "pop": "~5 million", "crop": "Cotton, Coffee, Tobacco", "minerals": "Diamonds, Gold, Uranium", "currency": "Central African CFA Franc (XAF)", "fact": "The CAR sits at the geographic heart of Africa and hosts the Dzanga-Sangha, one of Africa's richest ecosystems.", "flag": "🇨🇫"}, {"name": "Namibia", "region": "Southern Africa", "capital": "Windhoek", "area": "824,292 km²", "lang": "English, Afrikaans, Oshiwambo", "religion": "Christianity, Traditional", "pop": "~3 million", "crop": "Millet, Sorghum, Grapes", "minerals": "Diamonds, Uranium, Zinc", "currency": "Namibian Dollar (NAD)", "fact": "The Namib Desert is the world's oldest desert, estimated to be over 55 million years old.", "flag": "🇳🇦"}, {"name": "Botswana", "region": "Southern Africa", "capital": "Gaborone", "area": "581,730 km²", "lang": "Setswana, English", "religion": "Christianity, Traditional", "pop": "~2.5 million", "crop": "Sorghum, Maize, Beans", "minerals": "Diamonds, Copper, Nickel", "currency": "Botswana Pula (BWP)", "fact": "Botswana transformed from Africa's poorest nation at independence to one of its fastest growing economies.", "flag": "🇧🇼"}, {"name": "Eswatini", "region": "Southern Africa", "capital": "Mbabane", "area": "17,364 km²", "lang": "Swati, English", "religion": "Christianity, Traditional", "pop": "~1.2 million", "crop": "Sugarcane, Cotton, Maize", "minerals": "Coal, Asbestos, Diamonds", "currency": "Swazi Lilangeni (SZL)", "fact": "Eswatini, formerly Swaziland, is one of the world's last absolute monarchies.", "flag": "🇸🇿"}, {"name": "Lesotho", "region": "Southern Africa", "capital": "Maseru", "area": "30,355 km²", "lang": "Sesotho, English", "religion": "Christianity", "pop": "~2.2 million", "crop": "Maize, Sorghum, Wheat", "minerals": "Diamonds, Water, Sand", "currency": "Lesotho Loti (LSL)", "fact": "Lesotho is the world's highest country — even its lowest point at 1,400m is higher than most nations' peaks.", "flag": "🇱🇸"}, {"name": "Malawi", "region": "Southern Africa", "capital": "Lilongwe", "area": "118,484 km²", "lang": "Chichewa, English", "religion": "Christianity, Islam", "pop": "~20 million", "crop": "Tobacco, Tea, Cotton", "minerals": "Uranium, Limestone, Coal", "currency": "Malawian Kwacha (MWK)", "fact": "Lake Malawi is home to more fish species than any other lake on Earth — over 1,000 unique cichlids.", "flag": "🇲🇼"}, {"name": "Eritrea", "region": "East Africa", "capital": "Asmara", "area": "117,600 km²", "lang": "Tigrinya, Arabic, English", "religion": "Christianity, Islam", "pop": "~3.5 million", "crop": "Sorghum, Millet, Teff", "minerals": "Gold, Copper, Zinc", "currency": "Eritrean Nakfa (ERN)", "fact": "Eritrea's capital Asmara is a UNESCO World Heritage Site for its remarkable Art Deco Italian colonial architecture.", "flag": "🇪🇷"}, {"name": "Djibouti", "region": "East Africa", "capital": "Djibouti City", "area": "23,200 km²", "lang": "French, Arabic, Somali", "religion": "Islam, Christianity", "pop": "~1 million", "crop": "Fruits, Vegetables", "minerals": "Salt, Limestone, Perlite", "currency": "Djiboutian Franc (DJF)", "fact": "Djibouti hosts military bases from more foreign nations than almost any other country, due to its strategic location.", "flag": "🇩🇯"}, {"name": "Guinea", "region": "West Africa", "capital": "Conakry", "area": "245,857 km²", "lang": "French, Pular, Mandinka", "religion": "Islam, Christianity, Traditional", "pop": "~13 million", "crop": "Rice, Coffee, Cassava", "minerals": "Bauxite, Iron Ore, Gold", "currency": "Guinean Franc (GNF)", "fact": "Guinea holds the world's largest reserves of bauxite — the primary ore used to produce aluminium.", "flag": "🇬🇳"}, {"name": "Sierra Leone", "region": "West Africa", "capital": "Freetown", "area": "71,740 km²", "lang": "English, Krio", "religion": "Islam, Christianity, Traditional", "pop": "~8 million", "crop": "Rice, Coffee, Cocoa", "minerals": "Diamonds, Rutile, Iron Ore", "currency": "Sierra Leonean Leone (SLL)", "fact": "Sierra Leone's Freetown was founded in 1787 as a settlement for freed enslaved people returning to Africa.", "flag": "🇸🇱"}, {"name": "Liberia", "region": "West Africa", "capital": "Monrovia", "area": "111,369 km²", "lang": "English", "religion": "Christianity, Islam, Traditional", "pop": "~5 million", "crop": "Rubber, Palm Oil, Coffee", "minerals": "Iron Ore, Diamonds, Gold", "currency": "Liberian Dollar (LRD)", "fact": "Liberia was Africa's first republic, founded in 1847 by freed American slaves, and is named after 'liberty.'", "flag": "🇱🇷"}, {"name": "Togo", "region": "West Africa", "capital": "Lomé", "area": "56,785 km²", "lang": "French, Ewe, Kabiye", "religion": "Christianity, Islam, Traditional", "pop": "~8 million", "crop": "Cocoa, Coffee, Cotton", "minerals": "Phosphate, Iron Ore, Limestone", "currency": "West African CFA Franc (XOF)", "fact": "Lomé is one of the few African capitals located directly on the coast of the Atlantic Ocean.", "flag": "🇹🇬"}, {"name": "Benin", "region": "West Africa", "capital": "Porto-Novo", "area": "112,622 km²", "lang": "French, Fon, Yoruba", "religion": "Traditional (Vodun), Christianity, Islam", "pop": "~13 million", "crop": "Cotton, Yams, Cassava", "minerals": "Oil, Limestone, Marble", "currency": "West African CFA Franc (XOF)", "fact": "Benin is the birthplace of Vodun (Voodoo), a spiritual tradition now practised by millions across the world.", "flag": "🇧🇯"}, {"name": "Guinea-Bissau", "region": "West Africa", "capital": "Bissau", "area": "36,125 km²", "lang": "Portuguese, Crioulo", "religion": "Islam, Traditional, Christianity", "pop": "~2 million", "crop": "Cashew Nuts, Rice, Peanuts", "minerals": "Phosphate, Bauxite, Oil", "currency": "West African CFA Franc (XOF)", "fact": "Guinea-Bissau is among the world's top producers of cashew nuts, which make up nearly 90% of its exports.", "flag": "🇬🇼"}, {"name": "Gambia", "region": "West Africa", "capital": "Banjul", "area": "11,295 km²", "lang": "English, Mandinka, Wolof", "religion": "Islam, Christianity", "pop": "~2.5 million", "crop": "Groundnuts, Millet, Rice", "minerals": "Mineral Sands, Limestone", "currency": "Gambian Dalasi (GMD)", "fact": "The Gambia is Africa's smallest mainland country — a thin strip almost entirely surrounded by Senegal.", "flag": "🇬🇲"}, {"name": "Cabo Verde", "region": "West Africa", "capital": "Praia", "area": "4,033 km²", "lang": "Portuguese, Cape Verdean Creole", "religion": "Christianity", "pop": "~600,000", "crop": "Bananas, Corn, Beans", "minerals": "Salt, Pozzolana, Basalt", "currency": "Cape Verdean Escudo (CVE)", "fact": "Cabo Verde is a volcanic archipelago of 10 islands in the Atlantic, 570 km off the West African coast.", "flag": "🇨🇻"}, {"name": "São Tomé & Príncipe", "region": "Central Africa", "capital": "São Tomé", "area": "964 km²", "lang": "Portuguese", "religion": "Christianity", "pop": "~230,000", "crop": "Cocoa, Coconuts, Coffee", "minerals": "Oil (offshore)", "currency": "Dobra (STN)", "fact": "São Tomé and Príncipe is Africa's second smallest country and sits almost exactly on the equator.", "flag": "🇸🇹"}, {"name": "Comoros", "region": "East Africa", "capital": "Moroni", "area": "2,235 km²", "lang": "Comorian, Arabic, French", "religion": "Islam", "pop": "~900,000", "crop": "Vanilla, Cloves, Ylang-ylang", "minerals": "Limited resources", "currency": "Comorian Franc (KMF)", "fact": "Comoros produces more ylang-ylang — used in perfumes — than any other country in the world.", "flag": "🇰🇲"}, {"name": "Mauritius", "region": "East Africa", "capital": "Port Louis", "area": "2,040 km²", "lang": "Mauritian Creole, English, French", "religion": "Hinduism, Christianity, Islam", "pop": "~1.3 million", "crop": "Sugarcane, Tea, Tobacco", "minerals": "Granite, Limestone", "currency": "Mauritian Rupee (MUR)", "fact": "The dodo, history's most famous extinct bird, was native only to Mauritius before disappearing in the 1680s.", "flag": "🇲🇺"}, {"name": "Seychelles", "region": "East Africa", "capital": "Victoria", "area": "459 km²", "lang": "Seychellois Creole, English, French", "religion": "Christianity", "pop": "~100,000", "crop": "Coconuts, Cinnamon, Vanilla", "minerals": "Guano, Granite", "currency": "Seychellois Rupee (SCR)", "fact": "Victoria in Seychelles is the world's smallest capital city — you can walk across the entire centre in minutes.", "flag": "🇸🇨"}, {"name": "Mauritania", "region": "West Africa", "capital": "Nouakchott", "area": "1,030,700 km²", "lang": "Arabic, French", "religion": "Islam", "pop": "~4.5 million", "crop": "Dates, Millet, Rice", "minerals": "Iron Ore, Oil, Gold", "currency": "Mauritanian Ouguiya (MRU)", "fact": "Mauritania has the Eye of the Sahara — a giant geological ring visible from space, nicknamed the 'Eye of Africa'.", "flag": "🇲🇷"}, {"name": "Burundi", "region": "East Africa", "capital": "Gitega", "area": "27,834 km²", "lang": "Kirundi, French, English", "religion": "Christianity, Traditional", "pop": "~12 million", "crop": "Coffee, Tea, Cotton", "minerals": "Nickel, Cobalt, Vanadium", "currency": "Burundian Franc (BIF)", "fact": "Burundi moved its capital from Bujumbura to Gitega in 2019, making it one of Africa's few landlocked capitals.", "flag": "🇧🇮"}];
 const LOGO = 'data:image/png;base64,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';
-const ALL_FACTS = CTRS.map(function(c){ return {e:c.flag, t:c.fact}; });
+const ALL_FACTS = CTRS.map(function(c){return{e:c.flag,t:c.fact};});
 
 /* ═══════════════════════════════════════════════════════════════
-   IGITI PLATFORM — Firebase Edition
-   Firestore: users, puzzles, notifications, card sets
-   Firebase Auth: real login / registration / sessions
-   Firebase Storage: puzzle images (base64 stored in Firestore for simplicity)
+   IGITI — Firebase (project: igiti-3093c)
+   No demo mode. No fallbacks. Firebase only.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── FIREBASE CONFIG ── 
-   Replace these values with your Firebase project credentials from:
-   Firebase Console → Project Settings → Your apps → Web app → Config */
+/* ── CONFIG ── */
 const FB_CONFIG = {
-  apiKey:            "REPLACE_WITH_YOUR_API_KEY",
-  authDomain:        "REPLACE_WITH_YOUR_AUTH_DOMAIN",
-  projectId:         "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket:     "REPLACE_WITH_YOUR_STORAGE_BUCKET",
-  messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
-  appId:             "REPLACE_WITH_YOUR_APP_ID"
+  apiKey:            "AIzaSyBAx-xEDDeAvl90C88d5hK6njwZ202I1ZA",
+  authDomain:        "igiti-3093c.firebaseapp.com",
+  projectId:         "igiti-3093c",
+  storageBucket:     "igiti-3093c.firebasestorage.app",
+  messagingSenderId: "279062006774",
+  appId:             "1:279062006774:web:72e46717c043626a2cd5d7",
+  measurementId:     "G-KCVKGB5WSS"
 };
 
-/* ── FIREBASE MODULES (loaded dynamically) ── */
-let db = null;       // Firestore
-let auth = null;     // Firebase Auth
-let FB_READY = false;
-let FB_ERROR  = false;
+/* ── FIREBASE GLOBALS ── */
+let db   = null;
+let auth = null;
 
-function loadFirebase(cb) {
-  if (FB_READY) { cb(); return; }
-  if (FB_ERROR)  { cb(); return; } // run in demo mode if Firebase fails
-
-  /* Load Firebase compat SDK (v9 compat — works as globals, no bundler needed) */
-  function loadScript(src, next) {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = next;
-    s.onerror = function() {
-      console.warn('Firebase script failed to load:', src);
-      FB_ERROR = true;
-      cb(); // fall back to demo mode
-    };
-    document.head.appendChild(s);
-  }
-
-  loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js', function() {
-    loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js', function() {
-      loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js', function() {
-        try {
-          if (!firebase.apps.length) {
-            firebase.initializeApp(FB_CONFIG);
-          }
-          auth = firebase.auth();
-          db   = firebase.firestore();
-          /* Enable offline persistence so data survives offline use */
-          db.enablePersistence({ synchronizeTabs: true }).catch(function(e) {
-            if (e.code !== 'failed-precondition' && e.code !== 'unimplemented') {
-              console.warn('Persistence error:', e);
-            }
-          });
-          FB_READY = true;
-          console.log('✅ Firebase ready');
-          cb();
-        } catch(e) {
-          console.error('Firebase init error:', e);
-          FB_ERROR = true;
-          cb();
-        }
-      });
-    });
-  });
-}
-
-/* ── DEMO MODE FLAG ── */
-function isDemo() { return !FB_READY || FB_ERROR || FB_CONFIG.apiKey === 'REPLACE_WITH_YOUR_API_KEY'; }
-
-/* ── SHOW FIREBASE SETUP BANNER ── */
-function showSetupBanner() {
-  if (!isDemo()) { return; }
-  const existing = document.getElementById('fb-banner');
-  if (existing) { return; }
-  const banner = document.createElement('div');
-  banner.id = 'fb-banner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1A0E04;color:#FFAA55;font-family:Barlow,sans-serif;font-size:.8rem;padding:.6rem 1.2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;box-shadow:0 2px 12px rgba(0,0,0,.4);';
-  banner.innerHTML =
-    '<span>⚠️ <strong>Demo mode</strong> — data resets on refresh. ' +
-    '<a href="#firebase-setup" onclick="showFirebaseInstructions()" style="color:#F07C2A;text-decoration:underline;cursor:pointer;">Connect Firebase →</a></span>' +
-    '<button onclick="document.getElementById(\'fb-banner\').remove()" style="background:none;border:none;color:#FFAA55;cursor:pointer;font-size:1rem;">✕</button>';
-  document.body.prepend(banner);
-}
-
-function showFirebaseInstructions() {
-  alert(
-    'HOW TO CONNECT FIREBASE\n\n' +
-    '1. Go to console.firebase.google.com\n' +
-    '2. Create a new project (or use existing)\n' +
-    '3. Add a Web app → copy the config object\n' +
-    '4. Enable Authentication → Email/Password\n' +
-    '5. Enable Firestore Database (production mode)\n' +
-    '6. In this HTML file, replace the FB_CONFIG values at the top of the <script> tag\n' +
-    '7. In Firestore Rules, paste:\n\n' +
-    'rules_version = \'2\';\n' +
-    'service cloud.firestore {\n' +
-    '  match /databases/{database}/documents {\n' +
-    '    match /{document=**} {\n' +
-    '      allow read, write: if request.auth != null;\n' +
-    '    }\n' +
-    '    match /puzzles/{id} {\n' +
-    '      allow read: if true;\n' +
-    '    }\n' +
-    '  }\n' +
-    '}'
-  );
-}
-
-/* ════════════════════════════════════════════════════════
-   DATA LAYER
-   All reads/writes go through these functions.
-   In demo mode they use in-memory objects.
-   In Firebase mode they use Firestore.
-   ════════════════════════════════════════════════════════ */
-
-/* ── IN-MEMORY FALLBACK (demo mode) ── */
+/* ── LOCAL CACHE (mirrors Firestore, rebuilt on each login) ── */
 let MEM_USERS   = {};
 let MEM_PUZZLES = [];
 let MEM_NOTIFS  = [];
+let CARD_IMAGES = {};
 
-/* ── INIT: load all data from Firestore on app start ── */
+/* ── SESSION ── */
+let CU           = null;
+let CU_PROGRESS  = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
+let ACTIVE_PZ_ID = null;
+let selectedPieces = 60;
+let factTimer    = null;
+
+/* ── ACCESS RULES ── */
+const ACCESS = {
+  free:    { pieces:[60],           modes:[1,2],              ref:false },
+  basic:   { pieces:[60,100,500],   modes:[1,2,3,4],          ref:false },
+  premium: { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
+  school:  { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
+  admin:   { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
+};
+
+/* ── GETTERS ── */
+function getPuzzles() { return MEM_PUZZLES; }
+function getUsers()   { return MEM_USERS;   }
+function getNotifs()  { return MEM_NOTIFS;  }
+
+/* ══════════════════════════════════════════════════════
+   FIREBASE INIT — load SDKs then initialise
+   ══════════════════════════════════════════════════════ */
+function initFirebase() {
+  return new Promise(function(resolve, reject) {
+    function loadScript(src) {
+      return new Promise(function(res, rej) {
+        const s = document.createElement('script');
+        s.src = src; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const base = 'https://www.gstatic.com/firebasejs/10.12.0/';
+    loadScript(base + 'firebase-app-compat.js')
+      .then(function() { return loadScript(base + 'firebase-auth-compat.js'); })
+      .then(function() { return loadScript(base + 'firebase-firestore-compat.js'); })
+      .then(function() {
+        if (!firebase.apps.length) { firebase.initializeApp(FB_CONFIG); }
+        auth = firebase.auth();
+        db   = firebase.firestore();
+        db.enablePersistence({ synchronizeTabs:true }).catch(function() {});
+        resolve();
+      })
+      .catch(function(e) {
+        reject(new Error('Firebase failed to load. Check your internet connection. ' + e));
+      });
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   DATA LAYER — all reads/writes against Firestore
+   ══════════════════════════════════════════════════════ */
+
 async function loadAllData() {
-  if (isDemo()) { return; }
   try {
-    /* Puzzles */
-    const pzSnap = await db.collection('puzzles').orderBy('uploadDate', 'desc').get();
+    const [pzSnap, notifSnap] = await Promise.all([
+      db.collection('puzzles').orderBy('uploadDate','desc').get(),
+      db.collection('notifications').orderBy('sentAt','desc').limit(30).get()
+    ]);
     MEM_PUZZLES = pzSnap.docs.map(function(d) {
       const data = d.data();
-      /* Restore image from base64 if stored */
       let img = null;
-      if (data.imgData) {
-        img = new Image();
-        img.src = data.imgData;
-      }
-      return Object.assign({}, data, { id: d.id, img: img });
+      if (data.imgData) { img = new Image(); img.src = data.imgData; }
+      return Object.assign({}, data, { id:d.id, img:img });
     });
-    /* Notifications */
-    const notifSnap = await db.collection('notifications').orderBy('sentAt','desc').limit(20).get();
-    MEM_NOTIFS = notifSnap.docs.map(function(d) { return Object.assign({}, d.data(), { id: d.id }); });
-    /* Users are loaded via Auth + their profile doc */
-    console.log('Loaded', MEM_PUZZLES.length, 'puzzles from Firestore');
+    MEM_NOTIFS = notifSnap.docs.map(function(d) {
+      return Object.assign({}, d.data(), { id:d.id });
+    });
+    console.log('Loaded', MEM_PUZZLES.length, 'puzzles,', MEM_NOTIFS.length, 'notifications');
   } catch(e) {
-    console.error('loadAllData error:', e);
+    console.error('loadAllData:', e);
+    showAppError('Could not load data: ' + e.message);
   }
 }
 
-/* ── PUZZLES ── */
+/* PUZZLES */
 async function db_savePuzzle(puzzle) {
-  if (isDemo()) {
-    MEM_PUZZLES.push(puzzle);
-    return puzzle.id;
-  }
-  try {
-    /* Don't store raw Image object or large canvas in Firestore */
-    const toStore = {
-      name:            puzzle.name,
-      pieces:          puzzle.pieces,
-      assignedSchools: puzzle.assignedSchools,
-      assignedTeachers:puzzle.assignedTeachers,
-      plays:           puzzle.plays,
-      uploadDate:      puzzle.uploadDate,
-      uploadedBy:      CU ? CU.email : 'admin',
-      imgData:         puzzle.imgData || null,  /* base64 string */
-    };
-    await db.collection('puzzles').doc(puzzle.id).set(toStore);
-    MEM_PUZZLES.push(puzzle);
-    console.log('Puzzle saved to Firestore:', puzzle.id);
-    return puzzle.id;
-  } catch(e) {
-    console.error('db_savePuzzle error:', e);
-    /* Fall back to memory */
-    MEM_PUZZLES.push(puzzle);
-    return puzzle.id;
-  }
+  const toStore = {
+    name:             puzzle.name,
+    pieces:           puzzle.pieces,
+    assignedSchools:  puzzle.assignedSchools,
+    assignedTeachers: puzzle.assignedTeachers,
+    plays:            puzzle.plays,
+    uploadDate:       puzzle.uploadDate,
+    uploadedBy:       CU ? CU.email : 'admin',
+    imgData:          puzzle.imgData || null,
+  };
+  await db.collection('puzzles').doc(puzzle.id).set(toStore);
+  MEM_PUZZLES.push(puzzle);
 }
 
 async function db_deletePuzzle(id) {
+  await db.collection('puzzles').doc(id).delete();
   const idx = MEM_PUZZLES.findIndex(function(p) { return p.id === id; });
   if (idx !== -1) { MEM_PUZZLES.splice(idx, 1); }
-  if (isDemo()) { return; }
-  try {
-    await db.collection('puzzles').doc(id).delete();
-    console.log('Puzzle deleted from Firestore:', id);
-  } catch(e) {
-    console.error('db_deletePuzzle error:', e);
-  }
 }
 
 async function db_updatePuzzlePlays(id) {
   const pz = MEM_PUZZLES.find(function(p) { return p.id === id; });
   if (pz) { pz.plays++; }
-  if (isDemo()) { return; }
-  try {
-    await db.collection('puzzles').doc(id).update({ plays: firebase.firestore.FieldValue.increment(1) });
-  } catch(e) { console.error('db_updatePuzzlePlays error:', e); }
+  await db.collection('puzzles').doc(id).update({
+    plays: firebase.firestore.FieldValue.increment(1)
+  });
 }
 
 async function db_assignPuzzleToSchool(puzzleId, schoolId) {
+  await db.collection('puzzles').doc(puzzleId).update({
+    assignedSchools: firebase.firestore.FieldValue.arrayUnion(schoolId)
+  });
   const pz = MEM_PUZZLES.find(function(p) { return p.id === puzzleId; });
   if (pz && pz.assignedSchools.indexOf(schoolId) === -1) {
     pz.assignedSchools.push(schoolId);
   }
-  if (isDemo()) { return; }
-  try {
-    await db.collection('puzzles').doc(puzzleId).update({
-      assignedSchools: firebase.firestore.FieldValue.arrayUnion(schoolId)
-    });
-  } catch(e) { console.error('db_assignPuzzleToSchool error:', e); }
 }
 
-/* ── USERS ── */
+/* USERS */
 async function db_saveUserProfile(email, profile) {
+  await db.collection('users').doc(email).set(profile, { merge:true });
   MEM_USERS[email] = profile;
-  if (isDemo()) { return; }
-  try {
-    await db.collection('users').doc(email).set(profile, { merge: true });
-    console.log('User profile saved:', email);
-  } catch(e) { console.error('db_saveUserProfile error:', e); }
 }
 
 async function db_loadUserProfile(email) {
   if (MEM_USERS[email]) { return MEM_USERS[email]; }
-  if (isDemo()) { return null; }
-  try {
-    const snap = await db.collection('users').doc(email).get();
-    if (snap.exists) {
-      MEM_USERS[email] = snap.data();
-      return snap.data();
-    }
-    return null;
-  } catch(e) { console.error('db_loadUserProfile error:', e); return null; }
+  const snap = await db.collection('users').doc(email).get();
+  if (snap.exists) { MEM_USERS[email] = snap.data(); return snap.data(); }
+  return null;
 }
 
 async function db_loadAllUsers() {
-  if (isDemo()) { return Object.entries(MEM_USERS).map(function(p) { return Object.assign({email:p[0]},p[1]); }); }
-  try {
-    const snap = await db.collection('users').get();
-    const users = [];
-    snap.forEach(function(d) {
-      MEM_USERS[d.id] = d.data();
-      users.push(Object.assign({ email: d.id }, d.data()));
-    });
-    return users;
-  } catch(e) { console.error('db_loadAllUsers error:', e); return []; }
+  const snap = await db.collection('users').get();
+  snap.forEach(function(d) { MEM_USERS[d.id] = d.data(); });
+  return Object.values(MEM_USERS);
 }
 
-/* ── NOTIFICATIONS ── */
+/* NOTIFICATIONS */
 async function db_saveNotif(notif) {
-  MEM_NOTIFS.unshift(notif);
-  if (isDemo()) { return; }
-  try {
-    await db.collection('notifications').add(Object.assign({}, notif, { sentAt: firebase.firestore.FieldValue.serverTimestamp() }));
-  } catch(e) { console.error('db_saveNotif error:', e); }
+  const ref = await db.collection('notifications').add(
+    Object.assign({}, notif, { sentAt: firebase.firestore.FieldValue.serverTimestamp() })
+  );
+  MEM_NOTIFS.unshift(Object.assign({}, notif, { id:ref.id }));
 }
 
-/* ── PROGRESS ── */
+/* PROGRESS */
 async function db_saveProgress(email, progress) {
-  if (isDemo()) { return; }
-  try {
-    await db.collection('users').doc(email).update({ progress: progress });
-  } catch(e) { console.error('db_saveProgress error:', e); }
+  await db.collection('users').doc(email).update({ progress:progress });
 }
 
-/* ════════════════════════════════════════════════════════
-   AUTH LAYER
-   ════════════════════════════════════════════════════════ */
-
-/* ── ROUTING ── */
+/* ══════════════════════════════════════════════════════
+   UI HELPERS
+   ══════════════════════════════════════════════════════ */
 function goScreen(id) {
   document.querySelectorAll('.scr').forEach(function(s) { s.classList.remove('on'); });
   document.getElementById(id).classList.add('on');
 }
-
 function injectLogos() {
   document.querySelectorAll('.inj-logo').forEach(function(el) { el.src = LOGO; });
 }
 injectLogos();
 document.addEventListener('DOMContentLoaded', injectLogos);
 
-/* ── AUTH UI ── */
+function showAppError(msg) {
+  let el = document.getElementById('app-error');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-error';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#8B1A1A;color:#fff;font-family:Barlow,sans-serif;font-size:.82rem;padding:.7rem 1.2rem;text-align:center;';
+    document.body.prepend(el);
+  }
+  el.textContent = '⚠️ ' + msg;
+  setTimeout(function() { if (el.parentNode) el.remove(); }, 8000);
+}
+
+function showLoading(message) {
+  let el = document.getElementById('loading-screen');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-screen';
+    el.style.cssText = 'position:fixed;inset:0;background:#0E0B05;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;';
+    el.innerHTML = '<img src="' + LOGO + '" style="height:60px;object-fit:contain;"><div id="loading-msg" style="color:rgba(255,255,255,.5);font-family:Barlow,sans-serif;font-size:.88rem;"></div><div style="width:28px;height:28px;border:3px solid rgba(255,255,255,.15);border-top-color:#F07C2A;border-radius:50%;animation:spin .75s linear infinite;"></div>';
+    document.body.appendChild(el);
+  }
+  const msgEl = document.getElementById('loading-msg');
+  if (msgEl) { msgEl.textContent = message || 'Loading…'; }
+}
+function hideLoading() {
+  const el = document.getElementById('loading-screen');
+  if (el) { el.remove(); }
+}
+
+/* ══════════════════════════════════════════════════════
+   AUTH UI
+   ══════════════════════════════════════════════════════ */
 function showAuth(tab) { goScreen('s-auth'); switchAuthTab(tab); }
 
 function switchAuthTab(tab) {
@@ -1281,7 +1221,6 @@ function switchAuthTab(tab) {
   document.getElementById('tab-reg').classList.toggle('on',   tab === 'reg');
   clearAuthErr();
 }
-
 function toggleSchoolCode() {
   const role = document.getElementById('r-role').value;
   document.getElementById('school-code-wrap').style.display =
@@ -1291,11 +1230,14 @@ function showAuthErr(msg) {
   const el = document.getElementById('form-err');
   el.textContent = msg; el.style.display = 'block';
 }
-function clearAuthErr() { document.getElementById('form-err').style.display = 'none'; }
-
-function setAuthLoading(loading) {
-  const btns = document.querySelectorAll('#f-login .btn, #f-reg .btn');
-  btns.forEach(function(b) { b.disabled = loading; b.style.opacity = loading ? '.6' : '1'; });
+function clearAuthErr() {
+  const el = document.getElementById('form-err');
+  if (el) { el.style.display = 'none'; }
+}
+function setAuthLoading(on) {
+  document.querySelectorAll('#f-login .btn, #f-reg .btn').forEach(function(b) {
+    b.disabled = on; b.style.opacity = on ? '.5' : '1';
+  });
 }
 
 /* ── LOGIN ── */
@@ -1303,57 +1245,34 @@ function doLogin() {
   const em = document.getElementById('l-email').value.trim().toLowerCase();
   const pw = document.getElementById('l-pass').value;
   if (!em || !pw) { showAuthErr('Please enter your email and password.'); return; }
-  setAuthLoading(true);
-  loadFirebase(function() {
-    if (isDemo()) {
-      /* Demo mode: check hardcoded admin or in-memory users */
-      if (em === 'admin@igiti.africa' && pw === 'igiti2025') {
-        CU = { email:em, name:'Igiti Admin', role:'admin', plan:'admin', trial:0, schoolId:null };
-        CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-        setAuthLoading(false);
-        enterApp();
-      } else if (MEM_USERS[em] && MEM_USERS[em].pw === pw) {
-        const u = MEM_USERS[em];
-        CU = Object.assign({}, u, { email:em });
-        CU_PROGRESS = u.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-        setAuthLoading(false);
-        enterApp();
+  clearAuthErr(); setAuthLoading(true);
+  showLoading('Signing in…');
+  auth.signInWithEmailAndPassword(em, pw)
+    .then(function(cred) {
+      showLoading('Loading your profile…');
+      return db_loadUserProfile(cred.user.email);
+    })
+    .then(function(profile) {
+      if (!profile) { throw new Error('Profile not found. Contact admin.'); }
+      CU = Object.assign({}, profile, { email:em });
+      CU_PROGRESS = profile.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
+      showLoading('Loading platform data…');
+      return loadAllData();
+    })
+    .then(function() {
+      setAuthLoading(false); hideLoading();
+      enterApp();
+    })
+    .catch(function(e) {
+      setAuthLoading(false); hideLoading();
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        showAuthErr('Incorrect email or password.');
+      } else if (e.code === 'auth/too-many-requests') {
+        showAuthErr('Too many attempts. Please wait a few minutes.');
       } else {
-        setAuthLoading(false);
-        showAuthErr('No account found or incorrect password.');
+        showAuthErr(e.message);
       }
-      return;
-    }
-    /* Firebase Auth */
-    auth.signInWithEmailAndPassword(em, pw)
-      .then(function(cred) {
-        return db_loadUserProfile(cred.user.email);
-      })
-      .then(function(profile) {
-        if (!profile) {
-          setAuthLoading(false);
-          showAuthErr('Account exists but profile is missing. Please contact admin.');
-          return;
-        }
-        CU = Object.assign({}, profile, { email: em });
-        CU_PROGRESS = profile.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-        return loadAllData();
-      })
-      .then(function() {
-        setAuthLoading(false);
-        if (CU) { enterApp(); }
-      })
-      .catch(function(e) {
-        setAuthLoading(false);
-        if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
-          showAuthErr('Incorrect email or password. Please try again.');
-        } else if (e.code === 'auth/too-many-requests') {
-          showAuthErr('Too many attempts. Please wait a few minutes and try again.');
-        } else {
-          showAuthErr('Login failed: ' + e.message);
-        }
-      });
-  });
+    });
 }
 
 /* ── REGISTER ── */
@@ -1365,247 +1284,116 @@ function doRegister() {
   const sc   = document.getElementById('r-school-code').value.trim();
   if (!name || !em || !role || !pw) { showAuthErr('Please fill in all fields.'); return; }
   if (pw.length < 6) { showAuthErr('Password must be at least 6 characters.'); return; }
+  clearAuthErr(); setAuthLoading(true); showLoading('Creating account…');
 
-  setAuthLoading(true);
-  loadFirebase(function() {
-    /* Validate school code */
-    let schoolId = null;
-    if (role === 'teacher' || role === 'student') {
-      if (!sc) { setAuthLoading(false); showAuthErr('Teachers and students must enter a school access code.'); return; }
-      /* Look up school by code */
-      const validateAndRegister = function() {
-        if (isDemo()) {
-          const schoolEntry = Object.entries(MEM_USERS).find(function(p) {
-            return p[1].role === 'school' && p[1].schoolCode === sc.toUpperCase();
-          });
-          if (!schoolEntry) { setAuthLoading(false); showAuthErr('School code not found. Check with your admin.'); return; }
-          schoolId = schoolEntry[1].schoolId || schoolEntry[0];
-          finishRegister(name, em, role, pw, schoolId);
+  function proceed(schoolId) {
+    const plan = (role === 'school' || role === 'teacher' || role === 'student') ? 'school' : 'premium';
+    const schoolCode = (role === 'school')
+      ? name.replace(/[^A-Z0-9]/gi,'').toUpperCase().slice(0,6) + Math.floor(Math.random()*100)
+      : null;
+    const profile = {
+      name, role, plan, trial:14, schoolId,
+      joinDate: new Date().toISOString().split('T')[0],
+      progress: { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 }
+    };
+    if (schoolCode) { profile.schoolCode = schoolCode; profile.schoolId = em; }
+
+    auth.createUserWithEmailAndPassword(em, pw)
+      .then(function(cred) {
+        showLoading('Saving profile…');
+        return cred.user.updateProfile({ displayName:name })
+          .then(function() { return db_saveUserProfile(em, profile); });
+      })
+      .then(function() {
+        showLoading('Loading platform data…');
+        return loadAllData();
+      })
+      .then(function() {
+        CU = Object.assign({}, profile, { email:em });
+        CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
+        setAuthLoading(false); hideLoading();
+        enterApp();
+      })
+      .catch(function(e) {
+        setAuthLoading(false); hideLoading();
+        if (e.code === 'auth/email-already-in-use') {
+          showAuthErr('An account with this email already exists. Please sign in.');
         } else {
-          db.collection('users').where('schoolCode','==',sc.toUpperCase()).where('role','==','school').get()
-            .then(function(snap) {
-              if (snap.empty) { setAuthLoading(false); showAuthErr('School code not found. Check with your admin.'); return; }
-              schoolId = snap.docs[0].id;
-              finishRegister(name, em, role, pw, schoolId);
-            })
-            .catch(function(e) { setAuthLoading(false); showAuthErr('Could not verify school code: ' + e.message); });
+          showAuthErr(e.message);
         }
-      };
-      validateAndRegister();
-    } else {
-      finishRegister(name, em, role, pw, null);
-    }
+      });
+  }
+
+  if (role === 'teacher' || role === 'student') {
+    if (!sc) { setAuthLoading(false); hideLoading(); showAuthErr('Enter your school access code.'); return; }
+    db.collection('users').where('schoolCode','==',sc.toUpperCase()).where('role','==','school').get()
+      .then(function(snap) {
+        if (snap.empty) { setAuthLoading(false); hideLoading(); showAuthErr('School code not found. Check with your admin.'); return; }
+        proceed(snap.docs[0].id);
+      })
+      .catch(function(e) { setAuthLoading(false); hideLoading(); showAuthErr('Could not verify code: ' + e.message); });
+  } else {
+    proceed(null);
+  }
+}
+
+/* ── LOGOUT ── */
+function doLogout() {
+  auth.signOut().then(function() {
+    CU = null; MEM_PUZZLES = []; MEM_USERS = {}; MEM_NOTIFS = [];
+    goScreen('s-land');
+  }).catch(function() {
+    CU = null; goScreen('s-land');
   });
 }
 
-function finishRegister(name, em, role, pw, schoolId) {
-  const plan     = (role === 'school' || role === 'teacher' || role === 'student') ? 'school' : 'premium';
-  const today    = new Date().toISOString().split('T')[0];
-  const schoolCode = (role === 'school')
-    ? (name.replace(/[^A-Z0-9]/gi,'').toUpperCase().slice(0,6) + Math.floor(Math.random()*100))
-    : null;
-  const profile = {
-    name, role, plan, trial:14, schoolId,
-    joinDate: today,
-    progress: { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 }
-  };
-  if (schoolCode) { profile.schoolCode = schoolCode; profile.schoolId = em; }
-
-  if (isDemo()) {
-    profile.pw = pw;
-    MEM_USERS[em] = profile;
-    CU = Object.assign({}, profile, { email: em });
-    CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-    setAuthLoading(false);
-    enterApp();
-    return;
-  }
-
-  /* Firebase: create auth user, then save profile to Firestore */
-  auth.createUserWithEmailAndPassword(em, pw)
-    .then(function(cred) {
-      return cred.user.updateProfile({ displayName: name })
-        .then(function() { return db_saveUserProfile(em, profile); })
-        .then(function() { return loadAllData(); })
+/* ── BOOT: init Firebase, then restore session if any ── */
+document.addEventListener('DOMContentLoaded', function() {
+  showLoading('Starting Igiti…');
+  initFirebase()
+    .then(function() {
+      /* Check for existing Firebase Auth session */
+      return new Promise(function(resolve) {
+        const unsub = auth.onAuthStateChanged(function(user) {
+          unsub(); /* unsubscribe immediately after first check */
+          resolve(user);
+        });
+      });
+    })
+    .then(function(user) {
+      if (!user) {
+        /* No session → show landing page */
+        hideLoading();
+        goScreen('s-land');
+        return;
+      }
+      /* Session exists → restore it */
+      showLoading('Restoring your session…');
+      return db_loadUserProfile(user.email)
+        .then(function(profile) {
+          if (!profile) { hideLoading(); goScreen('s-land'); return; }
+          CU = Object.assign({}, profile, { email:user.email });
+          CU_PROGRESS = profile.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
+          return loadAllData();
+        })
         .then(function() {
-          CU = Object.assign({}, profile, { email: em });
-          CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-          setAuthLoading(false);
-          enterApp();
+          hideLoading();
+          if (CU) { enterApp(); }
+          else    { goScreen('s-land'); }
         });
     })
     .catch(function(e) {
-      setAuthLoading(false);
-      if (e.code === 'auth/email-already-in-use') {
-        showAuthErr('An account with this email already exists. Please sign in.');
-      } else {
-        showAuthErr('Registration failed: ' + e.message);
-      }
+      hideLoading();
+      showAppError(e.message);
+      goScreen('s-land');
     });
-}
-
-function doLogout() {
-  if (auth) { auth.signOut().catch(function() {}); }
-  CU = null;
-  MEM_PUZZLES = []; /* clear local cache so next login gets fresh data */
-  goScreen('s-land');
-}
-
-/* ── FIREBASE AUTH STATE LISTENER ── 
-   If user has an active session, skip the landing screen */
-document.addEventListener('DOMContentLoaded', function() {
-  loadFirebase(function() {
-    showSetupBanner();
-    if (isDemo()) { return; }
-    auth.onAuthStateChanged(function(user) {
-      if (user && !CU) {
-        /* Auto-restore session */
-        db_loadUserProfile(user.email).then(function(profile) {
-          if (profile) {
-            CU = Object.assign({}, profile, { email: user.email });
-            CU_PROGRESS = profile.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-            return loadAllData();
-          }
-        }).then(function() {
-          if (CU) { enterApp(); }
-        }).catch(function(e) { console.warn('Session restore failed:', e); });
-      }
-    });
-  });
 });
-
-/* ════════════════════════════════════════════════════════
-   ACCESS RULES
-   ════════════════════════════════════════════════════════ */
-const ACCESS = {
-  free:    { pieces:[60],           modes:[1,2],              ref:false },
-  basic:   { pieces:[60,100,500],   modes:[1,2,3,4],          ref:false },
-  premium: { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
-  school:  { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
-  admin:   { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
-};
-
-/* ── SESSION STATE ── */
-let CU = null;
-let CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-let ACTIVE_PZ_ID = null;
-let selectedPieces = 60;
-let factTimer = null;
-
-let CARD_IMAGES = {};
-
-/* ── GETTERS that use the live data ── */
-function getPuzzles()  { return MEM_PUZZLES; }
-function getUsers()    { return MEM_USERS; }
-function getNotifs()   { return MEM_NOTIFS; }
-
-
 
 
 /* ══════════════════════════════════════════════════════
    IGITI PLATFORM — Clean JS, no duplicate declarations
    ══════════════════════════════════════════════════════ */
 
-/* ── ACCESS RULES ── */
-
-/* ── USERS — only admin hardcoded, rest register at runtime ── */
-
-
-/* ══════════════════════════════════════════════════════
-   LOGO INJECTION
-   ══════════════════════════════════════════════════════ */
-function injectLogos() {
-  document.querySelectorAll('.inj-logo').forEach(function(el) { el.src = LOGO; });
-}
-injectLogos();
-document.addEventListener('DOMContentLoaded', injectLogos);
-
-/* ══════════════════════════════════════════════════════
-   ROUTING
-   ══════════════════════════════════════════════════════ */
-function goScreen(id) {
-  document.querySelectorAll('.scr').forEach(function(s) { s.classList.remove('on'); });
-  document.getElementById(id).classList.add('on');
-}
-
-/* ══════════════════════════════════════════════════════
-   AUTH
-   ══════════════════════════════════════════════════════ */
-function showAuth(tab) { goScreen('s-auth'); switchAuthTab(tab); }
-
-function switchAuthTab(tab) {
-  document.getElementById('f-login').style.display = (tab === 'login') ? 'block' : 'none';
-  document.getElementById('f-reg').style.display   = (tab === 'reg')   ? 'block' : 'none';
-  document.getElementById('tab-login').classList.toggle('on', tab === 'login');
-  document.getElementById('tab-reg').classList.toggle('on',   tab === 'reg');
-  clearAuthErr();
-}
-
-function toggleSchoolCode() {
-  const role = document.getElementById('r-role').value;
-  document.getElementById('school-code-wrap').style.display =
-    (role === 'teacher' || role === 'student') ? 'block' : 'none';
-}
-
-function showAuthErr(msg) {
-  const el = document.getElementById('form-err');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-function clearAuthErr() {
-  document.getElementById('form-err').style.display = 'none';
-}
-
-function doLogin() {
-  const em = document.getElementById('l-email').value.trim().toLowerCase();
-  const pw = document.getElementById('l-pass').value;
-  if (!em || !pw) { showAuthErr('Please enter your email and password.'); return; }
-  const u = USERS[em];
-  if (!u) { showAuthErr('No account found with this email.'); return; }
-  if (pw !== u.pw) { showAuthErr('Incorrect password. Please try again.'); return; }
-  CU = Object.assign({}, u, { email: em });
-  CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-  enterApp();
-}
-
-function doRegister() {
-  const name = document.getElementById('r-name').value.trim();
-  const em   = document.getElementById('r-email').value.trim().toLowerCase();
-  const role = document.getElementById('r-role').value;
-  const pw   = document.getElementById('r-pass').value;
-  const sc   = document.getElementById('r-school-code').value.trim();
-  if (!name || !em || !role || !pw) { showAuthErr('Please fill in all fields.'); return; }
-  if (pw.length < 6) { showAuthErr('Password must be at least 6 characters.'); return; }
-  if (USERS[em]) { showAuthErr('An account with this email already exists.'); return; }
-  let schoolId = null;
-  if (sc) {
-    const schoolEntry = Object.entries(getUsers()).find(function(pair) {
-      return pair[1].role === 'school' && pair[1].schoolCode === sc.toUpperCase();
-    });
-    if (schoolEntry) { schoolId = schoolEntry[1].schoolId || schoolEntry[0]; }
-    else { showAuthErr('School access code not recognised. Check with your admin.'); return; }
-  }
-  if ((role === 'teacher' || role === 'student') && !schoolId) {
-    showAuthErr('Teachers and students must enter a valid school access code.'); return;
-  }
-  const plan = (role === 'school' || role === 'teacher' || role === 'student') ? 'school' : 'premium';
-  const today = new Date().toISOString().split('T')[0];
-  const schoolCode = (role === 'school')
-    ? (name.replace(/[^A-Z0-9]/gi,'').toUpperCase().slice(0,6) + Math.floor(Math.random()*100))
-    : undefined;
-  const newUser = { pw, name, role, plan, trial:14, schoolId, joinDate:today };
-  if (schoolCode) { newUser.schoolCode = schoolCode; newUser.schoolId = em; }
-  USERS[em] = newUser;
-  CU = Object.assign({}, newUser, { email: em });
-  CU_PROGRESS = { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
-  enterApp();
-}
-
-function doLogout() { CU = null; goScreen('s-land'); }
-
-/* ══════════════════════════════════════════════════════
-   APP ENTRY
-   ══════════════════════════════════════════════════════ */
 function enterApp() {
   goScreen('s-app');
   injectLogos();
@@ -2743,7 +2531,7 @@ async function callClaude(prompt, maxTok) {
    ADMIN PANEL
    ══════════════════════════════════════════════════════ */
 async function buildAdminPanel() {
-  if (!isDemo()) { await loadAllData(); }
+  await loadAllData();
   renderPublishedPuzzles();
   buildAdminCharts();
   buildModesManager();
@@ -2790,7 +2578,7 @@ function refreshAdminDropdowns() {
 
 async function buildAdminCharts() {
   /* Load fresh user list from Firestore */
-  if (!isDemo()) { await db_loadAllUsers(); }
+  await db_loadAllUsers();
   const users = Object.values(getUsers());
   const totalUsers = users.length;
   const schools    = users.filter(function(u) { return u.role === 'school'; }).length;
@@ -2863,7 +2651,7 @@ async function buildAdminCharts() {
 }
 
 async function buildUserTable() {
-  if (!isDemo()) { await db_loadAllUsers(); }
+  await db_loadAllUsers();
   const searchEl = document.getElementById('u-search');
   const roleEl   = document.getElementById('u-role-f');
   const planEl   = document.getElementById('u-plan-f');
@@ -2961,7 +2749,7 @@ async function adminPublishPuzzle() {
   buildAdminCharts();
   refreshAdminDropdowns();
   if (document.getElementById('player-puzzle-library')) { renderPlayerPuzzleLib(); }
-  alert('"' + name + '" published and saved' + (isDemo() ? ' (demo mode — connect Firebase to persist across sessions)' : ' to Firebase!'));
+  alert('"' + name + '" published and saved to Firebase!');
 }
 
 function adminDeletePuzzle(id) {
@@ -2981,7 +2769,7 @@ async function adminAssignToSchool() {
   if (!sch) { alert('Select a school.'); return; }
   await db_assignPuzzleToSchool(pid, sch);
   renderPublishedPuzzles();
-  alert('Puzzle assigned to school' + (isDemo() ? ' (demo)' : ' and saved to Firebase!'));
+  alert('Puzzle assigned to school and saved to Firebase!');
 }
 
 function adminAssignCardToSchool() {
@@ -3095,6 +2883,7 @@ function sendNotification() {
   if (msgEl) { msgEl.value = ''; }
   buildNotifHistory();
 }
+
 
 </script>
 </body>
