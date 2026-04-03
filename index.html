@@ -823,7 +823,7 @@ img{max-width:100%;}
           <h3>🏫 Assign puzzle to school</h3>
           <div class="fg"><label>School</label>
             <select id="assign-school-sel" style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);">
-              <option value="gh">Green Hills Academy</option><option value="fw">FAWE Girls' School</option>
+              <option value="">Select school…</option>
             </select>
           </div>
           <div class="fg"><label>Puzzle</label>
@@ -842,16 +842,17 @@ img{max-width:100%;}
         <div class="a-card">
           <h3>📤 Upload card set</h3>
           <div class="upload-zone" style="margin-bottom:.75rem;">
-            <input type="file" accept=".pdf,image/*" onchange="alert('Card set uploaded (demo)')">
-            <div class="uz-icon">+</div><strong style="font-size:.8rem;">Upload cards PDF or images</strong><p>PDF with all 54 cards</p>
+            <input type="file" accept=".pdf" onchange="handleCardSetUpload(this)">
+            <div class="uz-icon">📄</div><strong style="font-size:.8rem;">Upload A54 PDF (54 pages)</strong><p>1 page per country · alphabetical order</p>
           </div>
-          <div class="fg"><label>Card set name</label><input type="text" id="cardset-name" placeholder="e.g. A54 Cards v2"></div>
-          <button class="btn btn-gn btn-sm" style="width:100%;" onclick="alert('Published: '+(document.getElementById('cardset-name').value||'Unnamed')+' (demo)')">Publish card set</button>
+          <div id="card-upload-status" style="font-size:.76rem;color:var(--mu);min-height:1.2rem;margin-bottom:.6rem;"></div>
+          <div class="fg"><label>Card set name</label><input type="text" id="cardset-name" placeholder="e.g. A54 Cards v1"></div>
+          <button class="btn btn-gn btn-sm" style="width:100%;" onclick="publishCardSet()">Publish card set</button>
         </div>
         <div class="a-card"><h3>⚙ Game modes on/off</h3><div id="modes-manager"></div></div>
         <div class="a-card">
           <h3>🏫 Assign card set to school</h3>
-          <div class="fg"><label>School</label><select style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option>Green Hills Academy</option><option>FAWE Girls' School</option></select></div>
+          <div class="fg"><label>School</label><select style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option value="">Select school…</option></select></div>
           <div class="fg"><label>Card set</label><select style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option>A54 Cards v1 (current)</option></select></div>
           <button class="btn btn-gn btn-sm" style="width:100%;" onclick="alert('Assigned (demo)')">Assign →</button>
         </div>
@@ -974,6 +975,21 @@ img{max-width:100%;}
 </div>
 
 <script>
+function publishCardSet() {
+  const name = document.getElementById('cardset-name').value.trim();
+  if(!name) { alert('Please enter a name for this card set.'); return; }
+  const count = Object.keys(CARD_IMAGES).length;
+  if(count === 0) { alert('Please upload a PDF first before publishing.'); return; }
+  alert('"' + name + '" published with ' + count + ' card images extracted!\nCards will now appear with your uploaded images in the browser and all game modes.');
+  document.getElementById('cardset-name').value = '';
+}
+
+function adminAssignCardToSchool() {
+  const sch = document.getElementById('card-assign-school-sel')?.value;
+  if(!sch) { alert('Please select a school.'); return; }
+  alert('Card set assigned to school (demo — backend needed for persistence).');
+}
+
 function adminAssignToSchool(){
   const sch=document.getElementById('assign-school-sel').value;
   const pid=document.getElementById('assign-pz-sel').value;
@@ -985,11 +1001,35 @@ function adminAssignToSchool(){
 }
 // Refresh admin dropdowns — called explicitly, no polling
 function refreshAdminDropdowns() {
-  const sel=document.getElementById('assign-pz-sel');
-  if(sel) sel.innerHTML=PUZZLES.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  const sel2=document.getElementById('assign-school-sel');
+  // Puzzle dropdown (assign puzzle to school)
+  const pzSel=document.getElementById('assign-pz-sel');
+  if(pzSel) pzSel.innerHTML = PUZZLES.length
+    ? PUZZLES.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')
+    : '<option value="">No puzzles published yet</option>';
+
+  // School dropdowns — built from registered school accounts
+  const schools = Object.entries(USERS).filter(([,u])=>u.role==='school');
+  const schoolOpts = schools.length
+    ? schools.map(([em,u])=>`<option value="${u.schoolId||em}">${u.name}</option>`).join('')
+    : '<option value="">No school accounts yet</option>';
+
+  const asSch=document.getElementById('assign-school-sel');
+  if(asSch) asSch.innerHTML='<option value="">Select school…</option>'+schoolOpts;
+  const cardSch=document.getElementById('card-assign-school-sel');
+  if(cardSch) cardSch.innerHTML='<option value="">Select school…</option>'+schoolOpts;
+
+  // Override user dropdown
   const ou=document.getElementById('override-user');
-  if(ou) ou.innerHTML='<option value="">Select…</option>'+Object.entries(USERS).filter(([,u])=>u.role!=='admin').map(([em,u])=>`<option value="${em}">${u.name}</option>`).join('');
+  if(ou) ou.innerHTML='<option value="">Select user…</option>'+Object.entries(USERS).filter(([,u])=>u.role!=='admin').map(([em,u])=>`<option value="${em}">${u.name} (${u.role})</option>`).join('');
+
+  // School dropdowns in school/teacher dashboards
+  const tSch=document.getElementById('school-assign-teacher');
+  if(tSch && CU && CU.schoolId) {
+    const teachers=Object.entries(USERS).filter(([,u])=>u.schoolId===CU.schoolId&&u.role==='teacher');
+    tSch.innerHTML=teachers.length
+      ? teachers.map(([em,u])=>`<option value="${em}">${u.name}</option>`).join('')
+      : '<option value="">No teachers yet</option>';
+  }
 }
 document.addEventListener('DOMContentLoaded',()=>{ setTimeout(refreshAdminDropdowns, 400); });
 </script>
@@ -1006,23 +1046,17 @@ const LOGO = document.getElementById('_ld').textContent.trim();
 const ALL_FACTS = CTRS.map(c => ({e: c.flag, t: c.fact}));
 
 /* ─── USERS (demo — replace with real auth in production) ─── */
+// USERS — in production replace with real auth DB.
+// These are demo accounts only; new registrations are added dynamically.
 const USERS = {
-  'admin@igiti.africa':  {pw:'igiti2025', name:'Igiti Admin',    role:'admin',       plan:'admin',   trial:0,  schoolId:null},
-  'school@greenhill.rw': {pw:'igiti2025', name:'Green Hills Academy', role:'school',  plan:'school',  trial:0,  schoolId:'gh'},
-  'teacher@school.com':  {pw:'igiti2025', name:'Ms. Uwimana',    role:'teacher',     plan:'school',  trial:0,  schoolId:'gh'},
-  'teacher2@school.com': {pw:'igiti2025', name:'Mr. Habimana',   role:'teacher',     plan:'school',  trial:0,  schoolId:'gh'},
-  'student@school.com':  {pw:'igiti2025', name:'Mugisha Eric',   role:'student',     plan:'school',  trial:0,  schoolId:'gh', teacherId:'teacher@school.com'},
-  'student2@school.com': {pw:'igiti2025', name:'Uwase Diane',    role:'student',     plan:'school',  trial:0,  schoolId:'gh', teacherId:'teacher@school.com'},
-  'user@email.com':      {pw:'igiti2025', name:'Jean-Pierre K.', role:'individual',  plan:'basic',   trial:8,  schoolId:null},
-  'fan@email.com':       {pw:'igiti2025', name:'Amara Diallo',   role:'enthusiast',  plan:'free',    trial:14, schoolId:null},
+  'admin@igiti.africa': {pw:'igiti2025', name:'Igiti Admin', role:'admin', plan:'admin', trial:0, schoolId:null, joinDate:'2025-01-01'},
 };
+// Dynamic registrations are pushed here during the session
+// Schools/teachers/students added via doRegister() at runtime
 
 /* ─── PUBLISHED PUZZLES (admin manages these) ─── */
-let PUZZLES = [
-  {id:'pz1', name:'Rwanda Map',  pieces:[60,100,500], assignedSchools:['gh'], assignedTeachers:[], img:null, plays:45, uploadDate:'2025-01-15'},
-  {id:'pz2', name:'Africa Map',  pieces:[60,100,500], assignedSchools:['gh'], assignedTeachers:[], img:null, plays:38, uploadDate:'2025-01-10'},
-  {id:'pz3', name:'East Africa', pieces:[60,100],     assignedSchools:[],     assignedTeachers:[], img:null, plays:12, uploadDate:'2025-02-01'},
-];
+// PUZZLES — populated by admin uploads. No hardcoded content.
+let PUZZLES = [];
 
 /* ─── ACCESS RULES ─── */
 const ACCESS = {
@@ -1079,9 +1113,32 @@ function doRegister() {
   const em   = document.getElementById('r-email').value.trim().toLowerCase();
   const role = document.getElementById('r-role').value;
   const pw   = document.getElementById('r-pass').value;
+  const sc   = document.getElementById('r-school-code').value.trim();
   if (!name||!em||!role||!pw) { showAuthErr('Please fill in all fields.'); return; }
   if (pw.length < 6)          { showAuthErr('Password must be at least 6 characters.'); return; }
-  CU = {name, email:em, role, pw, plan:'premium', trial:14, schoolId:null};
+  if (USERS[em])              { showAuthErr('An account with this email already exists.'); return; }
+  // Determine school linkage from school code
+  let schoolId = null;
+  if (sc) {
+    const school = Object.entries(USERS).find(([,u])=>u.role==='school' && u.schoolCode===sc.toUpperCase());
+    if (school) schoolId = school[1].schoolId;
+    else { showAuthErr('School access code not recognised. Please check with your admin.'); return; }
+  }
+  // For school roles, a code is required
+  if ((role==='teacher'||role==='student') && !schoolId) {
+    showAuthErr('Teachers and students must enter a valid school access code.'); return;
+  }
+  const newUser = {
+    pw, name, role,
+    plan: role==='school' ? 'school' : role==='teacher'||role==='student' ? 'school' : 'premium',
+    trial: 14,
+    schoolId,
+    joinDate: new Date().toISOString().split('T')[0],
+    // Generate school code if registering as a school
+    ...(role==='school' ? {schoolCode: name.replace(/[^A-Z0-9]/gi,'').toUpperCase().slice(0,6) + Math.floor(Math.random()*100)} : {}),
+  };
+  USERS[em] = newUser;
+  CU = {...newUser, email:em};
   CU_PROGRESS = {puzzlesCompleted:0, cardsPlayed:0, factsFound:0};
   enterApp();
 }
@@ -1163,18 +1220,29 @@ function renderAdminDash(el) {
   <div class="s-label">Recent activity</div>
   <div class="a-card"><div id="dash-admin-activity"></div></div>`;
   // Recent activity
-  const items = [
-    {icon:'👤',text:'New registration: Kwame Asante (Premium)', time:'2h ago'},
-    {icon:'🧩',text:'Rwanda Map completed by Ms. Uwimana\'s class', time:'4h ago'},
-    {icon:'🃏',text:'A54 Card War played 8 times today', time:'Today'},
-    {icon:'💳',text:'School plan renewed: Green Hills Academy', time:'Yesterday'},
-  ];
+  // Build activity feed from live platform data
+  const actItems = [];
+  // New registrations
+  Object.entries(USERS).filter(([,u])=>u.joinDate===new Date().toISOString().split('T')[0]).forEach(([em,u])=>{
+    actItems.push({icon:'👤', text:'New registration: '+u.name+' ('+u.role+')', time:'Today'});
+  });
+  // Published puzzles
+  PUZZLES.slice(-2).forEach(p=>{
+    actItems.push({icon:'🧩', text:'Puzzle published: '+p.name+' ('+p.pieces.join('/')+' pieces)', time:p.uploadDate});
+  });
+  // Card games played (from platform stats)
+  const totalPlays = PUZZLES.reduce((s,p)=>s+p.plays,0);
+  if(totalPlays>0) actItems.push({icon:'🃏', text:'Total puzzle plays across all puzzles: '+totalPlays, time:'Live'});
+  // Schools
+  const schools = Object.values(USERS).filter(u=>u.role==='school');
+  if(schools.length) actItems.push({icon:'🏫', text:schools.length+' school account(s) active on the platform', time:'Live'});
+  if(!actItems.length) actItems.push({icon:'ℹ️', text:'No activity yet — publish your first puzzle to get started!', time:'Now'});
   document.getElementById('dash-admin-activity').innerHTML =
-    items.map(i=>`<div style="display:flex;gap:.7rem;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--bd2);">
+    actItems.slice(0,6).map(i=>`<div style="display:flex;gap:.7rem;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid var(--bd2);">
       <span style="font-size:1.1rem;">${i.icon}</span>
       <span style="flex:1;font-size:.8rem;">${i.text}</span>
       <span style="font-size:.68rem;color:var(--mu);white-space:nowrap;">${i.time}</span>
-    </div>`).join('');
+    </div>`).join('') || '<div style="color:var(--mu);font-size:.8rem;padding:.5rem 0;">No recent activity.</div>';
 }
 
 function renderSchoolDash(el) {
@@ -1207,7 +1275,7 @@ function renderSchoolDash(el) {
     <thead><tr><th>Teacher</th><th>Students</th><th>Assigned content</th><th>Last active</th></tr></thead>
     <tbody>${teachers.map(t=>{
       const sts = Object.values(USERS).filter(u=>u.teacherId===t.email);
-      return `<tr><td><strong>${t.name}</strong><br><span style="font-size:.66rem;color:var(--mu);">${t.email}</span></td><td>${sts.length}</td><td>${PUZZLES.filter(p=>p.assignedTeachers.includes(t.email)).map(p=>p.name).join(', ')||'None yet'}</td><td style="font-size:.72rem;color:var(--mu);">Today</td></tr>`;
+      return `<tr><td><strong>${t.name}</strong><br><span style="font-size:.66rem;color:var(--mu);">${t.email}</span></td><td>${sts.length}</td><td>${PUZZLES.filter(p=>p.assignedTeachers.includes(t.email)).map(p=>p.name).join(', ')||'None yet'}</td><td style="font-size:.72rem;color:var(--mu);">Active</td></tr>`;
     }).join('')}</tbody>
   </table></div>`;
 }
@@ -1231,7 +1299,7 @@ function renderTeacherDash(el) {
   <div class="stats-row">
     <div class="stat-box"><div class="stat-val">${myStudents.length}</div><div class="stat-lab">My Students</div></div>
     <div class="stat-box"><div class="stat-val">${myPuzzles.length}</div><div class="stat-lab">Available Puzzles</div></div>
-    <div class="stat-box"><div class="stat-val">3</div><div class="stat-lab">Completed Today</div></div>
+    <div class="stat-box"><div class="stat-val" id="t-completed-today">0</div><div class="stat-lab">Completed Today</div></div>
     <div class="stat-box"><div class="stat-val">87%</div><div class="stat-lab">Class Avg Progress</div></div>
   </div>
   <div class="s-label">Assign puzzle to students</div>
@@ -1330,10 +1398,20 @@ function buildPuzzlePanel() {
 function renderPlayerPuzzleLib() {
   const slot = document.getElementById('player-puzzle-library');
   const myPuzzles = CU.role === 'student'
-    ? PUZZLES.filter(p => p.assignedSchools.includes(CU.schoolId) || p.assignedTeachers.includes(CU.teacherId))
-    : PUZZLES;
-  if (!myPuzzles.length) { slot.innerHTML = '<div class="banner banner-or"><p>No puzzles available yet. Check back soon!</p></div>'; return; }
-  slot.innerHTML = `<div class="s-label">Choose a puzzle to build</div><div class="puzzle-library">${myPuzzles.map(p=>buildPuzzleThumbCard(p, CU.role==='student')).join('')}</div>`;
+    ? PUZZLES.filter(p => p.assignedSchools.includes(CU.schoolId||'') || p.assignedTeachers.includes(CU.teacherId||''))
+    : CU.role === 'teacher'
+    ? PUZZLES.filter(p => p.assignedSchools.includes(CU.schoolId||'') || p.assignedTeachers.includes(CU.email))
+    : PUZZLES; // individual/enthusiast see all published puzzles
+  if (!myPuzzles.length) {
+    const isStudent = CU.role === 'student' || CU.role === 'teacher';
+    slot.innerHTML = `<div class="banner banner-or">
+      <p>${isStudent ? '📭 No puzzles assigned to you yet. Ask your school admin or teacher to assign one!' : '📭 No puzzles published yet. The admin will publish puzzles for you to play.'}</p>
+    </div>`;
+    // Hide the difficulty strip when no puzzle selected
+    document.getElementById('pz-selected-name').textContent = 'Select a puzzle above';
+    return;
+  }
+  slot.innerHTML = `<div class="s-label">Choose a puzzle to build</div><div class="puzzle-library">${myPuzzles.map(p=>buildPuzzleThumbCard(p, false)).join('')}</div>`;
 }
 
 /* ─── SELECTED PUZZLE ─── */
@@ -1391,26 +1469,111 @@ function generateMapCanvas() {
 
 function handlePuzzleUpload(inp) {
   const f = inp.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = e => {
-    if (f.type==='application/pdf') {
-      PZ.img = generateMapCanvas();
-      alert('PDF uploaded! For production, a server-side PDF renderer is needed.\nDemo map is shown for now.');
-    } else {
+  const btn = inp.closest('.upload-zone');
+  if(btn) btn.querySelector('strong').textContent = '⏳ Loading...';
+
+  if (f.type === 'application/pdf') {
+    // Use PDF.js to render first page as image
+    loadPDFjs(()=>{
+      const reader = new FileReader();
+      reader.onload = e => {
+        const typedArray = new Uint8Array(e.target.result);
+        pdfjsLib.getDocument({data: typedArray}).promise.then(pdf=>{
+          pdf.getPage(1).then(page=>{
+            const scale = 2;
+            const vp = page.getViewport({scale});
+            const canvas = document.createElement('canvas');
+            canvas.width = vp.width; canvas.height = vp.height;
+            page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise.then(()=>{
+              const img = new Image();
+              img.onload = ()=>{
+                PZ.img = img;
+                if(ACTIVE_PZ_ID){const pz=PUZZLES.find(p=>p.id===ACTIVE_PZ_ID);if(pz)pz.img=img;}
+                syncRefCanvases();
+                renderPublishedPuzzles();
+                if(btn) btn.querySelector('strong').textContent = '✅ '+f.name;
+              };
+              img.src = canvas.toDataURL();
+            });
+          });
+        }).catch(err=>{
+          if(btn) btn.querySelector('strong').textContent = '❌ PDF failed — try JPG/PNG';
+          console.error('PDF.js error:',err);
+        });
+      };
+      reader.readAsArrayBuffer(f);
+    });
+  } else {
+    // Image upload
+    const reader = new FileReader();
+    reader.onload = e => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = ()=>{
         PZ.img = img;
-        // Also update the matching PUZZLE entry if active
-        if (ACTIVE_PZ_ID) { const pz = PUZZLES.find(p=>p.id===ACTIVE_PZ_ID); if(pz) pz.img = img; }
+        if(ACTIVE_PZ_ID){const pz=PUZZLES.find(p=>p.id===ACTIVE_PZ_ID);if(pz)pz.img=img;}
         syncRefCanvases();
         renderPublishedPuzzles();
+        if(btn) btn.querySelector('strong').textContent = '✅ '+f.name;
       };
       img.src = e.target.result;
-    }
-    syncRefCanvases();
-  };
-  r.readAsDataURL(f);
+    };
+    reader.readAsDataURL(f);
+  }
 }
+
+function loadPDFjs(cb) {
+  if(window.pdfjsLib){ cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload = ()=>{ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; cb(); };
+  s.onerror = ()=>alert('Could not load PDF library. Please check your internet connection.');
+  document.head.appendChild(s);
+}
+
+// Card set PDF upload — extract all 54 pages as country card images (alphabetical order)
+let CARD_IMAGES = {}; // countryName → dataURL
+
+function handleCardSetUpload(inp) {
+  const f = inp.files[0]; if (!f) return;
+  const statusEl = document.getElementById('card-upload-status');
+  if(statusEl) statusEl.textContent = '⏳ Loading PDF...';
+
+  loadPDFjs(()=>{
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const typedArray = new Uint8Array(e.target.result);
+      try {
+        const pdf = await pdfjsLib.getDocument({data: typedArray}).promise;
+        const numPages = pdf.numPages;
+        if(statusEl) statusEl.textContent = `⏳ Extracting ${numPages} pages...`;
+        // Sort countries alphabetically (same as PDF page order)
+        const sorted = [...CTRS].sort((a,b)=>a.name.localeCompare(b.name));
+        const extracted = {};
+        for(let i=1; i<=Math.min(numPages, sorted.length); i++) {
+          const page = await pdf.getPage(i);
+          const scale = 1.5;
+          const vp = page.getViewport({scale});
+          const canvas = document.createElement('canvas');
+          canvas.width=vp.width; canvas.height=vp.height;
+          await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+          extracted[sorted[i-1].name] = canvas.toDataURL('image/jpeg', 0.85);
+          if(statusEl) statusEl.textContent = `⏳ Page ${i}/${Math.min(numPages,sorted.length)}...`;
+        }
+        CARD_IMAGES = extracted;
+        if(statusEl) statusEl.textContent = `✅ ${Object.keys(extracted).length} cards extracted from "${f.name}"`;
+        // Re-render browser if open
+        renderBrowser();
+        // Update published puzzles list
+        renderPublishedPuzzles();
+      } catch(err) {
+        if(statusEl) statusEl.textContent = '❌ Failed: '+err.message;
+        console.error(err);
+      }
+    };
+    reader.readAsArrayBuffer(f);
+  });
+}
+
 
 function selectPieces(n, btn) {
   if (!ACCESS[CU.plan].pieces.includes(n)) { openModal('m-sub'); return; }
@@ -1478,75 +1641,75 @@ function syncRefCanvases() {
   tmp.getContext('2d').drawImage(PZ.img,0,0,iw,ih); rio.src=tmp.toDataURL();
 }
 
-/* ── PROFESSIONAL JIGSAW PATH ──
-   Every edge has either a tab (outward) or a blank (inward).
-   Direction is deterministic from the piece index for consistency.
-   Uses smooth cubic beziers for a professional rounded-tab look.
+/* ── JIGSAW PATH — matches physical Igiti pieces ──
+   Physical piece traits: wide flat tab head, narrow neck, deep blank
+   Uses cubic bezier: approach straight → narrow neck → spread wide flat head → close
 */
 function jigsawPath(ctx, col, row, pw, ph, cols, rows) {
-  const x = col*pw, y = row*ph;
-  const tx = pw * 0.30;  // tab start x offset
-  const ty = ph * 0.30;  // tab start y offset
-  const ts = 0.20;       // tab size as fraction of edge length
-  const td = 0.18;       // tab depth as fraction of short dimension
-
+  const x0 = col*pw, y0 = row*ph;
   const hasT = row > 0, hasR = col < cols-1, hasB = row < rows-1, hasL = col > 0;
   const idx = row*cols + col;
-  // Each edge: true = tab protrudes outward, false = blank (inward)
-  const tTab = (idx + Math.floor(idx/cols))    % 3 !== 0;
-  const rTab = (idx * 2 + col)                 % 3 !== 0;
-  const bTab = (idx + Math.floor(idx/cols) + 1)% 3 !== 0;
-  const lTab = (idx * 2 + row + 1)             % 3 !== 0;
+  // Deterministic tab direction per edge (same puzzle always same shape)
+  const tOut = ((idx * 3 + col * 7)     & 1) === 0;
+  const rOut = ((idx * 5 + row * 3 + 1) & 1) === 0;
+  const bOut = ((idx * 7 + col * 5 + 2) & 1) === 0;
+  const lOut = ((idx * 11 + row * 7+ 3) & 1) === 0;
 
-  function hTab(x1, y1, len, dir, isTab) {
-    // Horizontal edge from (x1,y1) length `len`, dir=+1 right, -1 left
-    // isTab: true=protrude, false=indent. Relative to canvas (up is negative y).
-    const depth = ph * td * (isTab ? -1 : 1) * (dir > 0 ? -1 : 1);
-    const mx = x1 + (len * 0.5 * dir);
-    const hw = len * ts;
-    // Draw straight, then tab bezier, then straight
-    ctx.lineTo(x1 + (len * 0.3 * dir), y1);
+  // Tab geometry — tuned to match the physical pieces:
+  //   neck: 28% of edge length centered at midpoint (each side 14% in from mid)
+  //   head: 60% wide, flat-topped
+  //   depth: 28% of the perpendicular dimension
+  function drawHEdge(x1,y1, len, goRight, tabOut, hasTab) {
+    const dir  = goRight ? 1 : -1;
+    const perp = tabOut  ? -1 : 1; // negative y = upward tab on top edge
+    const mid  = x1 + dir * len * 0.5;
+    const d    = ph * 0.28 * perp;   // depth
+    const nw   = len * 0.14;          // half-neck width
+    const hw   = len * 0.30;          // half-head width
+    if (!hasTab) { ctx.lineTo(x1 + dir*len, y1); return; }
+    ctx.lineTo(mid - dir*nw,  y1);                         // straight to neck start
     ctx.bezierCurveTo(
-      x1 + (len*0.3*dir), y1,
-      mx - hw*dir,        y1 + depth,
-      mx,                 y1 + depth
+      mid - dir*nw,  y1,                                   // neck hold
+      mid - dir*hw,  y1 + d,                               // spread to head
+      mid - dir*hw,  y1 + d                                // head start
     );
+    ctx.lineTo(mid + dir*hw,  y1 + d);                     // flat top of head
     ctx.bezierCurveTo(
-      mx + hw*dir,        y1 + depth,
-      x1 + (len*0.7*dir), y1,
-      x1 + (len*dir),     y1
+      mid + dir*hw,  y1 + d,                               // head end
+      mid + dir*nw,  y1,                                   // neck back
+      mid + dir*nw,  y1                                    // neck hold
     );
+    ctx.lineTo(x1 + dir*len, y1);                          // straight to corner
   }
-  function vTab(x1, y1, len, dir, isTab) {
-    const depth = pw * td * (isTab ? 1 : -1) * (dir > 0 ? 1 : -1);
-    const my = y1 + (len * 0.5 * dir);
-    const hh = len * ts;
-    ctx.lineTo(x1, y1 + (len * 0.3 * dir));
+  function drawVEdge(x1,y1, len, goDown, tabOut, hasTab) {
+    const dir  = goDown  ? 1 : -1;
+    const perp = tabOut  ? 1 : -1;  // positive x = rightward tab on right edge
+    const mid  = y1 + dir * len * 0.5;
+    const d    = pw * 0.28 * perp;
+    const nw   = len * 0.14;
+    const hw   = len * 0.30;
+    if (!hasTab) { ctx.lineTo(x1, y1 + dir*len); return; }
+    ctx.lineTo(x1,           mid - dir*nw);
     ctx.bezierCurveTo(
-      x1,          y1 + (len*0.3*dir),
-      x1 + depth,  my - hh*dir,
-      x1 + depth,  my
+      x1,           mid - dir*nw,
+      x1 + d,       mid - dir*hw,
+      x1 + d,       mid - dir*hw
     );
+    ctx.lineTo(x1 + d,       mid + dir*hw);
     ctx.bezierCurveTo(
-      x1 + depth,  my + hh*dir,
-      x1,          y1 + (len*0.7*dir),
-      x1,          y1 + (len*dir)
+      x1 + d,       mid + dir*hw,
+      x1,           mid + dir*nw,
+      x1,           mid + dir*nw
     );
+    ctx.lineTo(x1, y1 + dir*len);
   }
 
-  ctx.beginPath(); ctx.moveTo(x, y);
-  // Top edge → right
-  if (hasT) hTab(x, y, pw, 1, tTab);
-  else ctx.lineTo(x+pw, y);
-  // Right edge ↓
-  if (hasR) vTab(x+pw, y, ph, 1, rTab);
-  else ctx.lineTo(x+pw, y+ph);
-  // Bottom edge ← 
-  if (hasB) hTab(x+pw, y+ph, pw, -1, bTab);
-  else ctx.lineTo(x, y+ph);
-  // Left edge ↑
-  if (hasL) vTab(x, y+ph, ph, -1, lTab);
-  else ctx.lineTo(x, y);
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  drawHEdge(x0,    y0,    pw, true,  tOut, hasT);  // top: left→right
+  drawVEdge(x0+pw, y0,    ph, true,  rOut, hasR);  // right: top→bottom
+  drawHEdge(x0+pw, y0+ph, pw, false, bOut, hasB);  // bottom: right→left
+  drawVEdge(x0,    y0+ph, ph, false, lOut, hasL);  // left: bottom→top
   ctx.closePath();
 }
 
@@ -1588,75 +1751,65 @@ function buildTray() {
   const sw=img.width||img.naturalWidth||600, sh=img.height||img.naturalHeight||450;
   const total=PZ.total, tg=document.getElementById('tray-grid');
   tg.innerHTML='';
-  [...Array(total).keys()].sort(()=>Math.random()-.5).forEach(idx=>{
+  // Shuffle order for tray display
+  const order=[...Array(total).keys()].sort(()=>Math.random()-.5);
+  order.forEach(idx=>{
     const c=idx%cols, r=Math.floor(idx/cols);
     const wrap=document.createElement('div'); wrap.className='t-pc';
+    // Tray canvas: use a scale so the piece fits with overflow for tabs
+    const S=90;               // canvas size
+    const PAD=S*0.18;         // padding so tabs don't clip
+    const inner=S-PAD*2;     // inner cell size
     const canvas=document.createElement('canvas');
-    // Make tray pieces bigger for clarity
-    const sz=96; canvas.width=sz; canvas.height=sz;
-    const pctx=canvas.getContext('2d');
-    const scaleX=sz/PZ.pw, scaleY=sz/PZ.ph;
-    pctx.save();
-    // Scale the jigsaw path to the tray canvas size
-    pctx.scale(scaleX, scaleY);
-    jigsawPath(pctx,0,0,PZ.pw,PZ.ph,1,1);
-    pctx.restore();
-    pctx.save();
-    // Re-draw at tray scale
-    const tPW=sz, tPH=sz;
-    const fakeCols=1, fakeRows=1;
-    // Simpler: draw full piece scaled
-    const tctx=canvas.getContext('2d');
-    tctx.clearRect(0,0,sz,sz);
-    // Path for tray (standalone piece — no tabs needed at edges)
-    tctx.save();
-    tctx.beginPath();
-    const bx=sz*.12, by=sz*.12;
-    const tx2=sz*.3, tw=sz*.2;
-    // Draw a piece shape: rectangle with a tab on each side
-    function trayTab(x1,y1,len,isH,dir,hasTab) {
-      if (!hasTab) { tctx.lineTo(isH ? x1+len*dir : x1, isH ? y1 : y1+len*dir); return; }
-      const depth = (isH?sz*.15:sz*.15)*(dir>0?1:-1);
-      const mid = isH ? (x1 + len*dir*0.5) : (y1 + len*dir*0.5);
-      const hw = len*.18;
-      if (isH) {
-        tctx.lineTo(x1+len*dir*0.3,y1);
-        tctx.bezierCurveTo(x1+len*dir*0.3,y1, mid-hw*dir,y1-depth, mid,y1-depth);
-        tctx.bezierCurveTo(mid+hw*dir,y1-depth, x1+len*dir*0.7,y1, x1+len*dir,y1);
-      } else {
-        tctx.lineTo(x1,y1+len*dir*0.3);
-        tctx.bezierCurveTo(x1,y1+len*dir*0.3, x1+depth,mid-hw*dir, x1+depth,mid);
-        tctx.bezierCurveTo(x1+depth,mid+hw*dir, x1,y1+len*dir*0.7, x1,y1+len*dir);
-      }
-    }
-    const m=6; // margin
-    tctx.moveTo(m,m);
-    // Determine tab directions from original piece
-    const origIdx=r*cols+c;
-    const tT=((origIdx+Math.floor(origIdx/cols))%3!==0)&&r>0;
-    const tR=((origIdx*2+c)%3!==0)&&c<cols-1;
-    const tB=((origIdx+Math.floor(origIdx/cols)+1)%3!==0)&&r<rows-1;
-    const tL=((origIdx*2+r+1)%3!==0)&&c>0;
-    trayTab(m,m,sz-2*m,true,1,tT);
-    trayTab(sz-m,m,sz-2*m,false,1,tR);
-    trayTab(sz-m,sz-m,sz-2*m,true,-1,tB);
-    trayTab(m,sz-m,sz-2*m,false,-1,tL);
-    tctx.closePath();
-    tctx.clip();
-    tctx.drawImage(img, c*(sw/cols), r*(sh/rows), sw/cols, sh/rows, m, m, sz-2*m, sz-2*m);
-    tctx.restore();
-    tctx.save();
-    // Re-apply path for stroke
-    tctx.beginPath();
-    tctx.moveTo(m,m);
-    trayTab(m,m,sz-2*m,true,1,tT);
-    trayTab(sz-m,m,sz-2*m,false,1,tR);
-    trayTab(sz-m,sz-m,sz-2*m,true,-1,tB);
-    tctx.moveTo(m,sz-m);
-    trayTab(m,sz-m,sz-2*m,false,-1,tL);
-    tctx.closePath();
-    tctx.strokeStyle='rgba(80,50,20,.25)'; tctx.lineWidth=1; tctx.stroke();
-    tctx.restore();
+    canvas.width=S; canvas.height=S;
+    const ctx=canvas.getContext('2d');
+
+    // Scale the real jigsawPath to fit the tray canvas
+    // Map piece (c,r) in the grid → a 1×1 grid at scaled coords
+    const scW=inner, scH=inner;
+    ctx.save();
+    ctx.translate(PAD, PAD);
+    ctx.scale(scW/PZ.pw, scH/PZ.ph);
+    // Draw using real jigsawPath — treats piece as col=c,row=r in full grid
+    // so tabs match the board exactly
+    jigsawPath(ctx, c, r, PZ.pw, PZ.ph, cols, rows);
+    ctx.restore();
+    // Clip and draw image
+    ctx.save();
+    ctx.translate(PAD, PAD);
+    ctx.scale(scW/PZ.pw, scH/PZ.ph);
+    jigsawPath(ctx, c, r, PZ.pw, PZ.ph, cols, rows);
+    ctx.restore();
+    ctx.save();
+    // Apply clip in screen space
+    ctx.beginPath();
+    ctx.translate(PAD, PAD);
+    // Rebuild path with transform
+    const scX=scW/PZ.pw, scY=scH/PZ.ph;
+    ctx.scale(scX, scY);
+    jigsawPath(ctx, c, r, PZ.pw, PZ.ph, cols, rows);
+    ctx.restore();
+
+    // Simpler approach: use offscreen canvas at board scale then downscale
+    const off=document.createElement('canvas');
+    off.width=PZ.pw+40; off.height=PZ.ph+40;
+    const octx=off.getContext('2d');
+    octx.save();
+    octx.translate(20,20);
+    jigsawPath(octx, 0, 0, PZ.pw, PZ.ph, 1, 1);
+    octx.clip();
+    octx.drawImage(img, c*(sw/cols), r*(sh/rows), sw/cols, sh/rows, 0, 0, PZ.pw, PZ.ph);
+    octx.restore();
+    // Stroke
+    octx.save();
+    octx.translate(20,20);
+    jigsawPath(octx, 0, 0, PZ.pw, PZ.ph, 1, 1);
+    octx.strokeStyle='rgba(60,40,15,.35)'; octx.lineWidth=1.5; octx.stroke();
+    octx.restore();
+    // Draw offscreen → tray canvas scaled to fit
+    const scale=Math.min(S/(PZ.pw+40), S/(PZ.ph+40));
+    ctx.drawImage(off, (S-(PZ.pw+40)*scale)/2, (S-(PZ.ph+40)*scale)/2, (PZ.pw+40)*scale, (PZ.ph+40)*scale);
+
     wrap.appendChild(canvas);
     wrap.addEventListener('click',()=>placePiece(idx,wrap));
     tg.appendChild(wrap);
@@ -1723,11 +1876,15 @@ function buildCardsPanel() { buildModeGrid(); renderBrowser(); }
 function rClass(r){return{'East Africa':'east','West Africa':'west','North Africa':'north','Southern Africa':'south','Central Africa':'central'}[r]||'east';}
 
 function buildCardHTML(ct) {
-  // Exactly matching the Rwanda sample: title pill, flag area, 3 icon rows, fact box
+  // Use uploaded card image if available, otherwise show flag emoji
+  const imgSrc = CARD_IMAGES && CARD_IMAGES[ct.name];
+  const flagArea = imgSrc
+    ? `<img src="${imgSrc}" alt="${ct.name}" style="width:100%;height:100%;object-fit:cover;display:block;">`
+    : ct.flag;
   return `<div class="igiti-card ${rClass(ct.region)}">
     <div class="ic-border"><div class="ic-inner">
       <div class="ic-title-row"><div class="ic-title">${ct.name}</div></div>
-      <div class="ic-flag-area">${ct.flag}</div>
+      <div class="ic-flag-area">${flagArea}</div>
       <div class="ic-rows">
         <div class="ic-row">
           <div class="ic-cell"><span class="cc-icon">🌍</span><span class="cc-val">${ct.region}</span></div>
@@ -2132,19 +2289,22 @@ function notifyUser(em){alert('Notification sent to '+em+' (demo)');}
 
 function renderPublishedPuzzles() {
   const pl=document.getElementById('published-puzzles'); if(!pl) return;
-  pl.innerHTML=PUZZLES.length?PUZZLES.map(p=>`
+  if(!PUZZLES.length){
+    pl.innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--mu);font-size:.84rem;">📭 No puzzles published yet.<br>Upload an image above, give it a name, and click Publish.</div>';
+    return;
+  }
+  pl.innerHTML=PUZZLES.map(p=>`
     <div class="assign-item">
-      <div class="assign-thumb">🗺️</div>
+      <div class="assign-thumb" style="background:${p.img?'var(--gn-pale)':'var(--wm)'};">${p.img?'🖼️':'🗺️'}</div>
       <div class="assign-info">
         <div class="an">${p.name}</div>
-        <div class="am">Pieces: ${p.pieces.join('/')} · ${p.assignedSchools.length} schools · ${p.plays} plays · ${p.uploadDate}</div>
+        <div class="am">Pieces: ${p.pieces.join(' · ')} · ${p.assignedSchools.length} school(s) · ${p.plays} play(s) · ${p.uploadDate}</div>
       </div>
-      <div style="display:flex;gap:.3rem;">
+      <div style="display:flex;gap:.3rem;flex-wrap:wrap;">
         <button class="btn btn-xs btn-ghost" onclick="adminEditPuzzle('${p.id}')">Edit</button>
-        <button class="btn btn-xs btn-danger" onclick="adminDeletePuzzle('${p.id}')">Del</button>
+        <button class="btn btn-xs btn-danger" onclick="adminDeletePuzzle('${p.id}')">Delete</button>
       </div>
-    </div>`).join('')
-    : '<div style="text-align:center;padding:1rem;color:var(--mu);font-size:.82rem;">No puzzles published yet. Upload one above.</div>';
+    </div>`).join('');
 }
 
 function adminPublishPuzzle() {
@@ -2210,24 +2370,33 @@ function buildAccessControls() {
 function buildSchoolList() {
   const sl=document.getElementById('school-list-admin'); if(!sl) return;
   const schools=Object.entries(USERS).filter(([,u])=>u.role==='school');
+  if(!schools.length){
+    sl.innerHTML='<div style="color:var(--mu);font-size:.8rem;padding:.5rem 0;">No school accounts registered yet.<br>Schools sign up via the registration page.</div>';
+    return;
+  }
   sl.innerHTML=schools.map(([em,u])=>{
     const teachers=Object.values(USERS).filter(x=>x.schoolId===u.schoolId&&x.role==='teacher').length;
     const students=Object.values(USERS).filter(x=>x.schoolId===u.schoolId&&x.role==='student').length;
+    const code = u.schoolCode || '—';
     return `<div class="toggle-row">
-      <label class="toggle-sw"><input type="checkbox" checked><span class="slider"></span></label>
-      <span style="flex:1;font-size:.8rem;">${u.name}</span>
-      <span style="font-size:.64rem;color:var(--mu);">${teachers}T · ${students}S</span>
+      <label class="toggle-sw"><input type="checkbox" checked onchange="alert('Access toggled for '+${JSON.stringify(u.name)}+' (demo)')"><span class="slider"></span></label>
+      <div style="flex:1;">
+        <div style="font-size:.8rem;font-weight:600;">${u.name}</div>
+        <div style="font-size:.64rem;color:var(--mu);">Code: <strong>${code}</strong> · ${teachers} teacher(s) · ${students} student(s)</div>
+      </div>
     </div>`;
   }).join('');
 }
+// In-session notification log — grows as admin sends notifications
+let NOTIF_LOG = [];
+
 function buildNotifHistory() {
   const nh=document.getElementById('notif-history'); if(!nh) return;
-  const items=[
-    {msg:'Trial expiring in 3 days',target:'Trial users',sent:'2h ago',count:3},
-    {msg:'New Rwanda Map published!',target:'All users',sent:'1d ago',count:Object.keys(USERS).length},
-    {msg:'Complete your puzzle for a badge',target:'Inactive 7+ days',sent:'3d ago',count:2},
-  ];
-  nh.innerHTML=items.map(n=>`<div class="notif-item"><div class="ni-title">${n.msg}</div><div class="ni-meta">→ ${n.target} · ${n.count} recipients · ${n.sent}</div></div>`).join('');
+  if(!NOTIF_LOG.length){
+    nh.innerHTML='<div style="color:var(--mu);font-size:.78rem;padding:.5rem 0;">No notifications sent yet this session.</div>';
+    return;
+  }
+  nh.innerHTML=NOTIF_LOG.slice().reverse().map(n=>`<div class="notif-item"><div class="ni-title">${n.msg}</div><div class="ni-meta">→ ${n.target} · ${n.count} recipients · ${n.sent}</div></div>`).join('');
 }
 function buildScheduledNotifs() {
   const sn=document.getElementById('sched-notifs'); if(!sn) return;
@@ -2243,11 +2412,20 @@ function buildScheduledNotifs() {
     </div>`).join('');
 }
 function sendNotification() {
-  const msg=document.getElementById('notif-msg').value;
+  const msg=document.getElementById('notif-msg').value.trim();
   if(!msg){alert('Write a message first.');return;}
   const target=document.getElementById('notif-target').value;
   const type=document.getElementById('notif-type').value;
-  alert(`Notification sent!\nTarget: ${target}\nType: ${type}\nMessage: ${msg}\n\n(Demo — backend needed for real delivery)`);
+  // Count recipients from live USERS
+  const userList=Object.values(USERS);
+  let count=0;
+  if(target==='all') count=userList.filter(u=>u.role!=='admin').length;
+  else if(target==='trial') count=userList.filter(u=>u.trial>0).length;
+  else if(target==='free') count=userList.filter(u=>u.plan==='free').length;
+  else if(target==='school') count=userList.filter(u=>u.role==='school'||u.plan==='school').length;
+  else if(target==='inactive') count=Math.max(0,userList.length-2); // demo
+  NOTIF_LOG.push({msg,target:target+' users',count,sent:'just now',type});
+  alert('Notification sent to '+count+' recipient(s)!\n\n(Demo — backend needed for real push/email delivery)');
   document.getElementById('notif-msg').value='';
   buildNotifHistory();
 }
