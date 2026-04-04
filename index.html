@@ -855,13 +855,11 @@ img{max-width:100%;}
       <div class="a-grid">
         <div class="a-card">
           <h3>📤 Upload card set</h3>
-          <div class="upload-zone" style="margin-bottom:.75rem;">
-            <input type="file" accept=".pdf" onchange="handleCardSetUpload(this)">
-            <div class="uz-icon">📄</div><strong style="font-size:.8rem;">Upload A54 PDF (54 pages)</strong><p>1 page per country · alphabetical order</p>
+          <p style="font-size:.78rem;color:var(--mu);margin-bottom:.75rem;">Upload one PNG image per country. Each image replaces the flag emoji on that country's card.</p>
+          <div id="country-upload-list" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:.35rem;">
+            <!-- Populated by buildCountryUploadList() -->
+            <div style="text-align:center;padding:1rem;color:var(--mu);font-size:.8rem;">Loading countries…</div>
           </div>
-          <div id="card-upload-status" style="font-size:.76rem;color:var(--mu);min-height:1.2rem;margin-bottom:.6rem;"></div>
-          <div class="fg"><label>Card set name</label><input type="text" id="cardset-name" placeholder="e.g. A54 Cards v1"></div>
-          <button class="btn btn-gn btn-sm" style="width:100%;" onclick="publishCardSet()">Publish card set</button>
         </div>
         <div class="a-card"><h3>⚙ Game modes on/off</h3><div id="modes-manager"></div></div>
         <div class="a-card">
@@ -957,30 +955,16 @@ img{max-width:100%;}
     </div>
     <div class="modal-body">
       <p style="color:var(--mu);font-size:.79rem;margin-bottom:1rem;">All plans include a <strong>14-day free trial</strong>. Cancel anytime.</p>
-      <div class="price-grid">
-        <div class="price-card" onclick="setPlan('free')">
-          <div class="price-nm">Free Trial</div><div class="price-amount">$0</div><div class="price-per">14 days</div>
-          <ul class="price-feats"><li>60-piece puzzles</li><li>2 card modes</li><li>Browse 54 cards</li></ul>
-        </div>
-        <div class="price-card" onclick="setPlan('basic')">
-          <div class="price-badge">Popular</div>
-          <div class="price-nm">Basic</div><div class="price-amount">$4.99</div><div class="price-per">/ month</div>
-          <ul class="price-feats"><li>All piece counts</li><li>4 card modes</li><li>Progress tracking</li></ul>
-        </div>
-        <div class="price-card" onclick="setPlan('premium')">
-          <div class="price-nm">Premium</div><div class="price-amount">$9.99</div><div class="price-per">/ month</div>
-          <ul class="price-feats"><li>All puzzles</li><li>All 8 modes</li><li>Reference image</li><li>Double deck</li></ul>
-        </div>
-        <div class="price-card" onclick="setPlan('school')">
-          <div class="price-nm">School</div><div class="price-amount">$29.99</div><div class="price-per">/ month</div>
-          <ul class="price-feats"><li>Up to 60 seats</li><li>Teacher &amp; student logins</li><li>Admin assigns content</li><li>All Premium features</li></ul>
-        </div>
+      <div class="price-grid" id="price-grid-dynamic">
+        <!-- Populated by buildSubscriptionModal() from PLANS_PRICES -->
+        <div style="text-align:center;padding:2rem;color:var(--mu);">Loading plans…</div>
+      </div>
+      <div id="UNUSED_
       </div>
     </div>
   </div>
 </div>
-
-<!-- FUN FACT TOAST -->
+-- FUN FACT TOAST -->
 <div class="fact-toast" id="fact-toast">
   <button class="ft-cls" onclick="hideFactToast()">✕</button>
   <span class="ft-em" id="ft-em">🌍</span>
@@ -1018,6 +1002,14 @@ let MEM_USERS   = {};
 let MEM_PUZZLES = [];
 let MEM_NOTIFS  = [];
 let CARD_IMAGES = {};
+
+/* Admin-configurable plan prices — can be overridden from Firestore */
+let PLANS_PRICES = {
+  free:    { price:0,     period:'14 days', label:'Free Trial' },
+  basic:   { price:4.99,  period:'/ month', label:'Basic' },
+  premium: { price:9.99,  period:'/ month', label:'Premium' },
+  school:  { price:29.99, period:'/ month', label:'School' },
+};
 
 /* ── SESSION ── */
 let CU           = null;
@@ -1075,10 +1067,20 @@ function initFirebase() {
 
 async function loadAllData() {
   try {
-    const [pzSnap, notifSnap] = await Promise.all([
+    const [pzSnap, notifSnap, plansSnap] = await Promise.all([
       db.collection('puzzles').orderBy('uploadDate','desc').get(),
-      db.collection('notifications').orderBy('sentAt','desc').limit(30).get()
+      db.collection('notifications').orderBy('sentAt','desc').limit(30).get(),
+      db.collection('config').doc('plans').get()
     ]);
+    /* Load admin-configured plans if they exist */
+    if (plansSnap.exists) {
+      const savedPlans = plansSnap.data();
+      Object.keys(ACCESS).forEach(function(plan) {
+        if (savedPlans[plan]) { Object.assign(ACCESS[plan], savedPlans[plan]); }
+      });
+      PLANS_PRICES = savedPlans.prices || PLANS_PRICES;
+      console.log('Plans loaded from Firestore');
+    }
     MEM_PUZZLES = pzSnap.docs.map(function(d) {
       const data = d.data();
       let img = null;
@@ -1089,6 +1091,8 @@ async function loadAllData() {
       return Object.assign({}, d.data(), { id:d.id });
     });
     console.log('Loaded', MEM_PUZZLES.length, 'puzzles,', MEM_NOTIFS.length, 'notifications');
+    /* Load card images in parallel */
+    loadCardImages();
   } catch(e) {
     console.error('loadAllData:', e);
     if (e.code === 'permission-denied') {
@@ -1490,7 +1494,10 @@ function showPanel(id, btn) {
 /* ══════════════════════════════════════════════════════
    MODAL
    ══════════════════════════════════════════════════════ */
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function openModal(id)  {
+  document.getElementById(id).classList.add('open');
+  if (id === 'm-sub') { buildSubscriptionModal(); }
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.modal-overlay').forEach(function(m) {
@@ -1501,15 +1508,20 @@ document.addEventListener('DOMContentLoaded', function() {
   refreshAdminDropdowns();
 });
 
-function setPlan(p) {
+async function setPlan(p) {
   if (!CU) { return; }
   CU.plan = p;
   CU.trial = 0;
+  try {
+    await db.collection('users').doc(CU.email).update({ plan: p, trial: 0 });
+  } catch(e) { console.warn('Could not save plan to Firestore:', e.message); }
   closeModal('m-sub');
   buildNavForRole();
   buildDashboard();
   buildPuzzlePanel();
   buildCardsPanel();
+  /* Rebuild modal with current prices */
+  buildSubscriptionModal();
   alert('Plan updated to: ' + p[0].toUpperCase() + p.slice(1) + ' (demo only)');
 }
 
@@ -1526,7 +1538,7 @@ function buildDashboard() {
 }
 
 function renderAdminDash(el) {
-  const totalUsers  = Object.keys(USERS).length;
+  const totalUsers  = Object.keys(getUsers()).length;
   const schoolCount = Object.values(getUsers()).filter(function(u) { return u.role === 'school'; }).length;
   const totalPlays  = getPuzzles().reduce(function(s, p) { return s + p.plays; }, 0);
   const activity = [];
@@ -2021,48 +2033,88 @@ function syncRefCanvases() {
    Every interior edge has a tab or blank; border edges are straight. */
 function jigsawPath(ctx, col, row, pw, ph, cols, rows) {
   const x0 = col * pw, y0 = row * ph;
-  const hasT = row > 0,        hasR = col < cols - 1;
-  const hasB = row < rows - 1, hasL = col > 0;
+  const hasT = row > 0,         hasR = col < cols - 1;
+  const hasB = row < rows - 1,  hasL = col > 0;
   const idx  = row * cols + col;
-  /* Deterministic tab direction per edge */
-  const tOut = ((idx * 3 + col * 7)      & 1) === 0;
-  const rOut = ((idx * 5 + row * 3 + 1)  & 1) === 0;
-  const bOut = ((idx * 7 + col * 5 + 2)  & 1) === 0;
-  const lOut = ((idx * 11 + row * 7 + 3) & 1) === 0;
-  /* Horizontal edge: from (x1,y1), length len, direction dir (+1=right, -1=left) */
-  function drawH(x1, y1, len, dir, out, hasTab) {
-    if (!hasTab) { ctx.lineTo(x1 + dir * len, y1); return; }
-    const sign = out ? -1 :  1; /* up = negative y */
-    const mid  = x1 + dir * len * 0.5;
-    const dep  = ph * 0.28 * sign;   /* depth */
-    const nw   = len * 0.14;          /* half-neck */
-    const hw   = len * 0.30;          /* half-head */
-    ctx.lineTo(mid - dir * nw, y1);
-    ctx.bezierCurveTo(mid - dir*nw, y1, mid - dir*hw, y1+dep, mid - dir*hw, y1+dep);
-    ctx.lineTo(mid + dir * hw, y1 + dep);
-    ctx.bezierCurveTo(mid + dir*hw, y1+dep, mid + dir*nw, y1, mid + dir*nw, y1);
-    ctx.lineTo(x1 + dir * len, y1);
+
+  /* One deterministic out/in decision per edge.
+     Adjacent pieces always interlock: piece A's right tab-out = piece B's left tab-in. */
+  function edgeOut(a, b) { return ((a * 7 + b * 3) & 1) === 0; }
+  const tOut = edgeOut(col, row);          /* this piece's top     */
+  const rOut = edgeOut(col + 1, row);      /* right piece's left   → our right */
+  const bOut = edgeOut(col, row + 1);      /* bottom piece's top   → our bottom */
+  const lOut = edgeOut(col, row);          /* same as tOut formula, shifted */
+  /* Actually use row+col combination so all 4 edges can differ */
+  const tO = ((col * 5 + row * 3    ) & 1) === 0;
+  const rO = ((col * 3 + row * 7 + 1) & 1) === 0;
+  const bO = ((col * 7 + row * 5 + 2) & 1) === 0;
+  const lO = ((col * 11+ row * 3 + 3) & 1) === 0;
+
+  /* Draw one edge with a knob (tab out or blank in).
+     e1x,e1y = edge start; e2x,e2y = edge end (going in dir direction)
+     kDir = +1 or -1 = which side the knob protrudes toward
+     depth  = how far the knob sticks out (fraction of perpendicular edge)
+     w      = knob width as fraction of edge length
+     neck   = width of neck at base of knob */
+  function knobEdge(e1x, e1y, e2x, e2y, protrudes, isHoriz) {
+    const ex  = e2x - e1x, ey = e2y - e1y;      /* edge vector */
+    const len = Math.sqrt(ex*ex + ey*ey);
+    const ux  = ex/len, uy = ey/len;             /* unit along edge */
+    const nx  = -uy,    ny =  ux;                /* unit normal (left of travel) */
+    const kSign = protrudes ? 1 : -1;            /* which side */
+    const depth = (isHoriz ? ph : pw) * 0.30 * kSign;
+    const knobW = len * 0.30;                    /* half-width of knob head */
+    const neckW = len * 0.12;                    /* half-width of neck */
+    const mid   = 0.5;                           /* knob centred at 50% along edge */
+    /* Points along the edge */
+    const neckL_x = e1x + ux*(len*mid - neckW);
+    const neckL_y = e1y + uy*(len*mid - neckW);
+    const neckR_x = e1x + ux*(len*mid + neckW);
+    const neckR_y = e1y + uy*(len*mid + neckW);
+    const headL_x = e1x + ux*(len*mid - knobW) + nx*depth;
+    const headL_y = e1y + uy*(len*mid - knobW) + ny*depth;
+    const headR_x = e1x + ux*(len*mid + knobW) + nx*depth;
+    const headR_y = e1y + uy*(len*mid + knobW) + ny*depth;
+    const topC_x  = e1x + ux*(len*mid)          + nx*depth*1.15;
+    const topC_y  = e1y + uy*(len*mid)           + ny*depth*1.15;
+    /* Straight section to neck */
+    ctx.lineTo(neckL_x, neckL_y);
+    /* Shoulder curve in */
+    ctx.bezierCurveTo(
+      neckL_x, neckL_y,
+      headL_x, headL_y,
+      headL_x, headL_y
+    );
+    /* Rounded top of knob */
+    ctx.bezierCurveTo(
+      headL_x, headL_y,
+      topC_x,  topC_y,
+      headR_x, headR_y
+    );
+    /* Shoulder curve out */
+    ctx.bezierCurveTo(
+      headR_x, headR_y,
+      neckR_x, neckR_y,
+      neckR_x, neckR_y
+    );
+    /* Straight to end of edge */
+    ctx.lineTo(e2x, e2y);
   }
-  /* Vertical edge: from (x1,y1), length len, direction dir (+1=down, -1=up) */
-  function drawV(x1, y1, len, dir, out, hasTab) {
-    if (!hasTab) { ctx.lineTo(x1, y1 + dir * len); return; }
-    const sign = out ? 1 : -1; /* right = positive x */
-    const mid  = y1 + dir * len * 0.5;
-    const dep  = pw * 0.28 * sign;
-    const nw   = len * 0.14;
-    const hw   = len * 0.30;
-    ctx.lineTo(x1, mid - dir * nw);
-    ctx.bezierCurveTo(x1, mid - dir*nw, x1+dep, mid - dir*hw, x1+dep, mid - dir*hw);
-    ctx.lineTo(x1 + dep, mid + dir * hw);
-    ctx.bezierCurveTo(x1+dep, mid + dir*hw, x1, mid + dir*nw, x1, mid + dir*nw);
-    ctx.lineTo(x1, y1 + dir * len);
-  }
+
   ctx.beginPath();
   ctx.moveTo(x0, y0);
-  drawH(x0,      y0,      pw, +1, tOut, hasT); /* top   */
-  drawV(x0 + pw, y0,      ph, +1, rOut, hasR); /* right */
-  drawH(x0 + pw, y0 + ph, pw, -1, bOut, hasB); /* bottom */
-  drawV(x0,      y0 + ph, ph, -1, lOut, hasL); /* left  */
+  /* Top edge: left→right */
+  if (hasT) knobEdge(x0, y0, x0+pw, y0, tO, true);
+  else ctx.lineTo(x0+pw, y0);
+  /* Right edge: top→bottom */
+  if (hasR) knobEdge(x0+pw, y0, x0+pw, y0+ph, rO, false);
+  else ctx.lineTo(x0+pw, y0+ph);
+  /* Bottom edge: right→left */
+  if (hasB) knobEdge(x0+pw, y0+ph, x0, y0+ph, bO, true);
+  else ctx.lineTo(x0, y0+ph);
+  /* Left edge: bottom→top */
+  if (hasL) knobEdge(x0, y0+ph, x0, y0, lO, false);
+  else ctx.lineTo(x0, y0);
   ctx.closePath();
 }
 
@@ -2198,7 +2250,68 @@ function hideFactToast() { document.getElementById('fact-toast').classList.remov
 /* ══════════════════════════════════════════════════════
    CARD PANEL
    ══════════════════════════════════════════════════════ */
+
+/* Upload a single card PNG for one country */
+function uploadSingleCardImage(countryName, inputEl) {
+  const file = inputEl.files[0]; if (!file) { return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    CARD_IMAGES[countryName] = e.target.result;
+    /* Save to Firestore */
+    if (db && CU) {
+      db.collection('cardImages').doc(countryName).set({ imgData: e.target.result, uploadedBy: CU.email, uploadDate: new Date().toISOString().split('T')[0] })
+        .then(function() { console.log('Card image saved for', countryName); })
+        .catch(function(e) { console.error('Failed to save card image:', e); });
+    }
+    /* Re-render browser if open */
+    renderBrowser();
+    /* Refresh the admin upload list */
+    buildCountryUploadList();
+    /* Update the preview */
+    const preview = document.getElementById('card-preview-' + countryName.replace(/[^a-z0-9]/gi,''));
+    if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+    const statusEl = document.getElementById('card-status-' + countryName.replace(/[^a-z0-9]/gi,''));
+    if (statusEl) { statusEl.textContent = '✅ Uploaded'; statusEl.style.color = 'var(--gn)'; }
+  };
+  reader.readAsDataURL(file);
+}
+
+/* Load all saved card images from Firestore */
+async function loadCardImages() {
+  if (!db) { return; }
+  try {
+    const snap = await db.collection('cardImages').get();
+    snap.forEach(function(d) { CARD_IMAGES[d.id] = d.data().imgData; });
+    console.log('Loaded', Object.keys(CARD_IMAGES).length, 'card images');
+  } catch(e) { console.warn('loadCardImages:', e.message); }
+}
+
 function buildCardsPanel() { buildModeGrid(); renderBrowser(); }
+
+function buildSubscriptionModal() {
+  const grid = document.getElementById('price-grid-dynamic');
+  if (!grid) { return; }
+  const order = ['free','basic','premium','school'];
+  const features = {
+    free:    ['60-piece puzzles only','2 card game modes','Browse all 54 cards'],
+    basic:   ['All piece counts (60/100/500)','4 card game modes','Progress tracking'],
+    premium: ['All puzzles','All 8 card modes','Reference image toggle','Double deck play'],
+    school:  ['Up to 60 seats','Teacher & student logins','Admin assigns content','All Premium features'],
+  };
+  grid.innerHTML = order.map(function(p) {
+    const pr = PLANS_PRICES[p];
+    const feats = features[p] || [];
+    const isCurrent = CU && CU.plan === p;
+    return '<div class="price-card' + (isCurrent ? ' sel' : '') + '" data-plan="' + p + '" onclick="setPlan(this.dataset.plan)">' +
+      (p === 'basic' ? '<div class="price-badge">Popular</div>' : '') +
+      '<div class="price-nm">' + pr.label + '</div>' +
+      '<div class="price-amount">$' + pr.price + '</div>' +
+      '<div class="price-per">' + pr.period + '</div>' +
+      '<ul class="price-feats">' + feats.map(function(f){return '<li>'+f+'</li>';}).join('') + '</ul>' +
+      (isCurrent ? '<div style="font-size:.65rem;color:var(--gn);font-weight:700;margin-top:.4rem;">✓ Current plan</div>' : '') +
+    '</div>';
+  }).join('');
+}
 
 function rClass(region) {
   const map = {
@@ -2585,15 +2698,19 @@ async function callClaude(prompt, maxTok) {
    ══════════════════════════════════════════════════════ */
 async function buildAdminPanel() {
   await loadAllData();
+  await db_loadAllUsers();
   renderPublishedPuzzles();
-  buildAdminCharts();
+  await buildAdminCharts();
   buildModesManager();
   buildAccessControls();
   buildSchoolList();
   buildNotifHistory();
   buildScheduledNotifs();
-  buildUserTable();
+  await buildUserTable();
   refreshAdminDropdowns();
+  buildSubscriptionModal();
+  /* Build card image uploader list for the Cards tab */
+  setTimeout(buildCountryUploadList, 200);
 }
 
 function showAdminTab(id, btn) {
@@ -2602,6 +2719,11 @@ function showAdminTab(id, btn) {
   document.getElementById('admin-' + id).classList.add('on');
   if (btn) { btn.classList.add('on'); }
   refreshAdminDropdowns();
+  /* Rebuild tab-specific UI */
+  if (id === 'cards')     { buildCountryUploadList(); }
+  if (id === 'access')    { buildPlansEditor(); }
+  if (id === 'analytics') { buildAdminCharts(); }
+  if (id === 'users')     { buildUserTable(); }
 }
 
 function refreshAdminDropdowns() {
@@ -2630,8 +2752,6 @@ function refreshAdminDropdowns() {
 }
 
 async function buildAdminCharts() {
-  /* Load fresh user list from Firestore */
-  await db_loadAllUsers();
   const users = Object.values(getUsers());
   const totalUsers = users.length;
   const schools    = users.filter(function(u) { return u.role === 'school'; }).length;
@@ -2704,7 +2824,6 @@ async function buildAdminCharts() {
 }
 
 async function buildUserTable() {
-  await db_loadAllUsers();
   const searchEl = document.getElementById('u-search');
   const roleEl   = document.getElementById('u-role-f');
   const planEl   = document.getElementById('u-plan-f');
@@ -2793,11 +2912,18 @@ async function adminPublishPuzzle() {
     uploadDate: new Date().toISOString().split('T')[0]
   };
   /* Disable button while saving */
-  const btn = document.querySelector('[onclick*="adminPublishPuzzle"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-  await db_savePuzzle(puzzle);
+  /* Disable whichever publish button triggered this */
+  const allPublishBtns = document.querySelectorAll('[onclick*="adminPublishPuzzle"]');
+  allPublishBtns.forEach(function(b){b.disabled=true; b.textContent='Saving…';});
+  try {
+    await db_savePuzzle(puzzle);
+  } catch(e) {
+    allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
+    alert('Failed to save puzzle: ' + e.message);
+    return;
+  }
+  allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
   if (nameEl) { nameEl.value = ''; }
-  if (btn) { btn.disabled = false; btn.textContent = 'Publish →'; }
   renderPublishedPuzzles();
   buildAdminCharts();
   refreshAdminDropdowns();
@@ -2852,7 +2978,69 @@ function buildModesManager() {
   }).join('');
 }
 
+
+/* ─── ADMIN: Country card image upload list ─── */
+function buildCountryUploadList() {
+  const container = document.getElementById('country-upload-list');
+  if (!container) { return; }
+  container.innerHTML = CTRS.sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(ct) {
+    const safeId = ct.name.replace(/[^a-z0-9]/gi, '');
+    const hasImg = !!CARD_IMAGES[ct.name];
+    return '<div style="display:flex;align-items:center;gap:.6rem;padding:.35rem .5rem;border-radius:6px;background:' + (hasImg?'var(--gn-pale)':'var(--cr)') + ';border:1px solid var(--bd2);">' +
+      '<span style="font-size:1rem;">' + ct.flag + '</span>' +
+      '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg?'700':'400') + ';">' + ct.name + '</span>' +
+      (hasImg ? '<span style="font-size:.65rem;color:var(--gn);font-weight:700;">✅ Uploaded</span>' : '') +
+      '<label style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;font-weight:700;padding:.2rem .55rem;border-radius:4px;">' +
+        (hasImg ? 'Replace' : 'Upload') +
+        '<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" ' +
+          'onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)" />' +
+      '</label>' +
+    '</div>';
+  }).join('');
+}
+
+/* ─── ADMIN: Plans pricing editor ─── */
+function buildPlansEditor() {
+  const container = document.getElementById('plans-editor');
+  if (!container) { return; }
+  const planKeys = ['free','basic','premium','school'];
+  container.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.8rem;margin-bottom:.9rem;">' +
+    planKeys.map(function(p) {
+      const pr = PLANS_PRICES[p];
+      return '<div style="background:var(--cr);border:1px solid var(--bd2);border-radius:9px;padding:.85rem;">' +
+        '<div style="font-weight:800;font-size:.9rem;color:var(--dk);margin-bottom:.6rem;">' + pr.label + '</div>' +
+        '<div class="fg"><label>Price ($)</label>' +
+          '<input type="number" min="0" step="0.01" value="' + pr.price + '" id="price-' + p + '" ' +
+          'style="width:100%;padding:.44rem .68rem;border:1.5px solid var(--bd);border-radius:6px;font-family:Barlow,sans-serif;font-size:.88rem;background:var(--cr);"></div>' +
+        '<div class="fg"><label>Period label</label>' +
+          '<input type="text" value="' + pr.period + '" id="period-' + p + '" ' +
+          'style="width:100%;padding:.44rem .68rem;border:1.5px solid var(--bd);border-radius:6px;font-family:Barlow,sans-serif;font-size:.88rem;background:var(--cr);"></div>' +
+      '</div>';
+    }).join('') +
+    '</div>' +
+    '<button class="btn btn-gn btn-sm" onclick="savePlansConfig()">💾 Save plan prices to Firebase</button>';
+}
+
+async function savePlansConfig() {
+  const planKeys = ['free','basic','premium','school'];
+  planKeys.forEach(function(p) {
+    const priceEl  = document.getElementById('price-' + p);
+    const periodEl = document.getElementById('period-' + p);
+    if (priceEl)  { PLANS_PRICES[p].price  = parseFloat(priceEl.value)  || PLANS_PRICES[p].price; }
+    if (periodEl) { PLANS_PRICES[p].period = periodEl.value || PLANS_PRICES[p].period; }
+  });
+  try {
+    await db.collection('config').doc('plans').set({ prices: PLANS_PRICES });
+    buildSubscriptionModal();
+    alert('Plan prices saved! The subscription modal now shows your updated prices.');
+  } catch(e) {
+    alert('Failed to save: ' + e.message);
+  }
+}
+
 function buildAccessControls() {
+  buildPlansEditor();  /* render plan pricing editor */
   const ac = document.getElementById('access-controls'); if (!ac) { return; }
   const rules = [
     ['60-piece puzzles',      'Free, Basic, Premium, School'],
