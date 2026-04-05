@@ -1000,8 +1000,9 @@ const FB_CONFIG = {
 };
 
 /* ── FIREBASE GLOBALS ── */
-let db   = null;
-let auth = null;
+let db      = null;
+let auth    = null;
+let storage = null;
 
 /* ── LOCAL CACHE (mirrors Firestore, rebuilt on each login) ── */
 let MEM_USERS   = {};
@@ -1054,10 +1055,12 @@ function initFirebase() {
     loadScript(base + 'firebase-app-compat.js')
       .then(function() { return loadScript(base + 'firebase-auth-compat.js'); })
       .then(function() { return loadScript(base + 'firebase-firestore-compat.js'); })
+      .then(function() { return loadScript(base + 'firebase-storage-compat.js'); })
       .then(function() {
         if (!firebase.apps.length) { firebase.initializeApp(FB_CONFIG); }
-        auth = firebase.auth();
-        db   = firebase.firestore();
+        auth    = firebase.auth();
+        db      = firebase.firestore();
+        storage = firebase.storage();
         db.enablePersistence({ synchronizeTabs:true }).catch(function() {});
         resolve();
       })
@@ -1089,7 +1092,14 @@ async function loadAllData() {
     MEM_PUZZLES = pzSnap.docs.map(function(d) {
       const data = d.data();
       let img = null;
-      if (data.imgData) { img = new Image(); img.src = data.imgData; }
+      if (data.imageUrl) {
+        img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = data.imageUrl;         /* load from Firebase Storage */
+      } else if (data.imgData) {
+        img = new Image();               /* legacy base64 fallback */
+        img.src = data.imgData;
+      }
       return Object.assign({}, data, { id:d.id, img:img });
     });
     MEM_NOTIFS = notifSnap.docs.map(function(d) {
@@ -1121,7 +1131,7 @@ async function db_savePuzzle(puzzle) {
     plays:            puzzle.plays,
     uploadDate:       puzzle.uploadDate,
     uploadedBy:       CU ? CU.email : 'admin',
-    imgData:          puzzle.imgData || null,
+    imageUrl:         puzzle.imageUrl || null,   /* Storage URL, not base64 */
   };
   try {
     await db.collection('puzzles').doc(puzzle.id).set(toStore);
@@ -1501,6 +1511,11 @@ function showPanel(id, btn) {
     document.querySelectorAll('.nav-btn').forEach(function(b) {
       if (b.dataset.panel === id) { b.classList.add('on'); }
     });
+  }
+  /* Refresh puzzle library whenever user opens puzzle panel
+     so newly published puzzles appear without a page reload */
+  if (id === 'puzzles' && CU && CU.role !== 'admin') {
+    loadAllData().then(function() { renderPlayerPuzzleLib(); }).catch(function(){});
   }
 }
 
@@ -1983,48 +1998,74 @@ function setCustomPieces() {
 }
 
 function launchPuzzle() {
-  if (!PZ.img) {
-    if (ACTIVE_PZ_ID) {
-      const pz = getPuzzles().find(function(p) { return p.id === ACTIVE_PZ_ID; });
-      PZ.img = (pz && pz.img) ? pz.img : generateMapCanvas();
-      document.getElementById('pz-title-label').textContent = pz ? pz.name : 'Map Puzzle';
-    } else {
-      PZ.img = generateMapCanvas();
-    }
+  /* Find the active puzzle and resolve its image before drawing anything */
+  const pz = ACTIVE_PZ_ID
+    ? getPuzzles().find(function(p) { return p.id === ACTIVE_PZ_ID; })
+    : null;
+  const titleEl = document.getElementById('pz-title-label');
+  if (titleEl && pz) { titleEl.textContent = pz.name; }
+
+  /* Determine which image to use */
+  var imgToUse = null;
+  if (pz && pz.img) {
+    imgToUse = pz.img;  /* puzzle loaded from Firestore — has a Storage URL image */
+  } else if (PZ.img) {
+    imgToUse = PZ.img;  /* admin just uploaded this session */
   }
-  PZ.pieces = selectedPieces;
-  const r = Math.sqrt(selectedPieces * (4/3));
-  PZ.cols  = Math.max(2, Math.round(r));
-  PZ.rows  = Math.max(2, Math.round(selectedPieces / PZ.cols));
-  PZ.placed = new Array(PZ.total).fill(false);
-  PZ.np = 0; PZ.nf = 0; PZ.refOn = false;
-  PZ.factQueue = ALL_FACTS.slice().sort(function() { return Math.random() - .5; });
-  PZ.factIdx = 0;
-  document.getElementById('pz-placed').textContent   = '0';
-  document.getElementById('pz-facts').textContent    = '0';
-  document.getElementById('pz-total').textContent    = PZ.total;
-  document.getElementById('prog-fill').style.width   = '0%';
-  document.getElementById('prog-pct').textContent    = '0% complete';
-  document.getElementById('prog-frac').textContent   = '0/' + PZ.total;
-  document.getElementById('pz-complete').classList.remove('on');
-  document.getElementById('ref-overlay').style.display = 'none';
-  document.getElementById('pz-game').style.display = 'block';
-  document.getElementById('player-puzzle-library').style.display = 'none';
-  document.getElementById('pz-game').scrollIntoView({behavior:'smooth', block:'start'});
-  const wrap = document.getElementById('pz-canvas-wrap');
-  const mw = Math.max(300, wrap.offsetWidth - 24);
-  const sw = PZ.img.width  || PZ.img.naturalWidth  || 600;
-  const sh = PZ.img.height || PZ.img.naturalHeight || 450;
-  const sc = Math.min(mw/sw, 400/sh);
-  PZ.pw = Math.floor(sw * sc / PZ.cols);
-  PZ.ph = Math.floor(sh * sc / PZ.rows);
-  const bc = document.getElementById('pz-canvas');
-  bc.width  = Math.floor(sw * sc);
-  bc.height = Math.floor(sh * sc);
-  document.getElementById('ref-sidebar-wrap').style.display = ACCESS[CU.plan].ref ? 'block' : 'none';
-  syncRefCanvases();
-  drawBoard();
-  buildTray();
+
+  /* If image is from a URL it may still be loading — wait for it */
+  if (imgToUse && !imgToUse.complete) {
+    var startBtn = document.querySelector('[onclick="launchPuzzle()"]');
+    if (startBtn) { startBtn.disabled = true; startBtn.textContent = '⏳ Loading image…'; }
+    imgToUse.onload = function() {
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = '▶ Start Puzzle'; }
+      doLaunch(imgToUse);
+    };
+    imgToUse.onerror = function() {
+      if (startBtn) { startBtn.disabled = false; startBtn.textContent = '▶ Start Puzzle'; }
+      doLaunch(generateMapCanvas());
+    };
+    return;  /* wait for onload */
+  }
+
+  doLaunch(imgToUse || generateMapCanvas());
+
+  function doLaunch(img) {
+    PZ.img = img;
+    PZ.pieces = selectedPieces;
+    const r = Math.sqrt(selectedPieces * (4/3));
+    PZ.cols  = Math.max(2, Math.round(r));
+    PZ.rows  = Math.max(2, Math.round(selectedPieces / PZ.cols));
+    PZ.placed = new Array(PZ.total).fill(false);
+    PZ.np = 0; PZ.nf = 0; PZ.refOn = false;
+    PZ.factQueue = ALL_FACTS.slice().sort(function() { return Math.random() - .5; });
+    PZ.factIdx = 0;
+    document.getElementById('pz-placed').textContent   = '0';
+    document.getElementById('pz-facts').textContent    = '0';
+    document.getElementById('pz-total').textContent    = PZ.total;
+    document.getElementById('prog-fill').style.width   = '0%';
+    document.getElementById('prog-pct').textContent    = '0% complete';
+    document.getElementById('prog-frac').textContent   = '0/' + PZ.total;
+    document.getElementById('pz-complete').classList.remove('on');
+    document.getElementById('ref-overlay').style.display = 'none';
+    document.getElementById('pz-game').style.display = 'block';
+    document.getElementById('player-puzzle-library').style.display = 'none';
+    document.getElementById('pz-game').scrollIntoView({behavior:'smooth', block:'start'});
+    const wrap = document.getElementById('pz-canvas-wrap');
+    const mw = Math.max(300, wrap.offsetWidth - 24);
+    const sw = PZ.img.width  || PZ.img.naturalWidth  || 600;
+    const sh = PZ.img.height || PZ.img.naturalHeight || 450;
+    const sc = Math.min(mw/sw, 400/sh);
+    PZ.pw = Math.floor(sw * sc / PZ.cols);
+    PZ.ph = Math.floor(sh * sc / PZ.rows);
+    const bc = document.getElementById('pz-canvas');
+    bc.width  = Math.floor(sw * sc);
+    bc.height = Math.floor(sh * sc);
+    document.getElementById('ref-sidebar-wrap').style.display = ACCESS[CU.plan].ref ? 'block' : 'none';
+    syncRefCanvases();
+    drawBoard();
+    buildTray();
+  }
 }
 
 function syncRefCanvases() {
@@ -2174,29 +2215,38 @@ function buildTray() {
     const col = idx % cols, row = Math.floor(idx / cols);
     const wrap = document.createElement('div');
     wrap.className = 't-pc';
-    /* Render piece on an offscreen canvas at full board scale, then draw scaled into tray */
+    /* Offscreen canvas — piece needs margin to fit tabs that protrude outside cell */
+    const MARGIN = 18;
     const off = document.createElement('canvas');
-    off.width  = PZ.pw + 40;
-    off.height = PZ.ph + 40;
+    off.width  = PZ.pw + MARGIN * 2;
+    off.height = PZ.ph + MARGIN * 2;
     const octx = off.getContext('2d');
+    /* Translate so piece (col*pw, row*ph) draws at (MARGIN, MARGIN).
+       This gives each tray piece its REAL jigsaw shape matching the board. */
+    const tx = MARGIN - col * PZ.pw;
+    const ty = MARGIN - row * PZ.ph;
+    /* Draw image clipped to real piece shape */
     octx.save();
-    octx.translate(20, 20);
-    jigsawPath(octx, 0, 0, PZ.pw, PZ.ph, 1, 1);
+    octx.translate(tx, ty);
+    jigsawPath(octx, col, row, PZ.pw, PZ.ph, cols, rows);
     octx.clip();
-    octx.drawImage(img, col*(sw/cols), row*(sh/rows), sw/cols, sh/rows, 0, 0, PZ.pw, PZ.ph);
+    octx.drawImage(img, col*(sw/cols), row*(sh/rows), sw/cols, sh/rows,
+                   col*PZ.pw, row*PZ.ph, PZ.pw, PZ.ph);
     octx.restore();
+    /* Stroke the real piece outline */
     octx.save();
-    octx.translate(20, 20);
-    jigsawPath(octx, 0, 0, PZ.pw, PZ.ph, 1, 1);
-    octx.strokeStyle = 'rgba(60,40,15,.35)'; octx.lineWidth = 1.5; octx.stroke();
+    octx.translate(tx, ty);
+    jigsawPath(octx, col, row, PZ.pw, PZ.ph, cols, rows);
+    octx.strokeStyle = 'rgba(60,40,15,.4)'; octx.lineWidth = 1.5; octx.stroke();
     octx.restore();
+    /* Scale into the tray canvas */
     const tCanvas = document.createElement('canvas');
     const sz = 90;
     tCanvas.width = sz; tCanvas.height = sz;
-    const sc = Math.min(sz / (PZ.pw + 40), sz / (PZ.ph + 40));
+    const offW = PZ.pw + MARGIN * 2, offH = PZ.ph + MARGIN * 2;
+    const sc = Math.min(sz / offW, sz / offH);
     tCanvas.getContext('2d').drawImage(off,
-      (sz - (PZ.pw+40)*sc) / 2, (sz - (PZ.ph+40)*sc) / 2,
-      (PZ.pw+40)*sc, (PZ.ph+40)*sc);
+      (sz - offW * sc) / 2, (sz - offH * sc) / 2, offW * sc, offH * sc);
     wrap.appendChild(tCanvas);
     wrap.addEventListener('click', function() { placePiece(idx, wrap); });
     tg.appendChild(wrap);
@@ -2757,7 +2807,11 @@ function showAdminTab(id, btn) {
   if (id === 'users')     { buildUserTable(); }
 }
 
-function refreshAdminDropdowns() {
+async function refreshAdminDropdowns() {
+  /* Ensure users are loaded before populating dropdowns */
+  if (Object.keys(MEM_USERS).length === 0) {
+    try { await db_loadAllUsers(); } catch(e) { console.warn('dropdown user load:', e); }
+  }
   const pzSel = document.getElementById('assign-pz-sel');
   if (pzSel) {
     pzSel.innerHTML = getPuzzles().length
@@ -2944,34 +2998,54 @@ async function adminPublishPuzzle() {
   if (p100 && p100.classList.contains('on')) { pieces.push(100); }
   if (p500 && p500.classList.contains('on')) { pieces.push(500); }
   if (!pieces.length) { alert('Select at least one piece count.'); return; }
-  /* Convert current PZ image to base64 for storage */
-  let imgData = null;
-  if (PZ.img) {
-    try {
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width  = PZ.img.width  || PZ.img.naturalWidth  || 600;
-      tmpCanvas.height = PZ.img.height || PZ.img.naturalHeight || 450;
-      tmpCanvas.getContext('2d').drawImage(PZ.img, 0, 0);
-      imgData = tmpCanvas.toDataURL('image/jpeg', 0.75); /* compressed */
-    } catch(e) { console.warn('Could not convert image:', e); }
-  }
+  if (!PZ.img) { alert('Please upload an image first before publishing.'); return; }
   const id = 'pz' + Date.now();
+  const allPublishBtns = document.querySelectorAll('[onclick*="adminPublishPuzzle"]');
+  allPublishBtns.forEach(function(b){b.disabled=true; b.textContent='Uploading image…';});
+
+  /* Resize image to max 1200px wide, then upload to Firebase Storage */
+  let imageUrl = null;
+  try {
+    const MAX_W = 1200;
+    const srcW = PZ.img.width || PZ.img.naturalWidth || 600;
+    const srcH = PZ.img.height || PZ.img.naturalHeight || 450;
+    const scale = srcW > MAX_W ? MAX_W / srcW : 1;
+    const cW = Math.round(srcW * scale);
+    const cH = Math.round(srcH * scale);
+    const resizeCanvas = document.createElement('canvas');
+    resizeCanvas.width = cW; resizeCanvas.height = cH;
+    resizeCanvas.getContext('2d').drawImage(PZ.img, 0, 0, cW, cH);
+
+    /* Convert canvas to Blob and upload */
+    await new Promise(function(resolve, reject) {
+      resizeCanvas.toBlob(function(blob) {
+        if (!blob) { reject(new Error('Image conversion failed')); return; }
+        const ref = storage.ref('puzzles/' + id + '.jpg');
+        allPublishBtns.forEach(function(b){b.textContent='Saving to Firebase…';});
+        ref.put(blob, {contentType:'image/jpeg'})
+          .then(function() { return ref.getDownloadURL(); })
+          .then(function(url) { imageUrl = url; resolve(); })
+          .catch(reject);
+      }, 'image/jpeg', 0.82);
+    });
+  } catch(e) {
+    allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
+    alert('Image upload failed: ' + e.message + '\n\nMake sure Firebase Storage rules allow writes.');
+    return;
+  }
+
   const puzzle = {
-    id, name, pieces, imgData,
+    id, name, pieces, imageUrl,
     assignedSchools:[], assignedTeachers:[],
     img: PZ.img || null,
     plays: 0,
     uploadDate: new Date().toISOString().split('T')[0]
   };
-  /* Disable button while saving */
-  /* Disable whichever publish button triggered this */
-  const allPublishBtns = document.querySelectorAll('[onclick*="adminPublishPuzzle"]');
-  allPublishBtns.forEach(function(b){b.disabled=true; b.textContent='Saving…';});
   try {
     await db_savePuzzle(puzzle);
   } catch(e) {
     allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
-    alert('Failed to save puzzle: ' + e.message);
+    alert('Metadata save failed: ' + e.message);
     return;
   }
   allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
