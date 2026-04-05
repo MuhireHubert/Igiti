@@ -1067,11 +1067,10 @@ function initFirebase() {
 
 async function loadAllData() {
   try {
-    const [pzSnap, notifSnap, plansSnap] = await Promise.all([
-      db.collection('puzzles').orderBy('uploadDate','desc').get(),
-      db.collection('notifications').orderBy('sentAt','desc').limit(30).get(),
-      db.collection('config').doc('plans').get()
-    ]);
+    /* Load each collection separately so one failure doesn't block the rest */
+    const pzSnap     = await db.collection('puzzles').orderBy('uploadDate','desc').get().catch(function(){ return {docs:[]}; });
+    const notifSnap  = await db.collection('notifications').limit(30).get().catch(function(){ return {docs:[]}; });
+    const plansSnap  = await db.collection('config').doc('plans').get().catch(function(){ return {exists:false}; });
     /* Load admin-configured plans if they exist */
     if (plansSnap.exists) {
       const savedPlans = plansSnap.data();
@@ -1106,6 +1105,8 @@ async function loadAllData() {
 
 /* PUZZLES */
 async function db_savePuzzle(puzzle) {
+  /* Push to local cache immediately so UI updates even if Firestore save lags */
+  MEM_PUZZLES.push(puzzle);
   const toStore = {
     name:             puzzle.name,
     pieces:           puzzle.pieces,
@@ -1116,8 +1117,14 @@ async function db_savePuzzle(puzzle) {
     uploadedBy:       CU ? CU.email : 'admin',
     imgData:          puzzle.imgData || null,
   };
-  await db.collection('puzzles').doc(puzzle.id).set(toStore);
-  MEM_PUZZLES.push(puzzle);
+  try {
+    await db.collection('puzzles').doc(puzzle.id).set(toStore);
+    console.log('Puzzle saved to Firestore:', puzzle.id);
+  } catch(e) {
+    console.error('Firestore save failed:', e.message);
+    /* Puzzle is still in MEM_PUZZLES so admin can see it this session */
+    throw new Error('Saved locally but Firebase failed: ' + e.message + '. Check Firestore rules.');
+  }
 }
 
 async function db_deletePuzzle(id) {
@@ -1451,7 +1458,7 @@ function enterApp() {
   buildDashboard();
   buildPuzzlePanel();
   buildCardsPanel();
-  if (CU.role === 'admin') { buildAdminPanel(); }
+  if (CU.role === 'admin') { buildAdminPanel().catch(function(e){ console.error('Admin panel error:', e); }); }
   showPanel('dash', null);
 }
 
@@ -1773,7 +1780,7 @@ function renderPlayerPuzzleLib() {
              p.assignedTeachers.indexOf(CU.email) !== -1;
     });
   } else {
-    myPuzzles = PUZZLES;
+    myPuzzles = getPuzzles();
   }
   if (!myPuzzles.length) {
     const msg = (CU.role === 'student' || CU.role === 'teacher')
@@ -2323,9 +2330,15 @@ function rClass(region) {
 
 function buildCardHTML(ct) {
   const imgSrc = CARD_IMAGES[ct.name];
+  /* Show uploaded image if available. If not: show a "no image" placeholder — 
+     NO flag emoji, because the physical card has real artwork, not a flag.
+     Admin uploads PNGs one by one via Admin → Card Sets tab. */
   const flagArea = imgSrc
-    ? '<img src="' + imgSrc + '" alt="' + ct.name + '" style="width:100%;height:100%;object-fit:cover;display:block;">'
-    : ct.flag;
+    ? '<img src="' + imgSrc + '" alt="' + ct.name + '" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:4px;">'
+    : '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f0ebe0;border-radius:4px;gap:4px;">' +
+        '<span style="font-size:1.6rem;opacity:.35;">🖼</span>' +
+        '<span style="font-size:.55rem;color:#9A7040;text-align:center;line-height:1.3;">Image not<br>uploaded yet</span>' +
+      '</div>';
   return '<div class="igiti-card ' + rClass(ct.region) + '">' +
     '<div class="ic-border"><div class="ic-inner">' +
     '<div class="ic-title-row"><div class="ic-title">' + ct.name + '</div></div>' +
@@ -2368,12 +2381,15 @@ function setBrowserRegion(region, btn) {
   renderBrowser();
 }
 function renderBrowser() {
-  const search = (document.getElementById('cb-search') ? document.getElementById('cb-search').value : '').toLowerCase();
+  const grid = document.getElementById('cb-grid');
+  if (!grid) { return; }
+  const searchEl = document.getElementById('cb-search');
+  const search = searchEl ? searchEl.value.toLowerCase() : '';
   const filtered = CTRS.filter(function(c) {
     return (cbRegion === 'all' || c.region === cbRegion) &&
            (!search || c.name.toLowerCase().indexOf(search) !== -1 || c.capital.toLowerCase().indexOf(search) !== -1);
   });
-  document.getElementById('cb-grid').innerHTML = filtered.map(buildCardHTML).join('');
+  grid.innerHTML = filtered.map(buildCardHTML).join('');
 }
 
 /* GAME MODES */
@@ -2389,8 +2405,10 @@ const MODES = [
 ];
 
 function buildModeGrid() {
-  const acc = ACCESS[CU.plan];
-  document.getElementById('mode-grid').innerHTML = MODES.map(function(m) {
+  const acc = ACCESS[CU && CU.plan] || ACCESS['free'];
+  const grid = document.getElementById('mode-grid');
+  if (!grid) { return; }
+  grid.innerHTML = MODES.map(function(m) {
     const ok = acc.modes.indexOf(m.n) !== -1;
     return '<div class="mode-card' + (ok ? '' : ' locked') + '" onclick="' + (ok ? 'startGame(' + m.n + ')' : 'openModal(\'m-sub\')') + '" style="--mc:' + m.c + '">' +
       '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:' + m.c + ';border-radius:12px 12px 0 0;"></div>' +
@@ -2924,17 +2942,20 @@ async function adminPublishPuzzle() {
   }
   allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
   if (nameEl) { nameEl.value = ''; }
+  /* Reset piece toggles */
+  document.querySelectorAll('.pc-btn[id^="admin-p"], .pc-btn[id^="pub-"]').forEach(function(b){b.classList.add('on');});
   renderPublishedPuzzles();
   buildAdminCharts();
   refreshAdminDropdowns();
-  if (document.getElementById('player-puzzle-library')) { renderPlayerPuzzleLib(); }
-  alert('"' + name + '" published and saved to Firebase!');
+  renderPlayerPuzzleLib();
+  alert('"' + name + '" published and saved to Firebase! Players can now see it in their library.');
 }
 
 function adminDeletePuzzle(id) {
   if (!confirm('Delete this puzzle? This cannot be undone.')) { return; }
-  const idx = PUZZLES.findIndex(function(p) { return p.id === id; });
-  if (idx !== -1) { PUZZLES.splice(idx, 1); }
+  /* Remove from local cache — db_deletePuzzle already deleted from Firestore */
+  const idx = MEM_PUZZLES.findIndex(function(p) { return p.id === id; });
+  if (idx !== -1) { MEM_PUZZLES.splice(idx, 1); }
   renderPublishedPuzzles();
   buildAdminCharts();
   refreshAdminDropdowns();
