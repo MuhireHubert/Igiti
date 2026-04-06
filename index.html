@@ -1163,7 +1163,7 @@ async function db_savePuzzle(puzzle) {
     uploadDate:       puzzle.uploadDate,
     uploadedBy:       CU ? CU.email : 'admin',
     imageUrl:         puzzle.imageUrl || null,
-    /* imgData intentionally NOT stored here — it's in puzzleImages/{id} */
+    /* imgData stored in puzzleImages/{id} collection */
   };
   try {
     await db.collection('puzzles').doc(puzzle.id).set(toStore);
@@ -2390,33 +2390,59 @@ function uploadSingleCardImage(countryName, inputEl) {
   const statusEl = document.getElementById('card-status-' + safeEl);
   if (statusEl) { statusEl.textContent = '⏳ Uploading…'; statusEl.style.color = 'var(--mu)'; }
 
+  /* Read file, compress to max 600px, upload to Firebase Storage */
   const reader = new FileReader();
   reader.onload = function(e) {
-    const dataUrl = e.target.result;
-    CARD_IMAGES[countryName] = dataUrl;   /* store by display name in local cache */
-
-    /* Save to Firestore using the safe doc ID, store display name separately */
-    if (db && CU) {
-      db.collection('cardImages').doc(safeId).set({
-        imgData:      dataUrl,
-        countryName:  countryName,        /* original display name */
-        uploadedBy:   CU.email,
-        uploadDate:   new Date().toISOString().split('T')[0]
-      }).then(function() {
-        console.log('Card image saved for', countryName, '(doc:', safeId, ')');
-        if (statusEl) { statusEl.textContent = '✅ Uploaded'; statusEl.style.color = 'var(--gn)'; }
-      }).catch(function(err) {
-        console.error('Failed to save card image:', err);
-        if (statusEl) { statusEl.textContent = '❌ Save failed: ' + err.message; statusEl.style.color = 'red'; }
-      });
-    }
-
-    /* Re-render browser and upload list immediately so image appears */
-    renderBrowser();
-    buildCountryUploadList();
-
-    const preview = document.getElementById('card-preview-' + safeEl);
-    if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
+    /* Compress the image before uploading */
+    const img = new Image();
+    img.onload = function() {
+      const MAX = 600;
+      const scale = img.width > MAX ? MAX / img.width : 1;
+      const cw = Math.round(img.width * scale);
+      const ch = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      canvas.toBlob(function(blob) {
+        if (!blob) {
+          if (statusEl) { statusEl.textContent = '❌ Compression failed'; statusEl.style.color='red'; }
+          return;
+        }
+        if (statusEl) { statusEl.textContent = '⏳ Uploading to Firebase…'; statusEl.style.color='var(--mu)'; }
+        /* Upload to Firebase Storage */
+        const ref = storage.ref('cardImages/' + safeId + '.jpg');
+        ref.put(blob, { contentType: 'image/jpeg' })
+          .then(function() { return ref.getDownloadURL(); })
+          .then(function(url) {
+            /* Save URL + metadata to Firestore */
+            return db.collection('cardImages').doc(safeId).set({
+              imageUrl:    url,
+              countryName: countryName,
+              uploadedBy:  CU ? CU.email : 'admin',
+              uploadDate:  new Date().toISOString().split('T')[0]
+            });
+          })
+          .then(function() {
+            /* Cache locally using the blob URL for immediate display */
+            const localUrl = URL.createObjectURL(blob);
+            CARD_IMAGES[countryName] = localUrl;
+            if (statusEl) { statusEl.textContent = '✅ Uploaded'; statusEl.style.color = 'var(--gn)'; }
+            const preview = document.getElementById('card-preview-' + safeEl);
+            if (preview) { preview.src = localUrl; preview.style.display = 'block'; }
+            renderBrowser();
+            buildCountryUploadList();
+            console.log('Card image uploaded for', countryName);
+          })
+          .catch(function(err) {
+            console.error('Card upload failed:', err);
+            if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'red'; }
+          });
+      }, 'image/jpeg', 0.82);
+    };
+    img.onerror = function() {
+      if (statusEl) { statusEl.textContent = '❌ Image load failed'; statusEl.style.color = 'red'; }
+    };
+    img.src = e.target.result;
   };
   reader.onerror = function() {
     if (statusEl) { statusEl.textContent = '❌ File read failed'; statusEl.style.color = 'red'; }
@@ -2431,9 +2457,10 @@ async function loadCardImages() {
     const snap = await db.collection('cardImages').get();
     snap.forEach(function(d) {
       const data = d.data();
-      /* Use countryName field if present (new format), else fall back to doc ID */
       const name = data.countryName || d.id.replace(/_/g, ' ');
-      CARD_IMAGES[name] = data.imgData;
+      /* Use Storage URL if available, fall back to legacy base64 */
+      CARD_IMAGES[name] = data.imageUrl || data.imgData || null;
+      if (!CARD_IMAGES[name]) { delete CARD_IMAGES[name]; }
     });
     console.log('Loaded', Object.keys(CARD_IMAGES).length, 'card images');
   } catch(e) { console.warn('loadCardImages:', e.message); }
@@ -3249,7 +3276,11 @@ async function adminPublishPuzzle() {
     const rc = document.createElement('canvas');
     rc.width = cW; rc.height = cH;
     rc.getContext('2d').drawImage(PZ.img, 0, 0, cW, cH);
-    imgData = rc.toDataURL('image/jpeg', 0.65);
+    imgData = rc.toDataURL('image/jpeg', 0.60);
+    /* Warn if still very large (base64 ~1.37x raw bytes) */
+    if (imgData.length > 900000) {
+      console.warn('Puzzle image is', Math.round(imgData.length/1024), 'KB base64. Consider a smaller image.');
+    }
     allPublishBtns.forEach(function(b){b.textContent='Saving to Firebase…';});
   } catch(e) {
     allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
