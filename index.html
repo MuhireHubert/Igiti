@@ -1087,6 +1087,13 @@ const ACCESS = {
   admin:   { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
 };
 
+/* ── PUZZLE SESSION STATE ── */
+let PZ_HINTS    = 0;   /* hints used this game */
+let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
+let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
+let pzDragStartX = 0, pzDragStartY = 0;
+
+
 /* ── GETTERS ── */
 function getPuzzles() { return MEM_PUZZLES; }
 function getUsers()   { return MEM_USERS;   }
@@ -3682,9 +3689,9 @@ function buildScheduledNotifs() {
 /* ════════════════════════════════════════════════════
    ZOOM — pinch/scroll to zoom puzzle board + reference
    ════════════════════════════════════════════════════ */
-let pzZoom = 1.0;
-let pzPanX = 0, pzPanY = 0;
-let pzDragging = false, pzDragStartX, pzDragStartY;
+
+
+
 
 function initPuzzleZoom() {
   const wrap = document.getElementById('pz-canvas-wrap');
@@ -3757,8 +3764,8 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 /* ════════════════════════════════════════════════════
    HINTS — reveal a random unplaced piece position
    ════════════════════════════════════════════════════ */
-let PZ_HINTS = 0;  /* hints used this session */
-let PZ_SELECTED = -1; /* index of currently selected tray piece, -1 = none */
+
+
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
