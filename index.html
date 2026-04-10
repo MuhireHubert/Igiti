@@ -278,7 +278,7 @@ img{max-width:100%;}
 .pz-canvas-wrap{
   background:#EDE0C4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 40L40 0M-10 10L10-10M30 50L50 30' stroke='rgba(180,150,100,.12)' stroke-width='1'/%3E%3C/svg%3E");
   border-radius:10px;border:1px solid var(--bd);
-  min-height:340px;position:relative;overflow:hidden;
+  min-height:340px;position:relative;overflow:visible;
   display:flex;align-items:center;justify-content:center;
 }
 #pz-canvas{display:block;max-width:100%;cursor:default;}
@@ -556,6 +556,28 @@ img{max-width:100%;}
   border-radius:20px;padding:.22rem .65rem;font-size:.72rem;font-weight:700;color:var(--or);
   border:1px solid var(--or);}
 
+
+/* ── LANDING HERO ── */
+.land-hero-title{font-size:clamp(1.6rem,5vw,2.8rem);font-weight:900;color:var(--dk);
+  line-height:1.15;text-align:center;margin:1rem 0 1.4rem;letter-spacing:-.02em;}
+.land-features{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;margin-bottom:1.5rem;}
+.land-feat{display:flex;flex-direction:column;align-items:center;gap:.25rem;
+  background:rgba(255,255,255,.55);backdrop-filter:blur(6px);
+  border:1px solid rgba(240,124,42,.25);border-radius:14px;
+  padding:.9rem 1.2rem;min-width:130px;max-width:160px;text-align:center;}
+.land-feat span{font-size:1.8rem;}
+.land-feat b{font-size:.82rem;color:var(--dk);font-weight:800;}
+.land-feat small{font-size:.7rem;color:var(--mu);line-height:1.3;}
+
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+  .nav { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; gap:.2rem; }
+  .nav-btn { white-space:nowrap; font-size:.68rem; padding:.32rem .5rem; flex-shrink:0; }
+  .nav-right .pill-role { display:none; }
+  .p-title { font-size:1.3rem; }
+  .land-features { flex-direction:column; align-items:center; }
+}
 </style>
 </head>
 <body>
@@ -580,11 +602,17 @@ img{max-width:100%;}
   <div class="land-center">
     <img class="land-logo inj-logo" src="" alt="Igiti">
     <div class="land-tag">Igiti Enterprises</div>
-    <div class="land-sl">"Where learning meets playing"</div>
+    <div class="land-hero-title">Explore Africa.<br>One puzzle at a time.</div>
+    <div class="land-features">
+      <div class="land-feat"><span>🗺</span><b>54 Countries</b><small>Jigsaw maps of every African nation</small></div>
+      <div class="land-feat"><span>🃏</span><b>Card Games</b><small>8 fun modes — quiz, war, roleplay &amp; more</small></div>
+      <div class="land-feat"><span>💡</span><b>Fun Facts</b><small>Discover Africa piece by piece</small></div>
+    </div>
     <div class="land-btns">
-      <button class="btn btn-or" onclick="showAuth('login')">Sign In</button>
+      <button class="btn btn-or" onclick="showAuth('login')">▶ Sign In &amp; Play</button>
       <button class="btn btn-or-ghost" onclick="showAuth('reg')">Create Account</button>
     </div>
+    <div class="land-sl">"Where learning meets playing"</div>
   </div>
   <div class="land-ftr">© 2025 Igiti Enterprises &nbsp;·&nbsp; All rights reserved &nbsp;·&nbsp; igiti.africa</div>
 </div>
@@ -1001,6 +1029,7 @@ img{max-width:100%;}
   <div id="ft-txt" class="ft-txt"></div>
 </div>
 <script>
+
 
 
 const CTRS = [{"name": "Rwanda", "region": "East Africa", "capital": "Kigali", "area": "26,338 km²", "lang": "Kinyarwanda, French, English", "religion": "Christianity, Traditional, Islam", "pop": "~14 million", "crop": "Coffee, Tea", "minerals": "Tin, Tantalum, Tungsten, Gold", "currency": "Rwandan Franc (RWF)", "fact": "Rwanda is known for its incredibly hilly landscape, earning it the nickname 'Land of a Thousand Hills.'", "flag": "🇷🇼"}, {"name": "Nigeria", "region": "West Africa", "capital": "Abuja", "area": "923,768 km²", "lang": "English, Hausa, Yoruba, Igbo", "religion": "Islam, Christianity", "pop": "~220 million", "crop": "Cocoa, Palm Oil, Cassava", "minerals": "Oil, Natural Gas, Coal", "currency": "Nigerian Naira (NGN)", "fact": "Nigeria is Africa's most populous country and has the continent's largest economy by GDP.", "flag": "🇳🇬"}, {"name": "Kenya", "region": "East Africa", "capital": "Nairobi", "area": "580,367 km²", "lang": "Swahili, English", "religion": "Christianity, Islam, Traditional", "pop": "~56 million", "crop": "Tea, Coffee, Flowers", "minerals": "Soda Ash, Fluorspar, Gold", "currency": "Kenyan Shilling (KES)", "fact": "Kenya's Maasai Mara hosts the world's greatest wildlife migration every year.", "flag": "🇰🇪"}, {"name": "Ethiopia", "region": "East Africa", "capital": "Addis Ababa", "area": "1,104,300 km²", "lang": "Amharic, Oromo, Tigrinya", "religion": "Christianity, Islam, Traditional", "pop": "~128 million", "crop": "Coffee, Teff, Sesame", "minerals": "Gold, Tantalum, Potash", "currency": "Ethiopian Birr (ETB)", "fact": "Ethiopia is the birthplace of coffee and one of the oldest nations with over 3,000 years of recorded history.", "flag": "🇪🇹"}, {"name": "Egypt", "region": "North Africa", "capital": "Cairo", "area": "1,002,450 km²", "lang": "Arabic", "religion": "Islam, Christianity", "pop": "~104 million", "crop": "Cotton, Wheat, Rice", "minerals": "Oil, Natural Gas, Phosphate", "currency": "Egyptian Pound (EGP)", "fact": "Egypt is home to the Great Pyramid of Giza — the last surviving original Wonder of the Ancient World.", "flag": "🇪🇬"}, {"name": "South Africa", "region": "Southern Africa", "capital": "Pretoria", "area": "1,219,090 km²", "lang": "11 official languages", "religion": "Christianity, Traditional, Islam", "pop": "~60 million", "crop": "Maize, Sugarcane, Wine Grapes", "minerals": "Gold, Diamonds, Platinum", "currency": "South African Rand (ZAR)", "fact": "South Africa is the only country that voluntarily dismantled its nuclear weapons programme.", "flag": "🇿🇦"}, {"name": "Ghana", "region": "West Africa", "capital": "Accra", "area": "238,533 km²", "lang": "English, Akan, Ewe", "religion": "Christianity, Islam, Traditional", "pop": "~33 million", "crop": "Cocoa, Palm Oil, Cassava", "minerals": "Gold, Diamonds, Bauxite", "currency": "Ghanaian Cedi (GHS)", "fact": "Ghana was the first sub-Saharan African country to gain independence in 1957, under Kwame Nkrumah.", "flag": "🇬🇭"}, {"name": "Tanzania", "region": "East Africa", "capital": "Dodoma", "area": "945,087 km²", "lang": "Swahili, English", "religion": "Christianity, Islam, Traditional", "pop": "~62 million", "crop": "Coffee, Sisal, Tea", "minerals": "Gold, Diamonds, Tanzanite", "currency": "Tanzanian Shilling (TZS)", "fact": "Tanzania is home to both Mount Kilimanjaro — Africa's highest peak — and the Serengeti National Park.", "flag": "🇹🇿"}, {"name": "Uganda", "region": "East Africa", "capital": "Kampala", "area": "241,038 km²", "lang": "English, Swahili, Luganda", "religion": "Christianity, Islam, Traditional", "pop": "~49 million", "crop": "Coffee, Tea, Fish", "minerals": "Oil, Gold, Coltan", "currency": "Ugandan Shilling (UGX)", "fact": "Uganda is home to half of the world's remaining mountain gorillas in Bwindi Impenetrable Forest.", "flag": "🇺🇬"}, {"name": "Morocco", "region": "North Africa", "capital": "Rabat", "area": "710,850 km²", "lang": "Arabic, Berber, French", "religion": "Islam", "pop": "~37 million", "crop": "Olives, Citrus, Wheat", "minerals": "Phosphate, Iron Ore, Zinc", "currency": "Moroccan Dirham (MAD)", "fact": "Morocco holds the world's largest known reserves of phosphate rock, a key ingredient in fertilisers.", "flag": "🇲🇦"}, {"name": "Senegal", "region": "West Africa", "capital": "Dakar", "area": "196,722 km²", "lang": "French, Wolof", "religion": "Islam, Christianity", "pop": "~18 million", "crop": "Groundnuts, Millet, Cotton", "minerals": "Phosphate, Iron Ore, Zircon", "currency": "West African CFA Franc (XOF)", "fact": "Senegal is nicknamed the 'Gateway to Africa' and celebrated for its Teranga — the spirit of hospitality.", "flag": "🇸🇳"}, {"name": "Côte d'Ivoire", "region": "West Africa", "capital": "Yamoussoukro", "area": "322,463 km²", "lang": "French", "religion": "Islam, Christianity, Traditional", "pop": "~27 million", "crop": "Cocoa, Coffee, Palm Oil", "minerals": "Oil, Gold, Diamonds", "currency": "West African CFA Franc (XOF)", "fact": "Côte d'Ivoire produces over 40% of the world's cocoa supply, making it the global cocoa capital.", "flag": "🇨🇮"}, {"name": "Angola", "region": "Central Africa", "capital": "Luanda", "area": "1,246,700 km²", "lang": "Portuguese, Bantu languages", "religion": "Christianity, Traditional", "pop": "~35 million", "crop": "Cassava, Corn, Cotton", "minerals": "Oil, Diamonds, Iron Ore", "currency": "Angolan Kwanza (AOA)", "fact": "Angola's Kalandula Falls is one of the largest waterfalls in Africa by volume of water.", "flag": "🇦🇴"}, {"name": "Mozambique", "region": "Southern Africa", "capital": "Maputo", "area": "801,590 km²", "lang": "Portuguese, Emakhuwa", "religion": "Christianity, Islam, Traditional", "pop": "~32 million", "crop": "Cashews, Cotton, Sugarcane", "minerals": "Coal, Natural Gas, Titanium", "currency": "Mozambican Metical (MZN)", "fact": "Mozambique has one of Africa's longest coastlines — over 2,500 km along the Indian Ocean.", "flag": "🇲🇿"}, {"name": "Cameroon", "region": "Central Africa", "capital": "Yaoundé", "area": "475,442 km²", "lang": "French, English", "religion": "Christianity, Islam, Traditional", "pop": "~27 million", "crop": "Cocoa, Coffee, Banana", "minerals": "Oil, Bauxite, Iron Ore", "currency": "Central African CFA Franc (XAF)", "fact": "Cameroon is called 'Africa in Miniature' because it contains nearly every landscape found across the continent.", "flag": "🇨🇲"}, {"name": "Madagascar", "region": "Island Nations", "capital": "Antananarivo", "area": "587,041 km²", "lang": "Malagasy, French", "religion": "Christianity, Traditional", "pop": "~28 million", "crop": "Vanilla, Cloves, Coffee", "minerals": "Nickel, Cobalt, Graphite", "currency": "Malagasy Ariary (MGA)", "fact": "Madagascar is the world's fourth largest island and home to over 90% of species found nowhere else on Earth.", "flag": "🇲🇬"}, {"name": "Zambia", "region": "Southern Africa", "capital": "Lusaka", "area": "752,618 km²", "lang": "English, Bemba, Nyanja", "religion": "Christianity, Traditional", "pop": "~19 million", "crop": "Maize, Tobacco, Cotton", "minerals": "Copper, Cobalt, Zinc", "currency": "Zambian Kwacha (ZMW)", "fact": "Zambia and Zimbabwe share Victoria Falls — the world's largest sheet of falling water.", "flag": "🇿🇲"}, {"name": "Zimbabwe", "region": "Southern Africa", "capital": "Harare", "area": "390,757 km²", "lang": "Shona, Ndebele, English", "religion": "Christianity, Traditional", "pop": "~16 million", "crop": "Tobacco, Maize, Cotton", "minerals": "Platinum, Chrome, Gold", "currency": "Zimbabwean Dollar (ZWL)", "fact": "Zimbabwe is home to the ancient stone city of Great Zimbabwe, which gives the country its name.", "flag": "🇿🇼"}, {"name": "Mali", "region": "West Africa", "capital": "Bamako", "area": "1,240,192 km²", "lang": "French, Bambara", "religion": "Islam, Traditional", "pop": "~22 million", "crop": "Cotton, Millet, Sorghum", "minerals": "Gold, Salt, Phosphate", "currency": "West African CFA Franc (XOF)", "fact": "The ancient city of Timbuktu was a major centre of Islamic scholarship and trans-Saharan trade.", "flag": "🇲🇱"}, {"name": "Niger", "region": "West Africa", "capital": "Niamey", "area": "1,267,000 km²", "lang": "French, Hausa, Zarma", "religion": "Islam, Traditional", "pop": "~25 million", "crop": "Millet, Sorghum, Cowpeas", "minerals": "Uranium, Oil, Gold", "currency": "West African CFA Franc (XOF)", "fact": "Niger is the world's largest producer of uranium by reserves and one of the hottest countries on Earth.", "flag": "🇳🇪"}, {"name": "Burkina Faso", "region": "West Africa", "capital": "Ouagadougou", "area": "274,200 km²", "lang": "French, Mooré, Dyula", "religion": "Islam, Christianity, Traditional", "pop": "~22 million", "crop": "Sorghum, Cotton, Millet", "minerals": "Gold, Manganese, Zinc", "currency": "West African CFA Franc (XOF)", "fact": "Burkina Faso means 'Land of the Upright People' — a name given by leader Thomas Sankara in 1984.", "flag": "🇧🇫"}, {"name": "Chad", "region": "Central Africa", "capital": "N'Djamena", "area": "1,284,000 km²", "lang": "French, Arabic", "religion": "Islam, Christianity, Traditional", "pop": "~17 million", "crop": "Sorghum, Millet, Cotton", "minerals": "Oil, Uranium, Gold", "currency": "Central African CFA Franc (XAF)", "fact": "Lake Chad has shrunk by over 90% since the 1960s due to climate change and overuse of water.", "flag": "🇹🇩"}, {"name": "Sudan", "region": "North Africa", "capital": "Khartoum", "area": "1,861,484 km²", "lang": "Arabic, English", "religion": "Islam, Christianity", "pop": "~45 million", "crop": "Sorghum, Cotton, Sesame", "minerals": "Oil, Gold, Iron Ore", "currency": "Sudanese Pound (SDG)", "fact": "Sudan has more ancient pyramids than Egypt — over 200 Nubian pyramids rise from the desert.", "flag": "🇸🇩"}, {"name": "Algeria", "region": "North Africa", "capital": "Algiers", "area": "2,381,741 km²", "lang": "Arabic, Tamazight, French", "religion": "Islam", "pop": "~45 million", "crop": "Wheat, Barley, Olives", "minerals": "Oil, Natural Gas, Iron Ore", "currency": "Algerian Dinar (DZD)", "fact": "Algeria is Africa's largest country by area, covering most of the northern Sahara Desert.", "flag": "🇩🇿"}, {"name": "Libya", "region": "North Africa", "capital": "Tripoli", "area": "1,759,540 km²", "lang": "Arabic, Berber", "religion": "Islam", "pop": "~7 million", "crop": "Olives, Dates, Wheat", "minerals": "Oil, Natural Gas, Gypsum", "currency": "Libyan Dinar (LYD)", "fact": "Libya has the largest proven oil reserves in Africa and sits above one of the world's greatest aquifer systems.", "flag": "🇱🇾"}, {"name": "Tunisia", "region": "North Africa", "capital": "Tunis", "area": "163,610 km²", "lang": "Arabic, French", "religion": "Islam", "pop": "~12 million", "crop": "Olives, Grains, Tomatoes", "minerals": "Phosphate, Iron Ore, Zinc", "currency": "Tunisian Dinar (TND)", "fact": "Tunisia was the site of ancient Carthage — once the most powerful city in the Mediterranean world.", "flag": "🇹🇳"}, {"name": "Somalia", "region": "East Africa", "capital": "Mogadishu", "area": "637,657 km²", "lang": "Somali, Arabic", "religion": "Islam", "pop": "~17 million", "crop": "Sorghum, Corn, Sugarcane", "minerals": "Oil, Uranium, Iron Ore", "currency": "Somali Shilling (SOS)", "fact": "Somalia has the longest coastline of any country in mainland Africa — over 3,300 km.", "flag": "🇸🇴"}, {"name": "South Sudan", "region": "East Africa", "capital": "Juba", "area": "619,745 km²", "lang": "English, Arabic, Dinka", "religion": "Christianity, Traditional", "pop": "~11 million", "crop": "Sorghum, Maize, Cassava", "minerals": "Oil, Gold, Iron Ore", "currency": "South Sudanese Pound (SSP)", "fact": "South Sudan is the world's newest country, gaining independence from Sudan on 9 July 2011.", "flag": "🇸🇸"}, {"name": "DR Congo", "region": "Central Africa", "capital": "Kinshasa", "area": "2,344,858 km²", "lang": "French, Lingala, Swahili", "religion": "Christianity, Traditional", "pop": "~100 million", "crop": "Cassava, Yams, Coffee", "minerals": "Coltan, Cobalt, Diamonds", "currency": "Congolese Franc (CDF)", "fact": "The DRC contains the Congo Rainforest — the world's second largest tropical forest and the lungs of Africa.", "flag": "🇨🇩"}, {"name": "Republic of Congo", "region": "Central Africa", "capital": "Brazzaville", "area": "342,000 km²", "lang": "French, Lingala, Kituba", "religion": "Christianity, Traditional", "pop": "~6 million", "crop": "Cassava, Sugar, Palm Oil", "minerals": "Oil, Potash, Iron Ore", "currency": "Central African CFA Franc (XAF)", "fact": "Brazzaville and Kinshasa are the world's closest capital cities, separated only by the Congo River.", "flag": "🇨🇬"}, {"name": "Gabon", "region": "Central Africa", "capital": "Libreville", "area": "267,668 km²", "lang": "French", "religion": "Christianity, Traditional", "pop": "~2 million", "crop": "Cassava, Yams, Cocoa", "minerals": "Oil, Manganese, Iron Ore", "currency": "Central African CFA Franc (XAF)", "fact": "Gabon has one of the world's highest forest cover rates — over 85% of the country is rainforest.", "flag": "🇬🇦"}, {"name": "Equatorial Guinea", "region": "Central Africa", "capital": "Malabo", "area": "28,051 km²", "lang": "Spanish, French, Portuguese", "religion": "Christianity, Traditional", "pop": "~1.5 million", "crop": "Cocoa, Coffee, Rice", "minerals": "Oil, Natural Gas, Gold", "currency": "Central African CFA Franc (XAF)", "fact": "Equatorial Guinea is the only African country with Spanish as an official language.", "flag": "🇬🇶"}, {"name": "Central African Republic", "region": "Central Africa", "capital": "Bangui", "area": "622,984 km²", "lang": "French, Sango", "religion": "Christianity, Islam, Traditional", "pop": "~5 million", "crop": "Cotton, Coffee, Tobacco", "minerals": "Diamonds, Gold, Uranium", "currency": "Central African CFA Franc (XAF)", "fact": "The CAR sits at the geographic heart of Africa and hosts the Dzanga-Sangha, one of Africa's richest ecosystems.", "flag": "🇨🇫"}, {"name": "Namibia", "region": "Southern Africa", "capital": "Windhoek", "area": "824,292 km²", "lang": "English, Afrikaans, Oshiwambo", "religion": "Christianity, Traditional", "pop": "~3 million", "crop": "Millet, Sorghum, Grapes", "minerals": "Diamonds, Uranium, Zinc", "currency": "Namibian Dollar (NAD)", "fact": "The Namib Desert is the world's oldest desert, estimated to be over 55 million years old.", "flag": "🇳🇦"}, {"name": "Botswana", "region": "Southern Africa", "capital": "Gaborone", "area": "581,730 km²", "lang": "Setswana, English", "religion": "Christianity, Traditional", "pop": "~2.5 million", "crop": "Sorghum, Maize, Beans", "minerals": "Diamonds, Copper, Nickel", "currency": "Botswana Pula (BWP)", "fact": "Botswana transformed from Africa's poorest nation at independence to one of its fastest growing economies.", "flag": "🇧🇼"}, {"name": "Eswatini", "region": "Southern Africa", "capital": "Mbabane", "area": "17,364 km²", "lang": "Swati, English", "religion": "Christianity, Traditional", "pop": "~1.2 million", "crop": "Sugarcane, Cotton, Maize", "minerals": "Coal, Asbestos, Diamonds", "currency": "Swazi Lilangeni (SZL)", "fact": "Eswatini, formerly Swaziland, is one of the world's last absolute monarchies.", "flag": "🇸🇿"}, {"name": "Lesotho", "region": "Southern Africa", "capital": "Maseru", "area": "30,355 km²", "lang": "Sesotho, English", "religion": "Christianity", "pop": "~2.2 million", "crop": "Maize, Sorghum, Wheat", "minerals": "Diamonds, Water, Sand", "currency": "Lesotho Loti (LSL)", "fact": "Lesotho is the world's highest country — even its lowest point at 1,400m is higher than most nations' peaks.", "flag": "🇱🇸"}, {"name": "Malawi", "region": "Southern Africa", "capital": "Lilongwe", "area": "118,484 km²", "lang": "Chichewa, English", "religion": "Christianity, Islam", "pop": "~20 million", "crop": "Tobacco, Tea, Cotton", "minerals": "Uranium, Limestone, Coal", "currency": "Malawian Kwacha (MWK)", "fact": "Lake Malawi is home to more fish species than any other lake on Earth — over 1,000 unique cichlids.", "flag": "🇲🇼"}, {"name": "Eritrea", "region": "East Africa", "capital": "Asmara", "area": "117,600 km²", "lang": "Tigrinya, Arabic, English", "religion": "Christianity, Islam", "pop": "~3.5 million", "crop": "Sorghum, Millet, Teff", "minerals": "Gold, Copper, Zinc", "currency": "Eritrean Nakfa (ERN)", "fact": "Eritrea's capital Asmara is a UNESCO World Heritage Site for its remarkable Art Deco Italian colonial architecture.", "flag": "🇪🇷"}, {"name": "Djibouti", "region": "East Africa", "capital": "Djibouti City", "area": "23,200 km²", "lang": "French, Arabic, Somali", "religion": "Islam, Christianity", "pop": "~1 million", "crop": "Fruits, Vegetables", "minerals": "Salt, Limestone, Perlite", "currency": "Djiboutian Franc (DJF)", "fact": "Djibouti hosts military bases from more foreign nations than almost any other country, due to its strategic location.", "flag": "🇩🇯"}, {"name": "Guinea", "region": "West Africa", "capital": "Conakry", "area": "245,857 km²", "lang": "French, Pular, Mandinka", "religion": "Islam, Christianity, Traditional", "pop": "~13 million", "crop": "Rice, Coffee, Cassava", "minerals": "Bauxite, Iron Ore, Gold", "currency": "Guinean Franc (GNF)", "fact": "Guinea holds the world's largest reserves of bauxite — the primary ore used to produce aluminium.", "flag": "🇬🇳"}, {"name": "Sierra Leone", "region": "West Africa", "capital": "Freetown", "area": "71,740 km²", "lang": "English, Krio", "religion": "Islam, Christianity, Traditional", "pop": "~8 million", "crop": "Rice, Coffee, Cocoa", "minerals": "Diamonds, Rutile, Iron Ore", "currency": "Sierra Leonean Leone (SLL)", "fact": "Sierra Leone's Freetown was founded in 1787 as a settlement for freed enslaved people returning to Africa.", "flag": "🇸🇱"}, {"name": "Liberia", "region": "West Africa", "capital": "Monrovia", "area": "111,369 km²", "lang": "English", "religion": "Christianity, Islam, Traditional", "pop": "~5 million", "crop": "Rubber, Palm Oil, Coffee", "minerals": "Iron Ore, Diamonds, Gold", "currency": "Liberian Dollar (LRD)", "fact": "Liberia was Africa's first republic, founded in 1847 by freed American slaves, and is named after 'liberty.'", "flag": "🇱🇷"}, {"name": "Togo", "region": "West Africa", "capital": "Lomé", "area": "56,785 km²", "lang": "French, Ewe, Kabiye", "religion": "Christianity, Islam, Traditional", "pop": "~8 million", "crop": "Cocoa, Coffee, Cotton", "minerals": "Phosphate, Iron Ore, Limestone", "currency": "West African CFA Franc (XOF)", "fact": "Lomé is one of the few African capitals located directly on the coast of the Atlantic Ocean.", "flag": "🇹🇬"}, {"name": "Benin", "region": "West Africa", "capital": "Porto-Novo", "area": "112,622 km²", "lang": "French, Fon, Yoruba", "religion": "Traditional (Vodun), Christianity, Islam", "pop": "~13 million", "crop": "Cotton, Yams, Cassava", "minerals": "Oil, Limestone, Marble", "currency": "West African CFA Franc (XOF)", "fact": "Benin is the birthplace of Vodun (Voodoo), a spiritual tradition now practised by millions across the world.", "flag": "🇧🇯"}, {"name": "Guinea-Bissau", "region": "West Africa", "capital": "Bissau", "area": "36,125 km²", "lang": "Portuguese, Crioulo", "religion": "Islam, Traditional, Christianity", "pop": "~2 million", "crop": "Cashew Nuts, Rice, Peanuts", "minerals": "Phosphate, Bauxite, Oil", "currency": "West African CFA Franc (XOF)", "fact": "Guinea-Bissau is among the world's top producers of cashew nuts, which make up nearly 90% of its exports.", "flag": "🇬🇼"}, {"name": "Gambia", "region": "West Africa", "capital": "Banjul", "area": "11,295 km²", "lang": "English, Mandinka, Wolof", "religion": "Islam, Christianity", "pop": "~2.5 million", "crop": "Groundnuts, Millet, Rice", "minerals": "Mineral Sands, Limestone", "currency": "Gambian Dalasi (GMD)", "fact": "The Gambia is Africa's smallest mainland country — a thin strip almost entirely surrounded by Senegal.", "flag": "🇬🇲"}, {"name": "Cabo Verde", "region": "Island Nations", "capital": "Praia", "area": "4,033 km²", "lang": "Portuguese, Cape Verdean Creole", "religion": "Christianity", "pop": "~600,000", "crop": "Bananas, Corn, Beans", "minerals": "Salt, Pozzolana, Basalt", "currency": "Cape Verdean Escudo (CVE)", "fact": "Cabo Verde is a volcanic archipelago of 10 islands in the Atlantic, 570 km off the West African coast.", "flag": "🇨🇻"}, {"name": "São Tomé & Príncipe", "region": "Island Nations", "capital": "São Tomé", "area": "964 km²", "lang": "Portuguese", "religion": "Christianity", "pop": "~230,000", "crop": "Cocoa, Coconuts, Coffee", "minerals": "Oil (offshore)", "currency": "Dobra (STN)", "fact": "São Tomé and Príncipe is Africa's second smallest country and sits almost exactly on the equator.", "flag": "🇸🇹"}, {"name": "Comoros", "region": "Island Nations", "capital": "Moroni", "area": "2,235 km²", "lang": "Comorian, Arabic, French", "religion": "Islam", "pop": "~900,000", "crop": "Vanilla, Cloves, Ylang-ylang", "minerals": "Limited resources", "currency": "Comorian Franc (KMF)", "fact": "Comoros produces more ylang-ylang — used in perfumes — than any other country in the world.", "flag": "🇰🇲"}, {"name": "Mauritius", "region": "Island Nations", "capital": "Port Louis", "area": "2,040 km²", "lang": "Mauritian Creole, English, French", "religion": "Hinduism, Christianity, Islam", "pop": "~1.3 million", "crop": "Sugarcane, Tea, Tobacco", "minerals": "Granite, Limestone", "currency": "Mauritian Rupee (MUR)", "fact": "The dodo, history's most famous extinct bird, was native only to Mauritius before disappearing in the 1680s.", "flag": "🇲🇺"}, {"name": "Seychelles", "region": "Island Nations", "capital": "Victoria", "area": "459 km²", "lang": "Seychellois Creole, English, French", "religion": "Christianity", "pop": "~100,000", "crop": "Coconuts, Cinnamon, Vanilla", "minerals": "Guano, Granite", "currency": "Seychellois Rupee (SCR)", "fact": "Victoria in Seychelles is the world's smallest capital city — you can walk across the entire centre in minutes.", "flag": "🇸🇨"}, {"name": "Mauritania", "region": "West Africa", "capital": "Nouakchott", "area": "1,030,700 km²", "lang": "Arabic, French", "religion": "Islam", "pop": "~4.5 million", "crop": "Dates, Millet, Rice", "minerals": "Iron Ore, Oil, Gold", "currency": "Mauritanian Ouguiya (MRU)", "fact": "Mauritania has the Eye of the Sahara — a giant geological ring visible from space, nicknamed the 'Eye of Africa'.", "flag": "🇲🇷"}, {"name": "Burundi", "region": "East Africa", "capital": "Gitega", "area": "27,834 km²", "lang": "Kirundi, French, English", "religion": "Christianity, Traditional", "pop": "~12 million", "crop": "Coffee, Tea, Cotton", "minerals": "Nickel, Cobalt, Vanadium", "currency": "Burundian Franc (BIF)", "fact": "Burundi moved its capital from Bujumbura to Gitega in 2019, making it one of Africa's few landlocked capitals.", "flag": "🇧🇮"}];
@@ -1502,13 +1531,17 @@ document.addEventListener('DOMContentLoaded', function() {
    ══════════════════════════════════════════════════════ */
 
 function enterApp() {
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('on'); });
+  ACTIVE_PZ_ID = null; if(typeof PZ!=='undefined'){PZ.img=null;} PZ_SELECTED = -1;
   goScreen('s-app');
   injectLogos();
   buildNavForRole();
   buildDashboard();
   buildPuzzlePanel();
   buildCardsPanel();
-  if (CU.role === 'admin') { buildAdminPanel().catch(function(e){ console.error('Admin panel error:', e); }); }
+  if (CU.role === 'admin') {
+    buildAdminPanel().catch(function(e){ console.error('Admin panel:', e); });
+  }
   showPanel('dash', null);
 }
 
@@ -1549,7 +1582,7 @@ function showPanel(id, btn) {
   /* Refresh puzzle library whenever user opens puzzle panel
      so newly published puzzles appear without a page reload */
   if (id === 'puzzles' && CU && CU.role !== 'admin') {
-    loadAllData().then(function() { renderPlayerPuzzleLib(); }).catch(function(){});
+    renderPlayerPuzzleLib();
   }
 }
 
@@ -1836,7 +1869,9 @@ function buildPuzzlePanel() {
   document.getElementById('ref-toggle-btn').style.display = ACCESS[CU.plan].ref ? 'flex' : 'none';
 }
 
-function renderPlayerPuzzleLib() {
+async function renderPlayerPuzzleLib() {
+  /* Always load fresh from Firestore so new puzzles appear immediately */
+  try { await loadAllData(); } catch(e) {}
   const slot = document.getElementById('player-puzzle-library');
   let myPuzzles;
   if (CU.role === 'student') {
@@ -2382,10 +2417,12 @@ function handleBoardClick(e) {
   if (!bc) { return; }
   /* Account for canvas transform (zoom/pan) */
   const rect = bc.getBoundingClientRect();
+  /* rect dimensions are in CSS pixels (already include CSS zoom scale).
+     canvas.width is in canvas pixels. Ratio = canvas pixels / CSS pixels. */
   const scaleX = bc.width  / (rect.width  || bc.width);
   const scaleY = bc.height / (rect.height || bc.height);
-  const cx = (e.clientX - rect.left)  * scaleX;
-  const cy = (e.clientY - rect.top)   * scaleY;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top)  * scaleY;
   const col = Math.floor(cx / PZ.pw);
   const row = Math.floor(cy / PZ.ph);
   const clickedIdx = row * PZ.cols + col;
@@ -2544,7 +2581,7 @@ function uploadSingleCardImage(countryName, inputEl) {
         if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'red'; }
       });
     };
-    img.onerror = function() {
+    imgEl.onerror = function() {
       if (statusEl) { statusEl.textContent = '❌ Image load failed'; statusEl.style.color = 'red'; }
     };
     imgEl.src = e.target.result;
@@ -3178,7 +3215,8 @@ async function refreshAdminDropdowns() {
   const schoolList = Object.entries(getUsers()).filter(function(pair) { return pair[1].role === 'school'; });
   const schoolOpts = schoolList.length
     ? schoolList.map(function(pair) {
-        return '<option value="' + (pair[1].schoolId || pair[0]) + '">' + pair[1].name + '</option>';
+        /* Use the user's email (doc ID) as the school identifier */
+        return '<option value="' + pair[0] + '">' + pair[1].name + ' (' + pair[0] + ')</option>';
       }).join('')
     : '<option value="">No school accounts yet</option>';
   ['assign-school-sel','card-assign-school-sel'].forEach(function(id) {
@@ -3194,6 +3232,10 @@ async function refreshAdminDropdowns() {
 }
 
 async function buildAdminCharts() {
+  /* Always reload users from Firestore so counts are live */
+  if (Object.keys(MEM_USERS).length <= 1) {
+    try { await db_loadAllUsers(); } catch(e) {}
+  }
   const users = Object.values(getUsers());
   const totalUsers = users.length;
   const schools    = users.filter(function(u) { return u.role === 'school'; }).length;
@@ -3433,18 +3475,18 @@ async function adminDeletePuzzle(id) {
 }
 
 async function adminAssignToSchool() {
-  const sch = document.getElementById('assign-school-sel') ? document.getElementById('assign-school-sel').value : '';
-  const pid = document.getElementById('assign-pz-sel') ? document.getElementById('assign-pz-sel').value : '';
-  if (!pid) { alert('No puzzle selected.'); return; }
-  if (!sch) { alert('No school selected.'); return; }
+  const schEl = document.getElementById('assign-school-sel');
+  const pidEl = document.getElementById('assign-pz-sel');
+  const sch = schEl ? schEl.value.trim() : '';
+  const pid = pidEl ? pidEl.value.trim() : '';
+  if (!pid || pid === 'No puzzles yet') { alert('Select a puzzle first.'); return; }
+  if (!sch || sch === '') { alert('Select a school first.\n\nIf no schools appear, make sure a user has registered with the School account type.'); return; }
   try {
     await db_assignPuzzleToSchool(pid, sch);
     renderPublishedPuzzles();
-    refreshAdminDropdowns();
-    alert('Puzzle assigned to school and saved to Firebase!');
-  } catch(e) {
-    alert('Assign failed: ' + e.message);
-  }
+    await refreshAdminDropdowns();
+    alert('✅ Puzzle assigned to school!');
+  } catch(e) { alert('Assign failed: ' + e.message); }
 }
 
 function adminAssignCardToSchool() {
@@ -3536,21 +3578,49 @@ async function savePlansConfig() {
 }
 
 function buildAccessControls() {
-  buildPlansEditor();  /* render plan pricing editor */
+  buildPlansEditor();
   const ac = document.getElementById('access-controls'); if (!ac) { return; }
-  const rules = [
-    ['60-piece puzzles',      'Free, Basic, Premium, School'],
-    ['100 & 500-piece puzzles','Basic, Premium, School'],
-    ['Card modes 1–2',        'Free, Basic, Premium, School'],
-    ['Card modes 3–4',        'Basic, Premium, School'],
-    ['Card modes 5–8',        'Premium, School'],
-    ['Reference image toggle','Premium, School'],
-    ['Double deck play',      'Premium, School'],
+  /* Live editable plan access — checkboxes per plan */
+  const planKeys = ['free','basic','premium','school'];
+  const features = [
+    { key:'pz60',   label:'60-piece puzzles',       check: function(p){ return ACCESS[p].pieces.indexOf(60)!=-1; } },
+    { key:'pz100',  label:'100 & 500-piece puzzles', check: function(p){ return ACCESS[p].pieces.indexOf(100)!=-1; } },
+    { key:'mode12', label:'Card modes 1–2',          check: function(p){ return ACCESS[p].modes.indexOf(1)!=-1; } },
+    { key:'mode34', label:'Card modes 3–4',          check: function(p){ return ACCESS[p].modes.indexOf(3)!=-1; } },
+    { key:'mode58', label:'Card modes 5–8',          check: function(p){ return ACCESS[p].modes.indexOf(5)!=-1; } },
+    { key:'ref',    label:'Reference image',         check: function(p){ return ACCESS[p].ref; } },
   ];
-  ac.innerHTML = rules.map(function(r) {
-    return '<div style="display:flex;justify-content:space-between;padding:.32rem 0;border-bottom:1px solid var(--bd2);font-size:.76rem;">' +
-      '<span>' + r[0] + '</span><span style="color:var(--mu);font-size:.68rem;">' + r[1] + '</span></div>';
-  }).join('') + '<button class="btn btn-gn btn-sm" style="width:100%;margin-top:.7rem;" onclick="alert(\'Saved (demo)\')">Save rules</button>';
+  var hdr = '<div style="display:grid;grid-template-columns:1fr repeat(4,80px);gap:.3rem;font-size:.72rem;font-weight:700;color:var(--mu);padding:.3rem 0;border-bottom:2px solid var(--bd);">' +
+    '<span>Feature</span>' + planKeys.map(function(p){ return '<span style="text-align:center;text-transform:capitalize;">'+p+'</span>'; }).join('') + '</div>';
+  var rows = features.map(function(f) {
+    return '<div style="display:grid;grid-template-columns:1fr repeat(4,80px);gap:.3rem;align-items:center;padding:.3rem 0;border-bottom:1px solid var(--bd2);font-size:.76rem;">' +
+      '<span>'+f.label+'</span>' +
+      planKeys.map(function(p) {
+        var checked = f.check(p) ? 'checked' : '';
+        return '<div style="text-align:center;"><input type="checkbox" '+checked+' data-feat="'+f.key+'" data-plan="'+p+'" onchange="applyAccessRule(this)"></div>';
+      }).join('') + '</div>';
+  }).join('');
+  ac.innerHTML = hdr + rows +
+    '<button class="btn btn-gn btn-sm" style="width:100%;margin-top:.8rem;" onclick="saveAccessRules()">💾 Save access rules to Firebase</button>';
+}
+
+function applyAccessRule(cb) {
+  var feat = cb.dataset.feat, plan = cb.dataset.plan, on = cb.checked;
+  if (feat === 'pz60')   { if(on){if(ACCESS[plan].pieces.indexOf(60)==-1)ACCESS[plan].pieces.push(60);}  else ACCESS[plan].pieces=ACCESS[plan].pieces.filter(function(x){return x!==60;}); }
+  if (feat === 'pz100')  { if(on){if(ACCESS[plan].pieces.indexOf(100)==-1){ACCESS[plan].pieces.push(100);ACCESS[plan].pieces.push(500);}} else ACCESS[plan].pieces=ACCESS[plan].pieces.filter(function(x){return x!==100&&x!==500;}); }
+  if (feat === 'mode12') { if(on){[1,2].forEach(function(n){if(ACCESS[plan].modes.indexOf(n)==-1)ACCESS[plan].modes.push(n);});} else ACCESS[plan].modes=ACCESS[plan].modes.filter(function(x){return x!==1&&x!==2;}); }
+  if (feat === 'mode34') { if(on){[3,4].forEach(function(n){if(ACCESS[plan].modes.indexOf(n)==-1)ACCESS[plan].modes.push(n);});} else ACCESS[plan].modes=ACCESS[plan].modes.filter(function(x){return x!==3&&x!==4;}); }
+  if (feat === 'mode58') { if(on){[5,6,7,8].forEach(function(n){if(ACCESS[plan].modes.indexOf(n)==-1)ACCESS[plan].modes.push(n);});} else ACCESS[plan].modes=ACCESS[plan].modes.filter(function(x){return x<5;}); }
+  if (feat === 'ref')    { ACCESS[plan].ref = on; }
+}
+
+async function saveAccessRules() {
+  try {
+    var toSave = {};
+    Object.keys(ACCESS).forEach(function(p){ toSave[p] = { pieces: ACCESS[p].pieces, modes: ACCESS[p].modes, ref: ACCESS[p].ref }; });
+    await db.collection('config').doc('plans').set(toSave, { merge: true });
+    alert('✅ Access rules saved to Firebase!');
+  } catch(e) { alert('Save failed: ' + e.message); }
 }
 
 function buildSchoolList() {
@@ -3691,7 +3761,7 @@ let PZ_HINTS = 0;  /* hints used this session */
 let PZ_SELECTED = -1; /* index of currently selected tray piece, -1 = none */
 
 function useHint() {
-  if (!PZ.placed) { return; }
+  if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
   const unplaced = [];
   for (let i = 0; i < PZ.total; i++) {
     if (!PZ.placed[i]) { unplaced.push(i); }
@@ -3839,6 +3909,7 @@ function sendNotification() {
   if (msgEl) { msgEl.value = ''; }
   buildNotifHistory();
 }
+
 
 
 
