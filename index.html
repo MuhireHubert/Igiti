@@ -1142,7 +1142,10 @@ function initFirebase() {
 async function loadAllData() {
   try {
     /* Load each collection separately so one failure doesn't block the rest */
-    const pzSnap     = await db.collection('puzzles').orderBy('uploadDate','desc').get().catch(function(){ return {docs:[]}; });
+    const pzSnap     = await db.collection('puzzles').orderBy('uploadDate','desc').get().catch(function(e){
+      console.error('puzzles read failed:', e && e.message);
+      return {docs:[]};
+    });
     const notifSnap  = await db.collection('notifications').limit(30).get().catch(function(){ return {docs:[]}; });
     const plansSnap  = await db.collection('config').doc('plans').get().catch(function(){ return {exists:false}; });
     /* Load admin-configured plans if they exist */
@@ -1595,8 +1598,6 @@ function showPanel(id, btn) {
   /* Refresh puzzle library whenever user opens puzzle panel
      so newly published puzzles appear without a page reload */
   if (id === 'puzzles' && CU && CU.role !== 'admin') {
-    /* Force refresh from Firestore when tab opens to catch newly published puzzles */
-    MEM_PUZZLES = [];
     renderPlayerPuzzleLib();
   }
 }
@@ -1879,41 +1880,67 @@ function buildPuzzlePanel() {
         btn500.onclick = function() { selectPieces(500, btn500); };
       }
     }
-    renderPlayerPuzzleLib();
+    renderPlayerPuzzleLib(); /* populates puzzle list */
   }
-  document.getElementById('ref-toggle-btn').style.display = ACCESS[CU.plan].ref ? 'flex' : 'none';
+  const refBtn = document.getElementById('ref-toggle-btn');
+  if (refBtn) { refBtn.style.display = ACCESS[CU.plan].ref ? 'flex' : 'none'; }
 }
 
 async function renderPlayerPuzzleLib() {
-  /* Load from Firestore only if cache is empty */
-  if (MEM_PUZZLES.length === 0) {
-    try { await loadAllData(); } catch(e) {}
-  }
+  /* Always make player-pz-strip visible for non-admin */
+  const strip = document.getElementById('player-pz-strip');
+  if (strip) { strip.style.display = 'block'; }
+
   const slot = document.getElementById('player-puzzle-library');
-  let myPuzzles;
-  if (CU.role === 'student') {
-    myPuzzles = getPuzzles().filter(function(p) {
-      return p.assignedSchools.indexOf(CU.schoolId || '') !== -1 ||
-             p.assignedTeachers.indexOf(CU.teacherId || '') !== -1;
-    });
-  } else if (CU.role === 'teacher') {
-    myPuzzles = getPuzzles().filter(function(p) {
-      return p.assignedSchools.indexOf(CU.schoolId || '') !== -1 ||
-             p.assignedTeachers.indexOf(CU.email) !== -1;
-    });
+  if (!slot) { return; }
+
+  function renderList() {
+    var myPuzzles;
+    if (CU.role === 'student') {
+      myPuzzles = getPuzzles().filter(function(p) {
+        return (p.assignedSchools || []).indexOf(CU.schoolId || '') !== -1 ||
+               (p.assignedTeachers || []).indexOf(CU.teacherId || '') !== -1;
+      });
+    } else if (CU.role === 'teacher') {
+      myPuzzles = getPuzzles().filter(function(p) {
+        return (p.assignedSchools || []).indexOf(CU.schoolId || '') !== -1 ||
+               (p.assignedTeachers || []).indexOf(CU.email) !== -1;
+      });
+    } else {
+      myPuzzles = getPuzzles(); /* individual/school/enthusiast: all puzzles */
+    }
+    if (!myPuzzles.length) {
+      var msg = (CU.role === 'student' || CU.role === 'teacher')
+        ? '📭 No puzzles assigned to you yet. Ask your admin to assign one.'
+        : '📭 No puzzles yet. Admin needs to upload and publish one first.';
+      slot.innerHTML = '<div class="banner banner-or"><p>' + msg + '</p></div>';
+      return;
+    }
+    slot.innerHTML =
+      '<div class="s-label" style="margin-bottom:.6rem;">Choose a puzzle to play</div>' +
+      '<div class="puzzle-library">' +
+      myPuzzles.map(function(p) { return buildPuzzleThumbCard(p); }).join('') +
+      '</div>';
+  }
+
+  /* Show from cache immediately if we have data */
+  if (MEM_PUZZLES.length > 0) {
+    renderList();
   } else {
-    myPuzzles = getPuzzles();
+    /* Nothing in cache — show spinner then load */
+    slot.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--mu);font-size:.9rem;">⏳ Loading puzzles…</div>';
   }
-  if (!myPuzzles.length) {
-    const msg = (CU.role === 'student' || CU.role === 'teacher')
-      ? '📭 No puzzles assigned to you yet.'
-      : '📭 No puzzles published yet. Check back soon!';
-    slot.innerHTML = '<div class="banner banner-or"><p>' + msg + '</p></div>';
-    return;
+
+  /* Always refresh from Firestore in background */
+  try {
+    await loadAllData();
+    renderList(); /* re-render with fresh data */
+  } catch(e) {
+    console.warn('renderPlayerPuzzleLib refresh:', e.message);
+    if (MEM_PUZZLES.length === 0) {
+      slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load puzzles: ' + e.message + '</p></div>';
+    }
   }
-  slot.innerHTML =
-    '<div class="s-label">Choose a puzzle</div>' +
-    '<div class="puzzle-library">' + myPuzzles.map(function(p) { return buildPuzzleThumbCard(p); }).join('') + '</div>';
 }
 
 function launchPuzzleById(id) {
@@ -2595,7 +2622,17 @@ function uploadSingleCardImage(countryName, inputEl) {
         console.log('Card saved to Firestore for', countryName);
       }).catch(function(err) {
         console.error('Card Firestore save failed:', err);
-        if (statusEl) { statusEl.textContent = '❌ ' + err.message; statusEl.style.color = 'red'; }
+        var msg = err.message || 'Unknown error';
+        if (statusEl) { statusEl.textContent = '❌ ' + msg; statusEl.style.color = 'red'; }
+        /* Show clear alert so admin knows what failed */
+        if (msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1) {
+          alert('Card upload blocked by Firestore rules.\n\n' +
+            'Go to Firebase Console → Firestore → Rules and make sure this rule exists:\n\n' +
+            'match /cardImages/{id} { allow read: if true; allow write: if request.auth != null; }\n\n' +
+            'Then click Publish in the Firestore rules editor.');
+        } else {
+          alert('Card upload failed: ' + msg);
+        }
       });
     };
     imgEl.onerror = function() {
@@ -3459,7 +3496,7 @@ async function adminPublishPuzzle() {
     await db_savePuzzle(puzzle);
   } catch(e) {
     allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
-    alert('Publish failed: ' + e.message + '\n\nCheck your Firestore rules allow writes to the puzzles collection.');
+    alert('Puzzle publish failed: ' + e.message + '\n\nFirestore rules needed:\n' + 'match /puzzles/{id} { allow read: if true; allow write: if request.auth != null; }\n' + 'match /puzzleImages/{id} { allow read: if true; allow write: if request.auth != null; }');
     return;
   }
 
