@@ -1209,7 +1209,7 @@ async function db_savePuzzle(puzzle) {
     uploadDate:       puzzle.uploadDate,
     uploadedBy:       CU ? CU.email : 'admin',
     imageUrl:         puzzle.imageUrl || null,
-    /* imgData stored in puzzleImages/{id} collection */
+    imgData:          puzzle.imgData  || null,   /* compressed base64 stored directly */
   };
   try {
     await db.collection('puzzles').doc(puzzle.id).set(toStore);
@@ -2607,7 +2607,18 @@ function uploadSingleCardImage(countryName, inputEl) {
       CARD_IMAGES[countryName] = dataUrl;
       if (statusEl) { statusEl.textContent = '⏳ Saving to Firebase…'; statusEl.style.color='var(--mu)'; }
       const preview = document.getElementById('card-preview-' + safeEl);
-      if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
+      if (preview) {
+        preview.src = dataUrl;
+        preview.style.display = 'block';
+        /* Convert placeholder div to img if needed */
+        if (preview.tagName !== 'IMG') {
+          const img = document.createElement('img');
+          img.id = preview.id;
+          img.src = dataUrl;
+          img.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;';
+          preview.parentNode.replaceChild(img, preview);
+        }
+      }
       renderBrowser();
       buildCountryUploadList();
 
@@ -2618,7 +2629,13 @@ function uploadSingleCardImage(countryName, inputEl) {
         uploadedBy:   CU ? CU.email : 'admin',
         uploadDate:   new Date().toISOString().split('T')[0]
       }).then(function() {
-        if (statusEl) { statusEl.textContent = '✅ Uploaded'; statusEl.style.color = 'var(--gn)'; }
+        if (statusEl) { statusEl.textContent = '✅ Done'; statusEl.style.color = 'var(--gn)'; }
+        /* Update the row background to green */
+        const row = document.getElementById('card-row-' + safeEl);
+        if (row) { row.style.background = 'var(--gn-pale)'; row.style.borderColor = 'var(--gn)'; }
+        /* Update the upload button text */
+        const labels = row ? row.querySelectorAll('label') : [];
+        labels.forEach(function(l){ if(l.textContent.includes('Upload')) l.childNodes[0].textContent = '↩ Replace'; });
         console.log('Card saved to Firestore for', countryName);
       }).catch(function(err) {
         console.error('Card Firestore save failed:', err);
@@ -3500,13 +3517,8 @@ async function adminPublishPuzzle() {
     return;
   }
 
-  /* Step 3: Try to save image to puzzleImages collection (non-blocking if fails) */
-  db.collection('puzzleImages').doc(id).set({ imgData: imgData })
-    .then(function() { console.log('Puzzle image saved to puzzleImages/', id); })
-    .catch(function(e) {
-      console.warn('puzzleImages write failed (add it to Firestore rules):', e.message);
-      /* Non-fatal — puzzle is already published, image is cached locally */
-    });
+  /* Image is now stored directly in the puzzles doc — no separate step needed */
+  console.log('Puzzle saved with image data embedded.');
 
   allPublishBtns.forEach(function(b){b.disabled=false; b.textContent='Publish →';});
   if (nameEl) { nameEl.value = ''; }
@@ -3580,20 +3592,42 @@ function buildModesManager() {
 function buildCountryUploadList() {
   const container = document.getElementById('country-upload-list');
   if (!container) { return; }
-  container.innerHTML = CTRS.sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(ct) {
-    const safeId = ct.name.replace(/[^a-z0-9]/gi, '');
-    const hasImg = !!CARD_IMAGES[ct.name];
-    return '<div style="display:flex;align-items:center;gap:.6rem;padding:.35rem .5rem;border-radius:6px;background:' + (hasImg?'var(--gn-pale)':'var(--cr)') + ';border:1px solid var(--bd2);">' +
-      '<span style="font-size:1rem;">' + ct.flag + '</span>' +
-      '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg?'700':'400') + ';">' + ct.name + '</span>' +
-      (hasImg ? '<span style="font-size:.65rem;color:var(--gn);font-weight:700;">✅ Uploaded</span>' : '') +
-      '<label style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;font-weight:700;padding:.2rem .55rem;border-radius:4px;">' +
-        (hasImg ? 'Replace' : 'Upload') +
-        '<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" ' +
-          'onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)" />' +
-      '</label>' +
-    '</div>';
-  }).join('');
+  const sorted = CTRS.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
+  const uploadedCount = sorted.filter(function(ct){ return !!CARD_IMAGES[ct.name]; }).length;
+  container.innerHTML =
+    '<div style="font-size:.76rem;color:var(--mu);margin-bottom:.6rem;font-weight:700;">' +
+      uploadedCount + ' / ' + sorted.length + ' cards uploaded' +
+    '</div>' +
+    sorted.map(function(ct) {
+      const safeEl = ct.name.replace(/[^a-z0-9]/gi,'');
+      const hasImg = !!CARD_IMAGES[ct.name];
+      const imgSrc = CARD_IMAGES[ct.name] || '';
+      return '<div id="card-row-' + safeEl + '" style="display:flex;align-items:center;gap:.6rem;' +
+        'padding:.4rem .5rem;border-radius:7px;margin-bottom:.25rem;' +
+        'background:' + (hasImg ? 'var(--gn-pale)' : 'var(--cr)') + ';' +
+        'border:1px solid ' + (hasImg ? 'var(--gn)' : 'var(--bd2)') + ';">' +
+        /* thumbnail */ (hasImg
+          ? '<img id="card-preview-' + safeEl + '" src="' + imgSrc + '" ' +
+              'style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;">'
+          : '<div id="card-preview-' + safeEl + '" style="width:36px;height:36px;background:var(--wm);' +
+              'border-radius:4px;display:flex;align-items:center;justify-content:center;' +
+              'font-size:1.1rem;flex-shrink:0;">🃏</div>') +
+        /* name */
+        '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg?'700':'400') + ';">' + ct.name + '</span>' +
+        /* status label — this is what uploadSingleCardImage updates */
+        '<span id="card-status-' + safeEl + '" style="font-size:.65rem;color:' +
+          (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;">' +
+          (hasImg ? '✅ Done' : '—') +
+        '</span>' +
+        /* upload button */
+        '<label style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;' +
+          'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;">' +
+          (hasImg ? '↩ Replace' : '⬆ Upload') +
+          '<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" ' +
+            'onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
+        '</label>' +
+      '</div>';
+    }).join('');
 }
 
 /* ─── ADMIN: Plans pricing editor ─── */
