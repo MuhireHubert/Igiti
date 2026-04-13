@@ -1172,7 +1172,6 @@ async function loadAllData() {
     /* Load puzzle metadata */
     MEM_PUZZLES = pzSnap.docs.map(function(d) {
       const data = d.data();
-    MEM_PUZZLES.sort(function(a,b){ return (b.uploadDate||'').localeCompare(a.uploadDate||''); });
       let img = null;
       if (data.imageUrl) {
         img = new Image(); img.crossOrigin = 'anonymous'; img.src = data.imageUrl;
@@ -1181,6 +1180,8 @@ async function loadAllData() {
       }
       return Object.assign({}, data, { id:d.id, img:img });
     });
+    /* Sort newest first — done AFTER map completes, not inside it */
+    MEM_PUZZLES.sort(function(a,b){ return (b.uploadDate||'').localeCompare(a.uploadDate||''); });
     /* Load puzzle images from puzzleImages collection for puzzles that don't have one yet */
     try {
       const imgSnap = await db.collection('puzzleImages').get().catch(function(){ return {docs:[]}; });
@@ -1857,9 +1858,12 @@ function buildPuzzleThumbCard(pz) {
       thumbHtml = '<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--wm);border-radius:8px 8px 0 0;">🖼️</div>';
     }
   } else if (pz.img) {
-    thumbHtml = '<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--wm);border-radius:8px 8px 0 0;">⏳</div>';
+    /* Image still loading from base64 — render and let browser complete it */
+    thumbHtml = '<img src="' + (pz.imgData || '') + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;display:block;">';
+  } else if (pz.imgData) {
+    thumbHtml = '<img src="' + pz.imgData + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;display:block;">';
   } else {
-    thumbHtml = '<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--mu);background:var(--wm);border-radius:8px 8px 0 0;">📭</div>';
+    thumbHtml = '<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--mu);background:var(--wm);border-radius:8px 8px 0 0;">🗺️</div>';
   }
   return '<div class="pz-thumb-card" onclick="launchPuzzleById(\'' + pz.id + '\')">' +
     thumbHtml +
@@ -1946,21 +1950,24 @@ async function renderPlayerPuzzleLib() {
       '</div>';
   }
 
-  /* Show cached data immediately — do NOT overwrite with empty on failure */
+  /* Show cached data immediately while fresh load runs in background */
   if (MEM_PUZZLES.length > 0) {
     renderList();
-    return; /* already have data — background refresh only via Refresh button */
+  } else {
+    slot.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--mu);">⏳ Loading puzzles…</div>';
   }
 
-  /* Cache empty — load once */
-  slot.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--mu);">⏳ Loading puzzles…</div>';
+  /* Always load fresh from Firestore so users see latest published puzzles */
   try {
     await loadAllData();
     renderList();
   } catch(e) {
-    slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load: ' + e.message +
-      '<br><small>Check Firestore rules allow read on /puzzles</small></p>' +
-      '<button class="btn btn-sm btn-or" onclick="refreshPuzzles()" style="margin-top:.4rem;">Retry</button></div>';
+    console.warn('renderPlayerPuzzleLib:', e.message);
+    if (MEM_PUZZLES.length === 0) {
+      slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load puzzles.<br>' +
+        '<small>' + e.message + '</small></p>' +
+        '<button class="btn btn-sm btn-or" onclick="refreshPuzzles()" style="margin-top:.4rem;">Retry</button></div>';
+    }
   }
 }
 
@@ -2710,7 +2717,14 @@ async function loadCardImages() {
       if (!CARD_IMAGES[name]) { delete CARD_IMAGES[name]; }
     });
     console.log('Loaded', Object.keys(CARD_IMAGES).length, 'card images');
-  } catch(e) { console.warn('loadCardImages:', e.message); }
+    /* Rebuild card browser if it's currently visible */
+    if (document.getElementById('cb-grid')) { renderBrowser(); }
+  } catch(e) {
+    console.warn('loadCardImages:', e.message);
+    if (e.code === 'permission-denied') {
+      showAppError('Cannot load cards — add Firestore rule: match /cardImages/{id} { allow read: if true; allow write: if request.auth != null; }');
+    }
+  }
 }
 
 function buildCardsPanel() { buildModeGrid(); renderBrowser(); }
@@ -3606,6 +3620,34 @@ async function adminDeletePuzzle(id) {
   renderPlayerPuzzleLib();
 }
 
+async function adminAssignCardToSchool() {
+  /* Cards are global — assign means flagging which schools have access */
+  const schEl = document.getElementById('card-assign-school-sel');
+  const sch = schEl ? schEl.value.trim() : '';
+  if (!sch) {
+    await db_loadAllUsers();
+    await refreshAdminDropdowns();
+    const sch2 = document.getElementById('card-assign-school-sel') ? document.getElementById('card-assign-school-sel').value.trim() : '';
+    if (!sch2) { alert('No school accounts found. Make sure a user registered as School.'); return; }
+  }
+  const finalSch = document.getElementById('card-assign-school-sel').value.trim();
+  try {
+    /* Store card access in the school user's profile */
+    await db.collection('users').doc(finalSch).update({
+      cardAccess: firebase.firestore.FieldValue.arrayUnion('A54')
+    });
+    if (MEM_USERS[finalSch]) {
+      MEM_USERS[finalSch].cardAccess = MEM_USERS[finalSch].cardAccess || [];
+      if (MEM_USERS[finalSch].cardAccess.indexOf('A54') === -1) {
+        MEM_USERS[finalSch].cardAccess.push('A54');
+      }
+    }
+    alert('✅ A54 card set assigned to school!');
+  } catch(e) {
+    alert('Card assign failed: ' + e.message);
+  }
+}
+
 async function adminAssignToSchool() {
   const schEl = document.getElementById('assign-school-sel');
   const pidEl = document.getElementById('assign-pz-sel');
@@ -3687,20 +3729,20 @@ function buildCountryUploadList() {
       const safeElId = ct.name.toLowerCase().replace(/[^a-z0-9]/g,'');
       const hasImg = !!CARD_IMAGES[ct.name];
       const imgSrc = CARD_IMAGES[ct.name] || '';
-      return '<div id="card-row-' + safeEl + '" style="display:flex;align-items:center;gap:.6rem;' +
+      return '<div id="card-row-' + safeElId + '" style="display:flex;align-items:center;gap:.6rem;' +
         'padding:.4rem .5rem;border-radius:7px;margin-bottom:.25rem;' +
         'background:' + (hasImg ? 'var(--gn-pale)' : 'var(--cr)') + ';' +
         'border:1px solid ' + (hasImg ? 'var(--gn)' : 'var(--bd2)') + ';">' +
         /* thumbnail */ (hasImg
-          ? '<img id="card-preview-' + safeEl + '" src="' + imgSrc + '" ' +
+          ? '<img id="card-preview-' + safeElId + '" src="' + imgSrc + '" ' +
               'style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;">'
-          : '<div id="card-preview-' + safeEl + '" style="width:36px;height:36px;background:var(--wm);' +
+          : '<div id="card-preview-' + safeElId + '" style="width:36px;height:36px;background:var(--wm);' +
               'border-radius:4px;display:flex;align-items:center;justify-content:center;' +
               'font-size:1.1rem;flex-shrink:0;">🃏</div>') +
         /* name */
         '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg?'700':'400') + ';">' + ct.name + '</span>' +
         /* status label — this is what uploadSingleCardImage updates */
-        '<span id="card-status-' + safeEl + '" style="font-size:.65rem;color:' +
+        '<span id="card-status-' + safeElId + '" style="font-size:.65rem;color:' +
           (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;">' +
           (hasImg ? '✅ Done' : '—') +
         '</span>' +
