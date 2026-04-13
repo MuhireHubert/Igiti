@@ -1144,6 +1144,11 @@ async function loadAllData() {
     /* Load each collection separately so one failure doesn't block the rest */
     const pzSnap     = await db.collection('puzzles').orderBy('uploadDate','desc').get().catch(function(e){
       console.error('puzzles read failed:', e && e.message);
+      /* Show a visible error so users know why puzzles are missing */
+      var errMsg = (e && e.code === 'permission-denied')
+        ? 'Firestore rules not set. Go to Firebase Console → Firestore → Rules and publish the correct rules.'
+        : 'Could not load puzzles: ' + (e && e.message);
+      showAppError(errMsg);
       return {docs:[]};
     });
     const notifSnap  = await db.collection('notifications').limit(30).get().catch(function(){ return {docs:[]}; });
@@ -1439,7 +1444,7 @@ function doRegister() {
   clearAuthErr(); setAuthLoading(true); showLoading('Creating account…');
 
   function proceed(schoolId) {
-    const plan = (role === 'school' || role === 'teacher' || role === 'student') ? 'school' : 'premium';
+    const plan = (role === 'school' || role === 'teacher' || role === 'student') ? 'school' : 'free';
     const schoolCode = (role === 'school')
       ? name.replace(/[^A-Z0-9]/gi,'').toUpperCase().slice(0,6) + Math.floor(Math.random()*100)
       : null;
@@ -1931,14 +1936,15 @@ async function renderPlayerPuzzleLib() {
     slot.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--mu);font-size:.9rem;">⏳ Loading puzzles…</div>';
   }
 
-  /* Always refresh from Firestore in background */
+  /* Always refresh from Firestore */
   try {
     await loadAllData();
-    renderList(); /* re-render with fresh data */
+    console.log('Puzzles loaded:', MEM_PUZZLES.length);
+    renderList();
   } catch(e) {
     console.warn('renderPlayerPuzzleLib refresh:', e.message);
     if (MEM_PUZZLES.length === 0) {
-      slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load puzzles: ' + e.message + '</p></div>';
+      slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load puzzles. Check Firestore rules allow read on /puzzles.</p></div>';
     }
   }
 }
@@ -2603,53 +2609,39 @@ function uploadSingleCardImage(countryName, inputEl) {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
       console.log('Card compressed:', Math.round(dataUrl.length/1024), 'KB base64 for', countryName);
 
-      /* Cache immediately for display */
+      /* Store in local cache immediately so UI updates right away */
       CARD_IMAGES[countryName] = dataUrl;
-      if (statusEl) { statusEl.textContent = '⏳ Saving to Firebase…'; statusEl.style.color='var(--mu)'; }
-      const preview = document.getElementById('card-preview-' + safeEl);
-      if (preview) {
-        preview.src = dataUrl;
-        preview.style.display = 'block';
-        /* Convert placeholder div to img if needed */
-        if (preview.tagName !== 'IMG') {
-          const img = document.createElement('img');
-          img.id = preview.id;
-          img.src = dataUrl;
-          img.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;';
-          preview.parentNode.replaceChild(img, preview);
-        }
-      }
-      renderBrowser();
-      buildCountryUploadList();
+      /* Show saving status using fresh getElementById (not captured ref) */
+      document.getElementById('card-status-' + safeEl) &&
+        (document.getElementById('card-status-' + safeEl).textContent = '⏳ Saving…');
 
-      /* Save to Firestore (base64 is now < 300KB, well within 1MB limit) */
+      /* Save to Firestore — then rebuild UI inside .then() so DOM refs stay fresh */
       db.collection('cardImages').doc(safeId).set({
         imgData:      dataUrl,
         countryName:  countryName,
         uploadedBy:   CU ? CU.email : 'admin',
         uploadDate:   new Date().toISOString().split('T')[0]
       }).then(function() {
-        if (statusEl) { statusEl.textContent = '✅ Done'; statusEl.style.color = 'var(--gn)'; }
-        /* Update the row background to green */
-        const row = document.getElementById('card-row-' + safeEl);
-        if (row) { row.style.background = 'var(--gn-pale)'; row.style.borderColor = 'var(--gn)'; }
-        /* Update the upload button text */
-        const labels = row ? row.querySelectorAll('label') : [];
-        labels.forEach(function(l){ if(l.textContent.includes('Upload')) l.childNodes[0].textContent = '↩ Replace'; });
         console.log('Card saved to Firestore for', countryName);
+        /* Rebuild the list first — this creates fresh DOM nodes */
+        buildCountryUploadList();
+        renderBrowser();
+        /* Now get fresh references and update them */
+        var st = document.getElementById('card-status-' + safeEl);
+        if (st) { st.textContent = '✅ Done'; st.style.color = 'var(--gn)'; }
+        var row = document.getElementById('card-row-' + safeEl);
+        if (row) { row.style.background = 'var(--gn-pale)'; row.style.borderColor = 'var(--gn)'; }
       }).catch(function(err) {
         console.error('Card Firestore save failed:', err);
         var msg = err.message || 'Unknown error';
-        if (statusEl) { statusEl.textContent = '❌ ' + msg; statusEl.style.color = 'red'; }
-        /* Show clear alert so admin knows what failed */
-        if (msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1) {
-          alert('Card upload blocked by Firestore rules.\n\n' +
-            'Go to Firebase Console → Firestore → Rules and make sure this rule exists:\n\n' +
-            'match /cardImages/{id} { allow read: if true; allow write: if request.auth != null; }\n\n' +
-            'Then click Publish in the Firestore rules editor.');
-        } else {
-          alert('Card upload failed: ' + msg);
-        }
+        /* Get fresh reference since we haven't rebuilt the list yet */
+        var st2 = document.getElementById('card-status-' + safeEl);
+        if (st2) { st2.textContent = '❌ Failed'; st2.style.color = 'red'; }
+        var isPermission = msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1;
+        alert(isPermission
+          ? 'Card upload blocked.\n\nFix: Firebase Console → Firestore → Rules → add:\n\n' +
+            'match /cardImages/{id} { allow read: if true; allow write: if request.auth != null; }\n\nThen click Publish.'
+          : 'Card upload failed: ' + msg);
       });
     };
     imgEl.onerror = function() {
