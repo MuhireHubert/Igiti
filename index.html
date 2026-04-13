@@ -882,6 +882,11 @@ img{max-width:100%;}
             <button class="pc-btn on" id="admin-p100" data-pieces="100" onclick="this.classList.toggle('on')"><span class="pn">100</span><span class="pl">Std</span></button>
             <button class="pc-btn on" id="admin-p500" data-pieces="500" onclick="this.classList.toggle('on')"><span class="pn">500</span><span class="pl">Expert</span></button>
           </div>
+          <div class="fg" style="margin-top:.5rem;">
+            <label style="font-size:.74rem;font-weight:700;color:var(--dk);">Custom fun facts (optional)</label>
+            <p style="font-size:.66rem;color:var(--mu);margin:.1rem 0 .3rem;">One fact per line. Shown to players on each piece placed. Leave blank to use generic Africa facts.</p>
+            <textarea id="admin-pz-facts" rows="4" placeholder="e.g. Rwanda has over 1,000 species of birds..." style="width:100%;padding:.44rem .6rem;border:1.5px solid var(--bd);border-radius:6px;font-family:Barlow,sans-serif;font-size:.76rem;background:var(--cr);resize:vertical;box-sizing:border-box;"></textarea>
+          </div>
           <button class="btn btn-gn btn-sm" style="width:100%;margin-top:.6rem;" onclick="adminPublishPuzzle()">Publish →</button>
         </div>
         <div class="a-card" style="grid-column:span 2;">
@@ -1033,6 +1038,7 @@ img{max-width:100%;}
   <div id="ft-txt" class="ft-txt"></div>
 </div>
 <script>
+
 
 
 
@@ -1214,7 +1220,8 @@ async function db_savePuzzle(puzzle) {
     uploadDate:       puzzle.uploadDate,
     uploadedBy:       CU ? CU.email : 'admin',
     imageUrl:         puzzle.imageUrl || null,
-    imgData:          puzzle.imgData  || null,   /* compressed base64 stored directly */
+    imgData:          puzzle.imgData  || null,
+    customFacts:      puzzle.customFacts || [],   /* compressed base64 stored directly */
   };
   try {
     await db.collection('puzzles').doc(puzzle.id).set(toStore);
@@ -1892,61 +1899,68 @@ function buildPuzzlePanel() {
 }
 
 async function renderPlayerPuzzleLib() {
-  /* Always make player-pz-strip visible for non-admin */
   const strip = document.getElementById('player-pz-strip');
   if (strip) { strip.style.display = 'block'; }
-
   const slot = document.getElementById('player-puzzle-library');
   if (!slot) { return; }
 
   function renderList() {
+    var all = getPuzzles();
     var myPuzzles;
     if (CU.role === 'student') {
-      myPuzzles = getPuzzles().filter(function(p) {
-        return (p.assignedSchools || []).indexOf(CU.schoolId || '') !== -1 ||
-               (p.assignedTeachers || []).indexOf(CU.teacherId || '') !== -1;
+      myPuzzles = all.filter(function(p) {
+        return (p.assignedSchools||[]).indexOf(CU.schoolId||'')!==-1 ||
+               (p.assignedTeachers||[]).indexOf(CU.teacherId||'')!==-1;
       });
     } else if (CU.role === 'teacher') {
-      myPuzzles = getPuzzles().filter(function(p) {
-        return (p.assignedSchools || []).indexOf(CU.schoolId || '') !== -1 ||
-               (p.assignedTeachers || []).indexOf(CU.email) !== -1;
+      myPuzzles = all.filter(function(p) {
+        return (p.assignedSchools||[]).indexOf(CU.schoolId||'')!==-1 ||
+               (p.assignedTeachers||[]).indexOf(CU.email)!==-1;
       });
     } else {
-      myPuzzles = getPuzzles(); /* individual/school/enthusiast: all puzzles */
+      myPuzzles = all;
     }
     if (!myPuzzles.length) {
-      var msg = (CU.role === 'student' || CU.role === 'teacher')
-        ? '📭 No puzzles assigned to you yet. Ask your admin to assign one.'
-        : '📭 No puzzles yet. Admin needs to upload and publish one first.';
-      slot.innerHTML = '<div class="banner banner-or"><p>' + msg + '</p></div>';
+      var msg = (CU.role==='student'||CU.role==='teacher')
+        ? '📭 No puzzles assigned to you yet.'
+        : '📭 No puzzles published yet.';
+      slot.innerHTML = '<div class="banner banner-or" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;">' +
+        '<p style="margin:0;">' + msg + '</p>' +
+        '<button class="btn btn-sm btn-ghost" onclick="refreshPuzzles()">🔄 Refresh</button>' +
+        '</div>';
       return;
     }
     slot.innerHTML =
-      '<div class="s-label" style="margin-bottom:.6rem;">Choose a puzzle to play</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;">' +
+        '<div class="s-label" style="margin:0;">Choose a puzzle</div>' +
+        '<button class="btn btn-xs btn-ghost" onclick="refreshPuzzles()">🔄 Refresh</button>' +
+      '</div>' +
       '<div class="puzzle-library">' +
       myPuzzles.map(function(p) { return buildPuzzleThumbCard(p); }).join('') +
       '</div>';
   }
 
-  /* Show from cache immediately if we have data */
+  /* Show cached data immediately — do NOT overwrite with empty on failure */
   if (MEM_PUZZLES.length > 0) {
     renderList();
-  } else {
-    /* Nothing in cache — show spinner then load */
-    slot.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--mu);font-size:.9rem;">⏳ Loading puzzles…</div>';
+    return; /* already have data — background refresh only via Refresh button */
   }
 
-  /* Always refresh from Firestore */
+  /* Cache empty — load once */
+  slot.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--mu);">⏳ Loading puzzles…</div>';
   try {
     await loadAllData();
-    console.log('Puzzles loaded:', MEM_PUZZLES.length);
     renderList();
   } catch(e) {
-    console.warn('renderPlayerPuzzleLib refresh:', e.message);
-    if (MEM_PUZZLES.length === 0) {
-      slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load puzzles. Check Firestore rules allow read on /puzzles.</p></div>';
-    }
+    slot.innerHTML = '<div class="banner banner-or"><p>⚠️ Could not load: ' + e.message +
+      '<br><small>Check Firestore rules allow read on /puzzles</small></p>' +
+      '<button class="btn btn-sm btn-or" onclick="refreshPuzzles()" style="margin-top:.4rem;">Retry</button></div>';
   }
+}
+
+async function refreshPuzzles() {
+  MEM_PUZZLES = [];
+  await renderPlayerPuzzleLib();
 }
 
 function launchPuzzleById(id) {
@@ -2178,7 +2192,12 @@ function launchPuzzle() {
     PZ.rows  = Math.max(2, Math.round(selectedPieces / PZ.cols));
     PZ.placed = new Array(PZ.total).fill(false);
     PZ.np = 0; PZ.nf = 0; PZ.refOn = false;
-    PZ.factQueue = ALL_FACTS.slice().sort(function() { return Math.random() - .5; });
+    /* Use puzzle-specific custom facts if admin provided them; else use generic Africa facts */
+    var activePz = ACTIVE_PZ_ID ? getPuzzles().find(function(p){ return p.id===ACTIVE_PZ_ID; }) : null;
+    var factSource = (activePz && activePz.customFacts && activePz.customFacts.length)
+      ? activePz.customFacts.map(function(t){ return {e:'💡', t:t}; })
+      : ALL_FACTS;
+    PZ.factQueue = factSource.slice().sort(function() { return Math.random() - .5; });
     PZ.factIdx = 0;
     document.getElementById('pz-placed').textContent   = '0';
     document.getElementById('pz-facts').textContent    = '0';
@@ -2526,7 +2545,12 @@ function placePiece(idx, el) {
   /* Fact on every piece — reshuffle queue when it loops */
   const qi = PZ.factIdx % PZ.factQueue.length;
   if (qi === 0 && PZ.factIdx > 0) {
-    PZ.factQueue = ALL_FACTS.slice().sort(function() { return Math.random() - .5; });
+    /* Use puzzle-specific custom facts if admin provided them; else use generic Africa facts */
+    var activePz = ACTIVE_PZ_ID ? getPuzzles().find(function(p){ return p.id===ACTIVE_PZ_ID; }) : null;
+    var factSource = (activePz && activePz.customFacts && activePz.customFacts.length)
+      ? activePz.customFacts.map(function(t){ return {e:'💡', t:t}; })
+      : ALL_FACTS;
+    PZ.factQueue = factSource.slice().sort(function() { return Math.random() - .5; });
   }
   const fact = PZ.factQueue[qi];
   PZ.factIdx++; PZ.nf++;
@@ -2584,73 +2608,81 @@ function safeDocId(name) {
 }
 
 function uploadSingleCardImage(countryName, inputEl) {
-  const file = inputEl.files[0]; if (!file) { return; }
-  const safeId = safeDocId(countryName);   /* safe doc ID for Firestore */
-  const safeEl = countryName.replace(/[^a-z0-9]/gi,''); /* safe HTML element ID suffix */
+  var file = inputEl.files[0];
+  if (!file) { return; }
+  var safeId = safeDocId(countryName);
+  var safeEl = countryName.replace(/[^a-z0-9]/gi,'');
 
-  /* Show uploading status immediately */
-  const statusEl = document.getElementById('card-status-' + safeEl);
-  if (statusEl) { statusEl.textContent = '⏳ Uploading…'; statusEl.style.color = 'var(--mu)'; }
+  function setStatus(msg, color) {
+    var el = document.getElementById('card-status-' + safeEl);
+    if (el) { el.textContent = msg; el.style.color = color || 'var(--mu)'; }
+  }
 
-  /* Read file, compress to max 600px, upload to Firebase Storage */
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    /* Compress the image before uploading */
-    const imgEl = new Image();
+  setStatus('⏳ Reading…', 'var(--mu)');
+
+  var reader = new FileReader();
+  reader.onerror = function() { setStatus('❌ Read error', 'red'); alert('Could not read file: ' + (reader.error && reader.error.message)); };
+  reader.onload = function(ev) {
+    var imgEl = new Image();
+    imgEl.onerror = function() { setStatus('❌ Image error', 'red'); alert('Could not load image. Try a PNG or JPG file.'); };
     imgEl.onload = function() {
-      /* Compress to max 400px wide, JPEG 55% — keeps base64 under 200KB */
-      const MAX = 400;
-      const scale = Math.min(1, MAX / imgEl.width);
-      const cw = Math.round(imgEl.width * scale);
-      const ch = Math.round(imgEl.height * scale);
-      const canvas = document.createElement('canvas');
+      setStatus('⏳ Compressing…', 'var(--mu)');
+      /* Compress: max 400px wide, JPEG 60% → ~80-200KB base64 */
+      var MAX = 400;
+      var scale = Math.min(1, MAX / imgEl.width);
+      var cw = Math.round(imgEl.width * scale);
+      var ch = Math.round(imgEl.height * scale);
+      var canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
       canvas.getContext('2d').drawImage(imgEl, 0, 0, cw, ch);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
-      console.log('Card compressed:', Math.round(dataUrl.length/1024), 'KB base64 for', countryName);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.60);
+      var kbSize = Math.round(dataUrl.length / 1024);
+      console.log('Card compressed:', kbSize, 'KB for', countryName);
 
-      /* Store in local cache immediately so UI updates right away */
+      if (kbSize > 900) {
+        alert('Image too large (' + kbSize + 'KB after compression). Please use a smaller image (under 2MB original).');
+        setStatus('❌ Too large', 'red');
+        return;
+      }
+
+      /* Cache locally so UI updates immediately */
       CARD_IMAGES[countryName] = dataUrl;
-      /* Show saving status using fresh getElementById (not captured ref) */
-      document.getElementById('card-status-' + safeEl) &&
-        (document.getElementById('card-status-' + safeEl).textContent = '⏳ Saving…');
+      setStatus('⏳ Saving…', 'var(--mu)');
 
-      /* Save to Firestore — then rebuild UI inside .then() so DOM refs stay fresh */
+      /* Save to Firestore */
+      if (!db) { setStatus('❌ No DB', 'red'); return; }
       db.collection('cardImages').doc(safeId).set({
-        imgData:      dataUrl,
-        countryName:  countryName,
-        uploadedBy:   CU ? CU.email : 'admin',
-        uploadDate:   new Date().toISOString().split('T')[0]
+        imgData:     dataUrl,
+        countryName: countryName,
+        uploadedBy:  CU ? CU.email : 'admin',
+        uploadDate:  new Date().toISOString().split('T')[0]
       }).then(function() {
-        console.log('Card saved to Firestore for', countryName);
-        /* Rebuild the list first — this creates fresh DOM nodes */
+        console.log('✅ Card saved:', countryName);
+        /* Rebuild list so row shows green and preview updates */
         buildCountryUploadList();
         renderBrowser();
-        /* Now get fresh references and update them */
-        var st = document.getElementById('card-status-' + safeEl);
-        if (st) { st.textContent = '✅ Done'; st.style.color = 'var(--gn)'; }
+        /* setStatus again with fresh ref after rebuild */
+        setStatus('✅ Done', 'var(--gn)');
         var row = document.getElementById('card-row-' + safeEl);
-        if (row) { row.style.background = 'var(--gn-pale)'; row.style.borderColor = 'var(--gn)'; }
+        if (row) { row.style.background='var(--gn-pale)'; row.style.borderColor='var(--gn)'; }
       }).catch(function(err) {
-        console.error('Card Firestore save failed:', err);
-        var msg = err.message || 'Unknown error';
-        /* Get fresh reference since we haven't rebuilt the list yet */
-        var st2 = document.getElementById('card-status-' + safeEl);
-        if (st2) { st2.textContent = '❌ Failed'; st2.style.color = 'red'; }
-        var isPermission = msg.indexOf('permission') !== -1 || msg.indexOf('insufficient') !== -1;
-        alert(isPermission
-          ? 'Card upload blocked.\n\nFix: Firebase Console → Firestore → Rules → add:\n\n' +
-            'match /cardImages/{id} { allow read: if true; allow write: if request.auth != null; }\n\nThen click Publish.'
-          : 'Card upload failed: ' + msg);
+        var msg = err.message || String(err);
+        console.error('Card save failed:', msg);
+        setStatus('❌ ' + msg.slice(0,30), 'red');
+        if (msg.indexOf('permission')!==-1 || msg.indexOf('insufficient')!==-1) {
+          alert('FIRESTORE RULES BLOCKING CARD UPLOAD\n\n' +
+            'Go to Firebase Console → Firestore Database → Rules\n' +
+            'Add this rule and click Publish:\n\n' +
+            'match /cardImages/{id} {\n' +
+            '  allow read: if true;\n' +
+            '  allow write: if request.auth != null;\n' +
+            '}');
+        } else {
+          alert('Card upload failed: ' + msg);
+        }
       });
     };
-    imgEl.onerror = function() {
-      if (statusEl) { statusEl.textContent = '❌ Image load failed'; statusEl.style.color = 'red'; }
-    };
-    imgEl.src = e.target.result;
-  };
-  reader.onerror = function() {
-    if (statusEl) { statusEl.textContent = '❌ File read failed'; statusEl.style.color = 'red'; }
+    imgEl.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -2811,25 +2843,45 @@ const MODES = [
 async function requestGameAccess(modeNumber) {
   if (!CU) { return; }
   const modeName = MODES[modeNumber - 1] ? MODES[modeNumber - 1].name : 'Mode ' + modeNumber;
-  const reason = prompt('Request access to "' + modeName + '"\n\nOptional: explain why you need this mode (leave blank to skip):');
-  if (reason === null) { return; } /* user cancelled */
-
+  const reason = prompt('Request access to "' + modeName + '"\n\nWhy do you need it? (optional)');
+  if (reason === null) { return; }
   try {
     await db.collection('accessRequests').add({
-      userEmail:   CU.email,
-      userName:    CU.name,
-      userRole:    CU.role,
-      userPlan:    CU.plan,
-      schoolId:    CU.schoolId || null,
-      modeNumber:  modeNumber,
-      modeName:    modeName,
-      reason:      reason || '',
-      status:      'pending',
-      requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      userEmail: CU.email, userName: CU.name,
+      userRole:  CU.role,  userPlan: CU.plan,
+      schoolId:  CU.schoolId || null,
+      type: 'cardMode', modeNumber: modeNumber, modeName: modeName,
+      reason: reason || '', status: 'pending',
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    alert('✅ Access request sent!\n\nThe Igiti admin will review your request and update your account. You will see the change the next time you sign in.');
+    alert('✅ Request sent! Admin will review and approve.');
   } catch(e) {
-    alert('Could not send request: ' + e.message);
+    var msg = e.message || '';
+    if (msg.indexOf('permission')!==-1||msg.indexOf('insufficient')!==-1) {
+      alert('REQUEST BLOCKED BY FIRESTORE RULES\n\nAdd to your rules:\n\n' +
+        'match /accessRequests/{id} { allow read, write: if request.auth != null; }');
+    } else {
+      alert('Could not send request: ' + msg);
+    }
+  }
+}
+
+async function requestPuzzleAccess(puzzleName) {
+  if (!CU) { return; }
+  const reason = prompt('Request access to puzzle "' + puzzleName + '"\n\nOptional reason:');
+  if (reason === null) { return; }
+  try {
+    await db.collection('accessRequests').add({
+      userEmail: CU.email, userName: CU.name,
+      userRole:  CU.role,  userPlan: CU.plan,
+      schoolId:  CU.schoolId || null,
+      type: 'puzzle', puzzleName: puzzleName,
+      reason: reason || '', status: 'pending',
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    alert('✅ Puzzle access request sent!');
+  } catch(e) {
+    alert('Could not send: ' + e.message);
   }
 }
 
@@ -3466,6 +3518,12 @@ async function adminPublishPuzzle() {
   if (p500 && p500.classList.contains('on')) { pieces.push(500); }
   if (!pieces.length) { alert('Select at least one piece count.'); return; }
   if (!PZ.img) { alert('Please upload an image first before publishing.'); return; }
+  /* Read custom facts from textarea (one per line) */
+  const factsEl = document.getElementById('admin-pz-facts');
+  const customFacts = factsEl && factsEl.value.trim()
+    ? factsEl.value.trim().split('\n').map(function(l){ return l.trim(); }).filter(Boolean)
+    : [];
+
   const id = 'pz' + Date.now();
   const allPublishBtns = document.querySelectorAll('[onclick*="adminPublishPuzzle"]');
   allPublishBtns.forEach(function(b){b.disabled=true; b.textContent='Uploading image…';});
@@ -3494,8 +3552,9 @@ async function adminPublishPuzzle() {
   allPublishBtns.forEach(function(b){b.textContent='Saving to Firebase…';});
   const puzzle = {
     id, name, pieces,
-    imageUrl: null,
-    imgData:  imgData,
+    imageUrl:     null,
+    imgData:      imgData,
+    customFacts:  customFacts,
     assignedSchools:[], assignedTeachers:[],
     img: PZ.img || null,
     plays: 0,
@@ -3772,35 +3831,44 @@ function buildScheduledNotifs() {
 
 
 function initPuzzleZoom() {
-  const wrap = document.getElementById('pz-canvas-wrap');
-  if (!wrap) { return; }
-  /* Scroll wheel zoom */
+  /* Remove previous listeners by cloning the wrap */
+  var oldWrap = document.getElementById('pz-canvas-wrap');
+  if (!oldWrap) { return; }
+  var wrap = oldWrap.cloneNode(true);
+  oldWrap.parentNode.replaceChild(wrap, oldWrap);
+
+  /* Re-attach the canvas since clone loses references */
+  /* Scroll wheel zoom on the wrap */
   wrap.addEventListener('wheel', function(e) {
     e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    pzZoom = Math.max(0.5, Math.min(4.0, pzZoom + delta));
+    pzZoom = Math.max(0.5, Math.min(4.0, pzZoom + (e.deltaY < 0 ? 0.15 : -0.15)));
     applyPuzzleTransform();
   }, { passive: false });
+
   /* Touch pinch zoom */
-  let lastDist = 0;
+  var lastDist = 0;
   wrap.addEventListener('touchstart', function(e) {
     if (e.touches.length === 2) { lastDist = getTouchDist(e); }
-  });
+  }, { passive: true });
   wrap.addEventListener('touchmove', function(e) {
     if (e.touches.length === 2) {
       e.preventDefault();
-      const d = getTouchDist(e);
-      const scale = d / lastDist;
-      pzZoom = Math.max(0.5, Math.min(4.0, pzZoom * scale));
+      var d = getTouchDist(e);
+      if (lastDist > 0) { pzZoom = Math.max(0.5, Math.min(4.0, pzZoom * (d / lastDist))); }
       lastDist = d;
       applyPuzzleTransform();
     }
   }, { passive: false });
-  /* Pan when zoomed */
-  const bc = document.getElementById('pz-canvas');
-  if (!bc) { return; }
-  bc.addEventListener('mousedown', function(e) {
-    if (pzZoom > 1) { pzDragging=true; pzDragStartX=e.clientX-pzPanX; pzDragStartY=e.clientY-pzPanY; }
+
+  /* Pan: mousedown/move/up on the wrap itself */
+  wrap.addEventListener('mousedown', function(e) {
+    if (pzZoom > 1 && e.target.id !== 'pz-canvas') { return; }
+    if (pzZoom > 1) {
+      pzDragging = true;
+      pzDragStartX = e.clientX - pzPanX;
+      pzDragStartY = e.clientY - pzPanY;
+      e.preventDefault();
+    }
   });
   document.addEventListener('mousemove', function(e) {
     if (!pzDragging) { return; }
@@ -3809,6 +3877,13 @@ function initPuzzleZoom() {
     applyPuzzleTransform();
   });
   document.addEventListener('mouseup', function() { pzDragging = false; });
+
+  /* Re-wire the board click handler since we cloned the wrap */
+  var bc = document.getElementById('pz-canvas');
+  if (bc) {
+    bc.removeEventListener('click', handleBoardClick);
+    bc.addEventListener('click', handleBoardClick);
+  }
 }
 
 function getTouchDist(e) {
@@ -3994,6 +4069,7 @@ function sendNotification() {
   if (msgEl) { msgEl.value = ''; }
   buildNotifHistory();
 }
+
 
 
 
