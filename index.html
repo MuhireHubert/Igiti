@@ -346,12 +346,13 @@ img{max-width:100%;}
 
 /* ── FUN FACT TOAST ── */
 .fact-toast{
-  position:fixed;bottom:2rem;right:2rem;
+  position:fixed;bottom:1.5rem;right:1rem;
   background:var(--dk);color:var(--cr);
-  border-radius:14px;padding:1.1rem 1.5rem;max-width:270px;
+  border-radius:14px;padding:1rem 1.3rem;max-width:300px;
   border:1.5px solid var(--or);box-shadow:var(--shL);
-  transform:translateX(320px);
-  transition:transform .42s cubic-bezier(.34,1.56,.64,1);z-index:1000;
+  transform:translateX(340px);
+  transition:transform .42s cubic-bezier(.34,1.56,.64,1);z-index:9999;
+  pointer-events:auto;
 }
 .fact-toast.on{transform:translateX(0);}
 .ft-em{font-size:1.3rem;margin-bottom:.25rem;display:block;}
@@ -581,6 +582,9 @@ img{max-width:100%;}
   .nav-right #nav-upgrade-btn { font-size:.66rem; padding:.28rem .55rem; }
   .p-title { font-size:1.2rem; }
   .land-features { flex-direction:column; align-items:center; }
+  /* Toast at bottom-center on small screens */
+  .fact-toast { right:auto; left:50%; transform:translateX(-50%) translateY(120px); max-width:92vw; bottom:1rem; }
+  .fact-toast.on { transform:translateX(-50%) translateY(0); }
 }
 </style>
 </head>
@@ -713,6 +717,7 @@ img{max-width:100%;}
             <button class="pc-btn on" id="pub-60" data-pieces="60" onclick="this.classList.toggle('on')"><span class="pn">60</span><span class="pl">Begin</span></button>
             <button class="pc-btn on" id="pub-100" data-pieces="100" onclick="this.classList.toggle('on')"><span class="pn">100</span><span class="pl">Std</span></button>
             <button class="pc-btn on" id="pub-500" data-pieces="500" onclick="this.classList.toggle('on')"><span class="pn">500</span><span class="pl">Expert</span></button>
+            <button class="pc-btn on" id="pub-1000" data-pieces="1000" onclick="this.classList.toggle('on')"><span class="pn">1000</span><span class="pl">Master</span></button>
           </div>
           <button class="btn btn-gn" style="width:100%;margin-top:.65rem;" onclick="adminPublishPuzzle()">▶ Publish puzzle</button>
         </div>
@@ -728,6 +733,7 @@ img{max-width:100%;}
           <button class="pc-btn on" id="pc-60"  data-pieces="60"  onclick="selectPieces(60,this)"><span class="pn">60</span><span class="pl">Beginner</span></button>
           <button class="pc-btn"    id="pc-100" data-pieces="100" onclick="selectPieces(100,this)"><span class="pn">100</span><span class="pl">Standard</span></button>
           <button class="pc-btn"    id="pc-500" data-pieces="500" onclick="selectPieces(500,this)"><span class="pn">500</span><span class="pl">Expert</span></button>
+          <button class="pc-btn"    id="pc-1000" data-pieces="1000" onclick="selectPieces(1000,this)"><span class="pn">1000</span><span class="pl">Master</span></button>
         </div>
         <button class="btn btn-gn" style="margin-top:.6rem;" onclick="launchPuzzle()">▶ Start Puzzle</button>
       </div>
@@ -1094,9 +1100,9 @@ let factTimer    = null;
 const ACCESS = {
   free:    { pieces:[60],           modes:[1,2],              ref:false },
   basic:   { pieces:[60,100,500],   modes:[1,2,3,4],          ref:false },
-  premium: { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
-  school:  { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
-  admin:   { pieces:[60,100,500],   modes:[1,2,3,4,5,6,7,8],  ref:true  },
+  premium: { pieces:[60,100,500,1000], modes:[1,2,3,4,5,6,7,8],  ref:true  },
+  school:  { pieces:[60,100,500,1000], modes:[1,2,3,4,5,6,7,8],  ref:true  },
+  admin:   { pieces:[60,100,500,1000], modes:[1,2,3,4,5,6,7,8],  ref:true  },
 };
 
 /* ── PUZZLE SESSION STATE ── */
@@ -1904,6 +1910,18 @@ function buildPuzzlePanel() {
     }
     renderPlayerPuzzleLib(); /* populates puzzle list */
   }
+  /* Wire 1000-piece button */
+  const btn1000 = document.getElementById('pc-1000');
+  if (btn1000) {
+    const acc2 = ACCESS[CU.plan];
+    if (acc2.pieces.indexOf(1000) === -1) {
+      btn1000.classList.add('locked');
+      btn1000.onclick = function() { openModal('m-sub'); };
+    } else {
+      btn1000.classList.remove('locked');
+      btn1000.onclick = function() { selectPieces(1000, btn1000); };
+    }
+  }
   const refBtn = document.getElementById('ref-toggle-btn');
   if (refBtn) { refBtn.style.display = ACCESS[CU.plan].ref ? 'flex' : 'none'; }
 }
@@ -2300,7 +2318,7 @@ function jigsawPath(ctx, col, row, pw, ph, cols, rows) {
     const ux  = ex/len, uy = ey/len;             /* unit along edge */
     const nx  =  uy,    ny = -ux;                /* unit normal (outward from piece) */
     const kSign = protrudes ? 1 : -1;            /* which side */
-    const depth = (isHoriz ? ph : pw) * 0.30 * kSign;
+    const depth = (isHoriz ? ph : pw) * 0.22 * kSign;  /* 22% = cleaner fit */
     const knobW = len * 0.30;                    /* half-width of knob head */
     const neckW = len * 0.12;                    /* half-width of neck */
     const mid   = 0.5;                           /* knob centred at 50% along edge */
@@ -2370,7 +2388,14 @@ function drawBoard() {
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
         ctx.clip();
-        ctx.drawImage(img, col*(sw/cols), row*(sh/rows), sw/cols, sh/rows, col*pw, row*ph, pw, ph);
+        /* Extend drawImage by 40% on all sides so tab areas get painted.
+           The clip path restricts what actually shows — no bleeding. */
+        var ov = 0.42;
+        ctx.drawImage(img,
+          col*(sw/cols)  - (sw/cols)*ov,  row*(sh/rows)  - (sh/rows)*ov,
+          (sw/cols)*(1+2*ov),              (sh/rows)*(1+2*ov),
+          col*pw - pw*ov,                  row*ph - ph*ov,
+          pw*(1+2*ov),                     ph*(1+2*ov));
         ctx.restore();
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
@@ -2407,22 +2432,25 @@ function buildTray() {
     const wrap = document.createElement('div');
     wrap.className = 't-pc';
     /* Offscreen canvas — piece needs margin to fit tabs that protrude outside cell */
-    const MARGIN = 18;
+    /* MARGIN must exceed 42% of pw/ph to contain tab overflows */
+    const MARGIN = Math.ceil(Math.max(PZ.pw, PZ.ph) * 0.48);
     const off = document.createElement('canvas');
     off.width  = PZ.pw + MARGIN * 2;
     off.height = PZ.ph + MARGIN * 2;
     const octx = off.getContext('2d');
-    /* Translate so piece (col*pw, row*ph) draws at (MARGIN, MARGIN).
-       This gives each tray piece its REAL jigsaw shape matching the board. */
     const tx = MARGIN - col * PZ.pw;
     const ty = MARGIN - row * PZ.ph;
-    /* Draw image clipped to real piece shape */
+    /* Draw image clipped to real piece shape — extended to cover tab areas */
     octx.save();
     octx.translate(tx, ty);
     jigsawPath(octx, col, row, PZ.pw, PZ.ph, cols, rows);
     octx.clip();
-    octx.drawImage(img, col*(sw/cols), row*(sh/rows), sw/cols, sh/rows,
-                   col*PZ.pw, row*PZ.ph, PZ.pw, PZ.ph);
+    var tov = 0.42;
+    octx.drawImage(img,
+      col*(sw/cols) - (sw/cols)*tov,  row*(sh/rows) - (sh/rows)*tov,
+      (sw/cols)*(1+2*tov),            (sh/rows)*(1+2*tov),
+      col*PZ.pw - PZ.pw*tov,          row*PZ.ph - PZ.ph*tov,
+      PZ.pw*(1+2*tov),                PZ.ph*(1+2*tov));
     octx.restore();
     /* Stroke the real piece outline */
     octx.save();
@@ -2604,7 +2632,7 @@ function showFactToast(emoji, text) {
     document.getElementById('ft-em').textContent  = emoji;
     document.getElementById('ft-txt').textContent = text;
     ft.classList.add('on');
-    factTimer = setTimeout(hideFactToast, 5000);
+    factTimer = setTimeout(hideFactToast, 7000);
   });
 }
 function hideFactToast() { document.getElementById('fact-toast').classList.remove('on'); }
@@ -3536,10 +3564,12 @@ async function adminPublishPuzzle() {
   const pieces = [];
   const p60  = document.getElementById('admin-p60')  || document.getElementById('pub-60');
   const p100 = document.getElementById('admin-p100') || document.getElementById('pub-100');
-  const p500 = document.getElementById('admin-p500') || document.getElementById('pub-500');
-  if (p60  && p60.classList.contains('on'))  { pieces.push(60); }
-  if (p100 && p100.classList.contains('on')) { pieces.push(100); }
-  if (p500 && p500.classList.contains('on')) { pieces.push(500); }
+  const p500  = document.getElementById('admin-p500')  || document.getElementById('pub-500');
+  const p1000 = document.getElementById('admin-p1000') || document.getElementById('pub-1000');
+  if (p60   && p60.classList.contains('on'))   { pieces.push(60); }
+  if (p100  && p100.classList.contains('on'))  { pieces.push(100); }
+  if (p500  && p500.classList.contains('on'))  { pieces.push(500); }
+  if (p1000 && p1000.classList.contains('on')) { pieces.push(1000); }
   if (!pieces.length) { alert('Select at least one piece count.'); return; }
   if (!PZ.img) { alert('Please upload an image first before publishing.'); return; }
   /* Read custom facts from textarea (one per line) */
