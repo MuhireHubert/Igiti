@@ -573,20 +573,13 @@ img{max-width:100%;}
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {
-  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
-  .nav-logo { width:22px; height:22px; flex-shrink:0; }
-  /* Nav buttons scroll horizontally — never wrap or overflow */
-  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
-                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
-  .nav-center::-webkit-scrollbar { display:none; }
-  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
-  /* Right side: hide everything except sign-out so buttons have room */
-  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
-  .nav-right .pill-user,
-  .nav-right .pill-trial,
-  .nav-right #nav-trial-pill,
-  .nav-right #nav-upgrade-btn { display:none !important; }
-  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
+  .nav { padding:.3rem .5rem; gap:.25rem; }
+  .nav-logo { width:26px; height:26px; }
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; gap:.15rem; flex:1; min-width:0; }
+  .nav-btn { white-space:nowrap; font-size:.66rem; padding:.28rem .44rem; flex-shrink:0; }
+  .nav-right { flex-shrink:0; gap:.25rem; }
+  .nav-right .pill-role, .nav-right #nav-trial-pill { display:none; }
+  .nav-right #nav-upgrade-btn { font-size:.66rem; padding:.28rem .55rem; }
   .p-title { font-size:1.2rem; }
   .land-features { flex-direction:column; align-items:center; }
   /* Toast at bottom-center on small screens */
@@ -594,6 +587,17 @@ img{max-width:100%;}
   .fact-toast.on { transform:translateX(-50%) translateY(0); }
 }
 </style>
+</head>
+<body>
+</head>
+<body>
+
+</head>
+<body>
+
+</head>
+<body>
+
 </head>
 <body>
 
@@ -1103,7 +1107,6 @@ const ACCESS = {
 
 /* ── PUZZLE SESSION STATE ── */
 let PZ_HINTS    = 0;   /* hints used this game */
-let PZ_MAX_HINTS = 0;  /* 10% of total pieces — set on each launch */
 let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
 let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
 let pzDragStartX = 0, pzDragStartY = 0;
@@ -2255,14 +2258,9 @@ function launchPuzzle() {
     buildTray();
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
-    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
     initPuzzleZoom();
     applyPuzzleTransform();
-    /* Reset hint counter display and re-enable button */
-    const hintEl=document.getElementById("pz-hints");
-    if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
-    const hintBtn=document.querySelector('[onclick="useHint()"]');
-    if(hintBtn){ hintBtn.textContent='💡 Hint ('+PZ_MAX_HINTS+' left)'; hintBtn.disabled=false; hintBtn.style.opacity=''; }
+    const hintEl=document.getElementById("pz-hints"); if(hintEl){hintEl.textContent="0";}
     /* Wire board click for piece placement */
     const bc2 = document.getElementById('pz-canvas');
     if (bc2) {
@@ -2406,15 +2404,9 @@ function drawBoard() {
       } else {
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
-        /* Highlight the slot matching the selected tray piece */
-        if (PZ_SELECTED === pidx) {
-          ctx.fillStyle = 'rgba(240,124,42,0.30)'; ctx.fill();
-          ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.0; ctx.stroke();
-          /* Pulsing outline — animate via repeated draw */
-        } else {
-          ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
-          ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
-        }
+        /* All empty slots look identical — no guidance on where pieces go */
+        ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
         ctx.restore();
       }
     }
@@ -2476,11 +2468,10 @@ function buildTray() {
 }
 
 /* ── PIECE SELECTION + PLACEMENT ──────────────────────
-   Click a tray piece → it's selected.
-   The board highlights its matching empty slot in orange.
-   Click the highlighted slot (or the board anywhere) to place.
-   Click a different tray piece to change selection.
-   Click the selected piece again to deselect.
+   Click a tray piece → it's selected (highlighted in tray).
+   Click any slot on the board to attempt placement.
+   Correct slot → piece placed. Wrong slot → red flash.
+   No slot guidance — use the Hint button if stuck.
    ──────────────────────────────────────────────────── */
 function selectTrayPiece(idx, wrapEl) {
   /* Deselect if already selected */
@@ -2502,24 +2493,11 @@ function selectTrayPiece(idx, wrapEl) {
   });
   if (PZ.placed[idx]) { return; } /* already placed */
   PZ_SELECTED = idx;
-  /* Highlight the selected tray piece */
+  /* Highlight the selected tray piece only — no board slot reveal */
   wrapEl.style.outline = '3px solid #F07C2A';
   wrapEl.style.background = 'rgba(240,124,42,0.15)';
   wrapEl.style.transform = 'scale(1.08)';
-  /* Redraw board with the matching slot highlighted */
   drawBoard();
-  /* Scroll the matching board slot into view hint */
-  const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
-  const bc = document.getElementById('pz-canvas');
-  if (bc) {
-    /* Flash a tooltip above the board showing which row/col */
-    const hint = document.getElementById('slot-hint');
-    if (hint) {
-      hint.textContent = 'Place it at row ' + (row+1) + ', column ' + (col+1);
-      hint.style.opacity = '1';
-      setTimeout(function() { hint.style.opacity = '0'; }, 2000);
-    }
-  }
 }
 
 /* Board canvas click — place selected piece */
@@ -2757,7 +2735,15 @@ async function loadCardImages() {
   }
 }
 
-function buildCardsPanel() { buildModeGrid(); renderBrowser(); }
+function buildCardsPanel() {
+  buildModeGrid();
+  renderBrowser();
+  /* Always reload card images from Firestore so users see the latest uploads */
+  loadCardImages().then(function() {
+    buildModeGrid();
+    renderBrowser();
+  }).catch(function(e) { console.warn('buildCardsPanel loadCardImages:', e && e.message); });
+}
 
 function buildSubscriptionModal() {
   const grid = document.getElementById('price-grid-dynamic');
@@ -3719,7 +3705,7 @@ async function adminAssignToSchool() {
   }
 }
 
-/* adminAssignCardToSchool — real Firebase async implementation above */
+/* real async adminAssignCardToSchool is defined above */
 
 function publishCardSet() {
   const nameEl = document.getElementById('cardset-name');
@@ -3779,8 +3765,8 @@ function buildCountryUploadList() {
           'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;">' +
           (hasImg ? '↩ Replace' : '⬆ Upload') +
           '<input type="file" accept="image/png,image/jpeg,image/webp" ' +
-            'style="opacity:0;position:absolute;width:1px;height:1px;overflow:hidden;pointer-events:none;" ' +
-            'onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
+            'style="position:absolute;opacity:0;width:0.1px;height:0.1px;overflow:hidden;z-index:-1;" ' +
+            'tabindex="-1" onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
         '</label>' +
       '</div>';
     }).join('');
@@ -4027,62 +4013,42 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
-
-  /* Enforce 10% hint cap */
-  if (PZ_HINTS >= PZ_MAX_HINTS) {
-    const btn = document.querySelector('[onclick="useHint()"]');
-    if (btn) { btn.textContent = '💡 No hints left'; btn.disabled = true; btn.style.opacity = '.4'; }
-    return;
-  }
-
   const unplaced = [];
   for (let i = 0; i < PZ.total; i++) {
     if (!PZ.placed[i]) { unplaced.push(i); }
   }
   if (!unplaced.length) { return; }
-
   /* Pick a random unplaced piece */
   const idx = unplaced[Math.floor(Math.random() * unplaced.length)];
   const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
-  const remaining = PZ_MAX_HINTS - PZ_HINTS;
-
   /* Briefly highlight the board cell */
   const bc = document.getElementById('pz-canvas');
   const ctx = bc.getContext('2d');
   ctx.save();
   jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
-  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(240,124,42,0.45)';
+  ctx.fill();
+  ctx.strokeStyle = '#F07C2A';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
   ctx.restore();
-
   /* Find and flash the matching tray piece */
   const trayPieces = document.querySelectorAll('.t-pc:not(.placed)');
   trayPieces.forEach(function(tp) {
+    /* The tray pieces are in shuffled order — we stored data-idx on each */
     if (parseInt(tp.dataset.idx) === idx) {
       tp.style.outline = '3px solid #F07C2A';
       tp.style.background = 'rgba(240,124,42,0.15)';
       tp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      setTimeout(function() { tp.style.outline = ''; tp.style.background = ''; }, 2500);
+      setTimeout(function() {
+        tp.style.outline = '';
+        tp.style.background = '';
+      }, 2500);
     }
   });
-
-  /* Update hint counter: used / max */
   const hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS + '/' + PZ_MAX_HINTS; }
-
-  /* Update button to show remaining hints (or disable when exhausted) */
-  const hintBtn = document.querySelector('[onclick="useHint()"]');
-  if (hintBtn) {
-    if (remaining <= 0) {
-      hintBtn.textContent = '💡 No hints left';
-      hintBtn.disabled = true;
-      hintBtn.style.opacity = '.4';
-    } else {
-      hintBtn.textContent = '💡 Hint (' + remaining + ' left)';
-    }
-  }
-
+  if (hintEl) { hintEl.textContent = PZ_HINTS; }
   /* Fade the board highlight after 2.5s */
   setTimeout(drawBoard, 2500);
 }
