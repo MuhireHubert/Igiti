@@ -573,13 +573,20 @@ img{max-width:100%;}
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {
-  .nav { padding:.3rem .5rem; gap:.25rem; }
-  .nav-logo { width:26px; height:26px; }
-  .nav-center { flex-wrap:nowrap; overflow-x:auto; gap:.15rem; flex:1; min-width:0; }
-  .nav-btn { white-space:nowrap; font-size:.66rem; padding:.28rem .44rem; flex-shrink:0; }
-  .nav-right { flex-shrink:0; gap:.25rem; }
-  .nav-right .pill-role, .nav-right #nav-trial-pill { display:none; }
-  .nav-right #nav-upgrade-btn { font-size:.66rem; padding:.28rem .55rem; }
+  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
+  .nav-logo { width:22px; height:22px; flex-shrink:0; }
+  /* Nav buttons scroll horizontally — never wrap or overflow */
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
+  .nav-center::-webkit-scrollbar { display:none; }
+  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
+  /* Right side: hide everything except sign-out so buttons have room */
+  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
+  .nav-right .pill-user,
+  .nav-right .pill-trial,
+  .nav-right #nav-trial-pill,
+  .nav-right #nav-upgrade-btn { display:none !important; }
+  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
   .p-title { font-size:1.2rem; }
   .land-features { flex-direction:column; align-items:center; }
   /* Toast at bottom-center on small screens */
@@ -587,17 +594,6 @@ img{max-width:100%;}
   .fact-toast.on { transform:translateX(-50%) translateY(0); }
 }
 </style>
-</head>
-<body>
-</head>
-<body>
-
-</head>
-<body>
-
-</head>
-<body>
-
 </head>
 <body>
 
@@ -935,9 +931,9 @@ img{max-width:100%;}
         <div class="a-card"><h3>⚙ Game modes on/off</h3><div id="modes-manager"></div></div>
         <div class="a-card">
           <h3>🏫 Assign card set to school</h3>
-          <div class="fg"><label>School</label><select style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option value="">Select school…</option></select></div>
-          <div class="fg"><label>Card set</label><select style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option>A54 Cards v1 (current)</option></select></div>
-          <button class="btn btn-gn btn-sm" style="width:100%;" onclick="alert('Assigned (demo)')">Assign →</button>
+          <div class="fg"><label>School</label><select id="card-assign-school-sel" style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option value="">Select school…</option></select></div>
+          <div class="fg"><label>Card set</label><select style="width:100%;padding:.55rem .72rem;border:1.5px solid var(--bd);border-radius:7px;font-family:'Barlow',sans-serif;background:var(--cr);"><option value="A54">A54 Cards v1 (current)</option></select></div>
+          <button class="btn btn-gn btn-sm" style="width:100%;" onclick="adminAssignCardToSchool()">Assign →</button>
         </div>
       </div>
     </div>
@@ -1107,6 +1103,7 @@ const ACCESS = {
 
 /* ── PUZZLE SESSION STATE ── */
 let PZ_HINTS    = 0;   /* hints used this game */
+let PZ_MAX_HINTS = 0;  /* 10% of total pieces — set on each launch */
 let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
 let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
 let pzDragStartX = 0, pzDragStartY = 0;
@@ -2258,9 +2255,14 @@ function launchPuzzle() {
     buildTray();
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
+    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
     initPuzzleZoom();
     applyPuzzleTransform();
-    const hintEl=document.getElementById("pz-hints"); if(hintEl){hintEl.textContent="0";}
+    /* Reset hint counter display and re-enable button */
+    const hintEl=document.getElementById("pz-hints");
+    if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
+    const hintBtn=document.querySelector('[onclick="useHint()"]');
+    if(hintBtn){ hintBtn.textContent='💡 Hint ('+PZ_MAX_HINTS+' left)'; hintBtn.disabled=false; hintBtn.style.opacity=''; }
     /* Wire board click for piece placement */
     const bc2 = document.getElementById('pz-canvas');
     if (bc2) {
@@ -3717,11 +3719,7 @@ async function adminAssignToSchool() {
   }
 }
 
-function adminAssignCardToSchool() {
-  const sch = document.getElementById('card-assign-school-sel') ? document.getElementById('card-assign-school-sel').value : '';
-  if (!sch) { alert('Please select a school.'); return; }
-  alert('Card set assigned to school (demo).');
-}
+/* adminAssignCardToSchool — real Firebase async implementation above */
 
 function publishCardSet() {
   const nameEl = document.getElementById('cardset-name');
@@ -3780,7 +3778,8 @@ function buildCountryUploadList() {
         '<label style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;' +
           'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;">' +
           (hasImg ? '↩ Replace' : '⬆ Upload') +
-          '<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" ' +
+          '<input type="file" accept="image/png,image/jpeg,image/webp" ' +
+            'style="opacity:0;position:absolute;width:1px;height:1px;overflow:hidden;pointer-events:none;" ' +
             'onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
         '</label>' +
       '</div>';
@@ -4028,42 +4027,62 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
+
+  /* Enforce 10% hint cap */
+  if (PZ_HINTS >= PZ_MAX_HINTS) {
+    const btn = document.querySelector('[onclick="useHint()"]');
+    if (btn) { btn.textContent = '💡 No hints left'; btn.disabled = true; btn.style.opacity = '.4'; }
+    return;
+  }
+
   const unplaced = [];
   for (let i = 0; i < PZ.total; i++) {
     if (!PZ.placed[i]) { unplaced.push(i); }
   }
   if (!unplaced.length) { return; }
+
   /* Pick a random unplaced piece */
   const idx = unplaced[Math.floor(Math.random() * unplaced.length)];
   const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
+  const remaining = PZ_MAX_HINTS - PZ_HINTS;
+
   /* Briefly highlight the board cell */
   const bc = document.getElementById('pz-canvas');
   const ctx = bc.getContext('2d');
   ctx.save();
   jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)';
-  ctx.fill();
-  ctx.strokeStyle = '#F07C2A';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
+  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.restore();
+
   /* Find and flash the matching tray piece */
   const trayPieces = document.querySelectorAll('.t-pc:not(.placed)');
   trayPieces.forEach(function(tp) {
-    /* The tray pieces are in shuffled order — we stored data-idx on each */
     if (parseInt(tp.dataset.idx) === idx) {
       tp.style.outline = '3px solid #F07C2A';
       tp.style.background = 'rgba(240,124,42,0.15)';
       tp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      setTimeout(function() {
-        tp.style.outline = '';
-        tp.style.background = '';
-      }, 2500);
+      setTimeout(function() { tp.style.outline = ''; tp.style.background = ''; }, 2500);
     }
   });
+
+  /* Update hint counter: used / max */
   const hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS; }
+  if (hintEl) { hintEl.textContent = PZ_HINTS + '/' + PZ_MAX_HINTS; }
+
+  /* Update button to show remaining hints (or disable when exhausted) */
+  const hintBtn = document.querySelector('[onclick="useHint()"]');
+  if (hintBtn) {
+    if (remaining <= 0) {
+      hintBtn.textContent = '💡 No hints left';
+      hintBtn.disabled = true;
+      hintBtn.style.opacity = '.4';
+    } else {
+      hintBtn.textContent = '💡 Hint (' + remaining + ' left)';
+    }
+  }
+
   /* Fade the board highlight after 2.5s */
   setTimeout(drawBoard, 2500);
 }
