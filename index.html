@@ -278,10 +278,11 @@ img{max-width:100%;}
 .pz-canvas-wrap{
   background:#EDE0C4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 40L40 0M-10 10L10-10M30 50L50 30' stroke='rgba(180,150,100,.12)' stroke-width='1'/%3E%3C/svg%3E");
   border-radius:10px;border:1px solid var(--bd);
-  min-height:340px;position:relative;overflow:visible;
+  min-height:340px;position:relative;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
+  touch-action:none;
 }
-#pz-canvas{display:block;max-width:100%;cursor:default;}
+#pz-canvas{display:block;max-width:100%;cursor:default;touch-action:none;}
 #ref-overlay{
   position:absolute;bottom:10px;right:10px;width:108px;
   border-radius:7px;border:2px solid var(--or);
@@ -544,6 +545,9 @@ img{max-width:100%;}
   .nav-btn{white-space:nowrap;font-size:.7rem;padding:.32rem .55rem;flex-shrink:0;}
   .mode-grid{grid-template-columns:1fr 1fr;}
   .cb-grid{grid-template-columns:1fr;}
+  /* Tray below board on tablet - wider grid */
+  .tray-box{max-height:none;}
+  .tray-grid{grid-template-columns:repeat(6,1fr);gap:5px;}
 }
 
 
@@ -573,35 +577,46 @@ img{max-width:100%;}
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {
-  .nav { padding:.3rem .5rem; gap:.25rem; }
-  .nav-logo { width:26px; height:26px; }
-  .nav-center { flex-wrap:nowrap; overflow-x:auto; gap:.15rem; flex:1; min-width:0; }
-  .nav-btn { white-space:nowrap; font-size:.66rem; padding:.28rem .44rem; flex-shrink:0; }
-  .nav-right { flex-shrink:0; gap:.25rem; }
-  .nav-right .pill-role, .nav-right #nav-trial-pill { display:none; }
-  .nav-right #nav-upgrade-btn { font-size:.66rem; padding:.28rem .55rem; }
+  /* Nav: hide user pill so Puzzles/Cards buttons are never covered */
+  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
+  .nav-logo { width:22px; height:22px; flex-shrink:0; }
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
+  .nav-center::-webkit-scrollbar { display:none; }
+  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
+  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
+  .nav-right .pill-user,
+  .nav-right .pill-trial,
+  .nav-right #nav-trial-pill,
+  .nav-right #nav-upgrade-btn { display:none !important; }
+  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
+
+  /* Puzzle header: stack title+stats on one row, controls on next */
+  .pz-hdr { flex-direction:column; align-items:stretch; gap:.4rem; }
+  .pz-hdr > div:nth-child(2) { justify-content:space-around; }
+  .pz-hdr > div:last-child { justify-content:flex-start; overflow-x:auto; scrollbar-width:none; }
+  .pz-hdr > div:last-child::-webkit-scrollbar { display:none; }
+
+  /* Puzzle board: use full width, allow taller canvas */
+  .pz-board { padding:.65rem; }
+  .pz-canvas-wrap { min-height:220px; }
+
+  /* Tray: 4 columns, bigger tap targets, no height cap */
+  .tray-box { max-height:none; padding:.6rem; }
+  .tray-grid { grid-template-columns:repeat(4,1fr); gap:6px; }
+  .t-pc { min-height:56px; }
+
+  /* Progress bar */
+  .prog-bar-wrap { margin-top:.4rem; }
+
   .p-title { font-size:1.2rem; }
   .land-features { flex-direction:column; align-items:center; }
-  /* Toast at bottom-center on small screens */
   .fact-toast { right:auto; left:50%; transform:translateX(-50%) translateY(120px); max-width:92vw; bottom:1rem; }
   .fact-toast.on { transform:translateX(-50%) translateY(0); }
 }
 </style>
 </head>
 <body>
-</head>
-<body>
-
-</head>
-<body>
-
-</head>
-<body>
-
-</head>
-<body>
-
-
 
 
 <!-- ═══════════════ LANDING ═══════════════ -->
@@ -1107,6 +1122,7 @@ const ACCESS = {
 
 /* ── PUZZLE SESSION STATE ── */
 let PZ_HINTS    = 0;   /* hints used this game */
+let PZ_MAX_HINTS = 0;  /* 10% of total pieces, set on launch */
 let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
 let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
 let pzDragStartX = 0, pzDragStartY = 0;
@@ -2258,9 +2274,13 @@ function launchPuzzle() {
     buildTray();
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
+    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
     initPuzzleZoom();
     applyPuzzleTransform();
-    const hintEl=document.getElementById("pz-hints"); if(hintEl){hintEl.textContent="0";}
+    const hintEl=document.getElementById('pz-hints');
+    if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
+    var hintBtn=document.querySelector('[onclick="useHint()"]');
+    if(hintBtn){ hintBtn.textContent='💡 Hint ('+PZ_MAX_HINTS+' left)'; hintBtn.disabled=false; hintBtn.style.opacity=''; }
     /* Wire board click for piece placement */
     const bc2 = document.getElementById('pz-canvas');
     if (bc2) {
@@ -2404,7 +2424,7 @@ function drawBoard() {
       } else {
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
-        /* All empty slots look identical — no guidance on where pieces go */
+        /* All empty slots look the same — no placement guidance without hint */
         ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
         ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
         ctx.restore();
@@ -2468,32 +2488,25 @@ function buildTray() {
 }
 
 /* ── PIECE SELECTION + PLACEMENT ──────────────────────
-   Click a tray piece → it's selected (highlighted in tray).
-   Click any slot on the board to attempt placement.
-   Correct slot → piece placed. Wrong slot → red flash.
-   No slot guidance — use the Hint button if stuck.
+   Click/tap tray piece → selected (orange outline).
+   Click/tap any board slot → attempt placement.
+   Correct slot → placed. Wrong slot → red flash + shake.
+   Use Hint button to reveal a slot (10% cap).
    ──────────────────────────────────────────────────── */
 function selectTrayPiece(idx, wrapEl) {
-  /* Deselect if already selected */
   if (PZ_SELECTED === idx) {
     PZ_SELECTED = -1;
     document.querySelectorAll('.t-pc').forEach(function(tp) {
-      tp.style.outline = '';
-      tp.style.background = '';
-      tp.style.transform = '';
+      tp.style.outline = ''; tp.style.background = ''; tp.style.transform = '';
     });
     drawBoard();
     return;
   }
-  /* Deselect previous */
   document.querySelectorAll('.t-pc').forEach(function(tp) {
-    tp.style.outline = '';
-    tp.style.background = '';
-    tp.style.transform = '';
+    tp.style.outline = ''; tp.style.background = ''; tp.style.transform = '';
   });
-  if (PZ.placed[idx]) { return; } /* already placed */
+  if (PZ.placed[idx]) { return; }
   PZ_SELECTED = idx;
-  /* Highlight the selected tray piece only — no board slot reveal */
   wrapEl.style.outline = '3px solid #F07C2A';
   wrapEl.style.background = 'rgba(240,124,42,0.15)';
   wrapEl.style.transform = 'scale(1.08)';
@@ -2738,11 +2751,11 @@ async function loadCardImages() {
 function buildCardsPanel() {
   buildModeGrid();
   renderBrowser();
-  /* Always reload card images from Firestore so users see the latest uploads */
+  /* Reload card images from Firestore so users always see latest uploads */
   loadCardImages().then(function() {
     buildModeGrid();
     renderBrowser();
-  }).catch(function(e) { console.warn('buildCardsPanel loadCardImages:', e && e.message); });
+  }).catch(function(e) { console.warn('buildCardsPanel reload:', e && e.message); });
 }
 
 function buildSubscriptionModal() {
@@ -3765,7 +3778,7 @@ function buildCountryUploadList() {
           'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;">' +
           (hasImg ? '↩ Replace' : '⬆ Upload') +
           '<input type="file" accept="image/png,image/jpeg,image/webp" ' +
-            'style="position:absolute;opacity:0;width:0.1px;height:0.1px;overflow:hidden;z-index:-1;" ' +
+            'style="position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;" ' +
             'tabindex="-1" onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
         '</label>' +
       '</div>';
@@ -3922,25 +3935,32 @@ function buildScheduledNotifs() {
 
 
 function initPuzzleZoom() {
-  /* Remove previous listeners by cloning the wrap */
   var oldWrap = document.getElementById('pz-canvas-wrap');
   if (!oldWrap) { return; }
   var wrap = oldWrap.cloneNode(true);
   oldWrap.parentNode.replaceChild(wrap, oldWrap);
 
-  /* Re-attach the canvas since clone loses references */
-  /* Scroll wheel zoom on the wrap */
+  /* Scroll wheel zoom */
   wrap.addEventListener('wheel', function(e) {
     e.preventDefault();
     pzZoom = Math.max(0.5, Math.min(4.0, pzZoom + (e.deltaY < 0 ? 0.15 : -0.15)));
     applyPuzzleTransform();
   }, { passive: false });
 
-  /* Touch pinch zoom */
+  /* Touch: pinch-zoom with 2 fingers, single-finger tap to place piece */
   var lastDist = 0;
+  var touchStartX = 0, touchStartY = 0, touchMoved = false;
+
   wrap.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 2) { lastDist = getTouchDist(e); }
+    if (e.touches.length === 2) {
+      lastDist = getTouchDist(e);
+    } else if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchMoved = false;
+    }
   }, { passive: true });
+
   wrap.addEventListener('touchmove', function(e) {
     if (e.touches.length === 2) {
       e.preventDefault();
@@ -3948,13 +3968,37 @@ function initPuzzleZoom() {
       if (lastDist > 0) { pzZoom = Math.max(0.5, Math.min(4.0, pzZoom * (d / lastDist))); }
       lastDist = d;
       applyPuzzleTransform();
+    } else if (e.touches.length === 1) {
+      var dx = e.touches[0].clientX - touchStartX;
+      var dy = e.touches[0].clientY - touchStartY;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { touchMoved = true; }
+      if (pzZoom > 1 && touchMoved) {
+        e.preventDefault();
+        pzPanX = e.touches[0].clientX - touchStartX + pzPanX;
+        pzPanY = e.touches[0].clientY - touchStartY + pzPanY;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        applyPuzzleTransform();
+      }
     }
   }, { passive: false });
 
-  /* Pan: mousedown/move/up on the wrap itself */
+  wrap.addEventListener('touchend', function(e) {
+    lastDist = 0;
+    /* Single tap (no significant move) = treat as board click for piece placement */
+    if (!touchMoved && e.changedTouches.length === 1) {
+      var touch = e.changedTouches[0];
+      var syntheticEvent = { clientX: touch.clientX, clientY: touch.clientY };
+      var bc = document.getElementById('pz-canvas');
+      if (bc && e.target === bc) {
+        handleBoardClick(syntheticEvent);
+      }
+    }
+  }, { passive: true });
+
+  /* Mouse pan (desktop zoomed in) */
   wrap.addEventListener('mousedown', function(e) {
-    if (pzZoom > 1 && e.target.id !== 'pz-canvas') { return; }
-    if (pzZoom > 1) {
+    if (pzZoom > 1 && e.target.id === 'pz-canvas') {
       pzDragging = true;
       pzDragStartX = e.clientX - pzPanX;
       pzDragStartY = e.clientY - pzPanY;
@@ -3969,7 +4013,7 @@ function initPuzzleZoom() {
   });
   document.addEventListener('mouseup', function() { pzDragging = false; });
 
-  /* Re-wire the board click handler since we cloned the wrap */
+  /* Re-wire board click after clone */
   var bc = document.getElementById('pz-canvas');
   if (bc) {
     bc.removeEventListener('click', handleBoardClick);
@@ -4013,43 +4057,46 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
-  const unplaced = [];
-  for (let i = 0; i < PZ.total; i++) {
-    if (!PZ.placed[i]) { unplaced.push(i); }
+  if (PZ_HINTS >= PZ_MAX_HINTS) {
+    var btn0 = document.querySelector('[onclick="useHint()"]');
+    if (btn0) { btn0.textContent='💡 No hints left'; btn0.disabled=true; btn0.style.opacity='.4'; }
+    return;
   }
+  const unplaced = [];
+  for (let i = 0; i < PZ.total; i++) { if (!PZ.placed[i]) { unplaced.push(i); } }
   if (!unplaced.length) { return; }
-  /* Pick a random unplaced piece */
   const idx = unplaced[Math.floor(Math.random() * unplaced.length)];
   const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
-  /* Briefly highlight the board cell */
+  const remaining = PZ_MAX_HINTS - PZ_HINTS;
+  /* Highlight board slot */
   const bc = document.getElementById('pz-canvas');
   const ctx = bc.getContext('2d');
   ctx.save();
   jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)';
-  ctx.fill();
-  ctx.strokeStyle = '#F07C2A';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
+  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.restore();
-  /* Find and flash the matching tray piece */
-  const trayPieces = document.querySelectorAll('.t-pc:not(.placed)');
-  trayPieces.forEach(function(tp) {
-    /* The tray pieces are in shuffled order — we stored data-idx on each */
+  /* Flash matching tray piece */
+  document.querySelectorAll('.t-pc:not(.placed)').forEach(function(tp) {
     if (parseInt(tp.dataset.idx) === idx) {
       tp.style.outline = '3px solid #F07C2A';
       tp.style.background = 'rgba(240,124,42,0.15)';
-      tp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      setTimeout(function() {
-        tp.style.outline = '';
-        tp.style.background = '';
-      }, 2500);
+      tp.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      setTimeout(function() { tp.style.outline=''; tp.style.background=''; }, 2500);
     }
   });
+  /* Update counter */
   const hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS; }
-  /* Fade the board highlight after 2.5s */
+  if (hintEl) { hintEl.textContent = PZ_HINTS+'/'+PZ_MAX_HINTS; }
+  var hintBtn = document.querySelector('[onclick="useHint()"]');
+  if (hintBtn) {
+    if (remaining <= 0) {
+      hintBtn.textContent='💡 No hints left'; hintBtn.disabled=true; hintBtn.style.opacity='.4';
+    } else {
+      hintBtn.textContent='💡 Hint ('+remaining+' left)';
+    }
+  }
   setTimeout(drawBoard, 2500);
 }
 
