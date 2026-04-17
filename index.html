@@ -278,11 +278,10 @@ img{max-width:100%;}
 .pz-canvas-wrap{
   background:#EDE0C4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 40L40 0M-10 10L10-10M30 50L50 30' stroke='rgba(180,150,100,.12)' stroke-width='1'/%3E%3C/svg%3E");
   border-radius:10px;border:1px solid var(--bd);
-  min-height:340px;position:relative;overflow:hidden;
+  min-height:340px;position:relative;overflow:visible;
   display:flex;align-items:center;justify-content:center;
-  touch-action:none;
 }
-#pz-canvas{display:block;max-width:100%;cursor:default;touch-action:none;}
+#pz-canvas{display:block;max-width:100%;cursor:default;}
 #ref-overlay{
   position:absolute;bottom:10px;right:10px;width:108px;
   border-radius:7px;border:2px solid var(--or);
@@ -545,9 +544,6 @@ img{max-width:100%;}
   .nav-btn{white-space:nowrap;font-size:.7rem;padding:.32rem .55rem;flex-shrink:0;}
   .mode-grid{grid-template-columns:1fr 1fr;}
   .cb-grid{grid-template-columns:1fr;}
-  /* Tray below board on tablet - wider grid */
-  .tray-box{max-height:none;}
-  .tray-grid{grid-template-columns:repeat(6,1fr);gap:5px;}
 }
 
 
@@ -577,46 +573,35 @@ img{max-width:100%;}
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {
-  /* Nav: hide user pill so Puzzles/Cards buttons are never covered */
-  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
-  .nav-logo { width:22px; height:22px; flex-shrink:0; }
-  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
-                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
-  .nav-center::-webkit-scrollbar { display:none; }
-  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
-  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
-  .nav-right .pill-user,
-  .nav-right .pill-trial,
-  .nav-right #nav-trial-pill,
-  .nav-right #nav-upgrade-btn { display:none !important; }
-  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
-
-  /* Puzzle header: stack title+stats on one row, controls on next */
-  .pz-hdr { flex-direction:column; align-items:stretch; gap:.4rem; }
-  .pz-hdr > div:nth-child(2) { justify-content:space-around; }
-  .pz-hdr > div:last-child { justify-content:flex-start; overflow-x:auto; scrollbar-width:none; }
-  .pz-hdr > div:last-child::-webkit-scrollbar { display:none; }
-
-  /* Puzzle board: use full width, allow taller canvas */
-  .pz-board { padding:.65rem; }
-  .pz-canvas-wrap { min-height:220px; }
-
-  /* Tray: 4 columns, bigger tap targets, no height cap */
-  .tray-box { max-height:none; padding:.6rem; }
-  .tray-grid { grid-template-columns:repeat(4,1fr); gap:6px; }
-  .t-pc { min-height:56px; }
-
-  /* Progress bar */
-  .prog-bar-wrap { margin-top:.4rem; }
-
+  .nav { padding:.3rem .5rem; gap:.25rem; }
+  .nav-logo { width:26px; height:26px; }
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; gap:.15rem; flex:1; min-width:0; }
+  .nav-btn { white-space:nowrap; font-size:.66rem; padding:.28rem .44rem; flex-shrink:0; }
+  .nav-right { flex-shrink:0; gap:.25rem; }
+  .nav-right .pill-role, .nav-right #nav-trial-pill { display:none; }
+  .nav-right #nav-upgrade-btn { font-size:.66rem; padding:.28rem .55rem; }
   .p-title { font-size:1.2rem; }
   .land-features { flex-direction:column; align-items:center; }
+  /* Toast at bottom-center on small screens */
   .fact-toast { right:auto; left:50%; transform:translateX(-50%) translateY(120px); max-width:92vw; bottom:1rem; }
   .fact-toast.on { transform:translateX(-50%) translateY(0); }
 }
 </style>
 </head>
 <body>
+</head>
+<body>
+
+</head>
+<body>
+
+</head>
+<body>
+
+</head>
+<body>
+
+
 
 
 <!-- ═══════════════ LANDING ═══════════════ -->
@@ -1122,7 +1107,6 @@ const ACCESS = {
 
 /* ── PUZZLE SESSION STATE ── */
 let PZ_HINTS    = 0;   /* hints used this game */
-let PZ_MAX_HINTS = 0;  /* 10% of total pieces, set on launch */
 let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
 let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
 let pzDragStartX = 0, pzDragStartY = 0;
@@ -2274,13 +2258,9 @@ function launchPuzzle() {
     buildTray();
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
-    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
     initPuzzleZoom();
     applyPuzzleTransform();
-    const hintEl=document.getElementById('pz-hints');
-    if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
-    var hintBtn=document.querySelector('[onclick="useHint()"]');
-    if(hintBtn){ hintBtn.textContent='💡 Hint ('+PZ_MAX_HINTS+' left)'; hintBtn.disabled=false; hintBtn.style.opacity=''; }
+    const hintEl=document.getElementById("pz-hints"); if(hintEl){hintEl.textContent="0";}
     /* Wire board click for piece placement */
     const bc2 = document.getElementById('pz-canvas');
     if (bc2) {
@@ -2424,9 +2404,15 @@ function drawBoard() {
       } else {
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
-        /* All empty slots look the same — no placement guidance without hint */
-        ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
-        ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
+        /* Highlight the slot matching the selected tray piece */
+        if (PZ_SELECTED === pidx) {
+          ctx.fillStyle = 'rgba(240,124,42,0.30)'; ctx.fill();
+          ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.0; ctx.stroke();
+          /* Pulsing outline — animate via repeated draw */
+        } else {
+          ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
+          ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
+        }
         ctx.restore();
       }
     }
@@ -2488,29 +2474,50 @@ function buildTray() {
 }
 
 /* ── PIECE SELECTION + PLACEMENT ──────────────────────
-   Click/tap tray piece → selected (orange outline).
-   Click/tap any board slot → attempt placement.
-   Correct slot → placed. Wrong slot → red flash + shake.
-   Use Hint button to reveal a slot (10% cap).
+   Click a tray piece → it's selected.
+   The board highlights its matching empty slot in orange.
+   Click the highlighted slot (or the board anywhere) to place.
+   Click a different tray piece to change selection.
+   Click the selected piece again to deselect.
    ──────────────────────────────────────────────────── */
 function selectTrayPiece(idx, wrapEl) {
+  /* Deselect if already selected */
   if (PZ_SELECTED === idx) {
     PZ_SELECTED = -1;
     document.querySelectorAll('.t-pc').forEach(function(tp) {
-      tp.style.outline = ''; tp.style.background = ''; tp.style.transform = '';
+      tp.style.outline = '';
+      tp.style.background = '';
+      tp.style.transform = '';
     });
     drawBoard();
     return;
   }
+  /* Deselect previous */
   document.querySelectorAll('.t-pc').forEach(function(tp) {
-    tp.style.outline = ''; tp.style.background = ''; tp.style.transform = '';
+    tp.style.outline = '';
+    tp.style.background = '';
+    tp.style.transform = '';
   });
-  if (PZ.placed[idx]) { return; }
+  if (PZ.placed[idx]) { return; } /* already placed */
   PZ_SELECTED = idx;
+  /* Highlight the selected tray piece */
   wrapEl.style.outline = '3px solid #F07C2A';
   wrapEl.style.background = 'rgba(240,124,42,0.15)';
   wrapEl.style.transform = 'scale(1.08)';
+  /* Redraw board with the matching slot highlighted */
   drawBoard();
+  /* Scroll the matching board slot into view hint */
+  const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
+  const bc = document.getElementById('pz-canvas');
+  if (bc) {
+    /* Flash a tooltip above the board showing which row/col */
+    const hint = document.getElementById('slot-hint');
+    if (hint) {
+      hint.textContent = 'Place it at row ' + (row+1) + ', column ' + (col+1);
+      hint.style.opacity = '1';
+      setTimeout(function() { hint.style.opacity = '0'; }, 2000);
+    }
+  }
 }
 
 /* Board canvas click — place selected piece */
@@ -2751,7 +2758,7 @@ async function loadCardImages() {
 function buildCardsPanel() {
   buildModeGrid();
   renderBrowser();
-  /* Reload card images from Firestore so users always see latest uploads */
+  /* Always reload card images from Firestore so users see latest uploads */
   loadCardImages().then(function() {
     buildModeGrid();
     renderBrowser();
@@ -2877,14 +2884,14 @@ function renderBrowser() {
 
 /* GAME MODES */
 const MODES = [
-  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! AI generates smart distractors.',          c:'#F07C2A'},
+  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! Smart distractors keep you on your toes.',   c:'#F07C2A'},
   {n:2, name:'Country Matching',      desc:'Pair capitals or crops to their countries.',               c:'#2A5C25'},
   {n:3, name:'Igiti Card War',        desc:'Top Trumps — pick a stat, highest value wins.',            c:'#8B1A1A'},
-  {n:4, name:'Guess the Country',     desc:'AI crafts clever clues — guess from 4 options.',           c:'#1A4068'},
+  {n:4, name:'Guess the Country',     desc:'Clever clues — guess the country from 4 options.',         c:'#1A4068'},
   {n:5, name:'Who Am I?',             desc:'Card to forehead — get clues, guess your country.',        c:'#3A3A88'},
   {n:6, name:'Regional Challenges',   desc:'Collect one card from each of Africa\'s 5 regions.',       c:'#7A2050'},
-  {n:7, name:'Thematic Discovery',    desc:'AI finds what connects 3 random cards.',                   c:'#5A4010'},
-  {n:8, name:'Country Roleplay Day',  desc:'Become a country! AI gives you presentation prompts.',    c:'#1A5A68'},
+  {n:7, name:'Thematic Discovery',    desc:'Find what connects 3 random cards.',                       c:'#5A4010'},
+  {n:8, name:'Country Roleplay Day',  desc:'Become a country! Get presentation prompts.',              c:'#1A5A68'},
 ];
 
 
@@ -3210,7 +3217,7 @@ function rWar(gc, ct) {
 
 /* MODE 4 — AI Guess Country */
 async function rGuess(gc, ct) {
-  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>AI is crafting clues…</p></div>';
+  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>Crafting clues…</p></div>';
   const prompt = 'African geography game for kids. Create 4 short clues for ' + ct.name + ' without saying the name. Use: region=' + ct.region + ', capital=' + ct.capital + ', language=' + ct.lang + ', crop=' + ct.crop + '. Return ONLY a JSON array of 4 strings, each under 12 words.';
   let clues;
   try {
@@ -3281,7 +3288,7 @@ function rRegional(gc) {
 /* MODE 7 — AI Thematic */
 async function rThematic(gc) {
   const sam = CTRS.slice().sort(function() { return Math.random() - .5; }).slice(0,3);
-  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>AI is finding a theme…</p></div>';
+  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>Finding a theme…</p></div>';
   const prompt = 'Teacher activity for kids. These 3 African countries: ' + sam.map(function(c) { return c.name; }).join(', ') + '. Crops: ' + sam.map(function(c) { return c.crop; }).join(' | ') + '. Regions: ' + sam.map(function(c) { return c.region; }).join(' | ') + '. Write ONE connecting theme sentence under 15 words. Return ONLY the sentence.';
   let theme;
   try {
@@ -3292,7 +3299,7 @@ async function rThematic(gc) {
     theme = themes[Math.floor(Math.random() * themes.length)];
   }
   gc.innerHTML =
-    '<div class="quiz-q">🤔 AI theme challenge:<br><strong>' + theme + '</strong></div>' +
+    '<div class="quiz-q">🤔 Thematic challenge:<br><strong>' + theme + '</strong></div>' +
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;margin-bottom:.9rem;">' + sam.map(buildCardHTML).join('') + '</div>' +
     '<div style="text-align:center;color:var(--mu);font-size:.77rem;">Discuss with your group, then continue.</div>' +
     '<div class="game-ctrl" style="margin-top:.82rem;"><button class="btn btn-gn" onclick="addScore(1);nextCard()">Discussed! Next →</button></div>';
@@ -3300,7 +3307,7 @@ async function rThematic(gc) {
 
 /* MODE 8 — AI Roleplay */
 async function rRoleplay(gc, ct) {
-  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>AI is preparing your role…</p></div>';
+  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>Preparing your role…</p></div>';
   const prompt = 'Fun roleplay for kids aged 6-14. Student will be: ' + ct.name + ' (' + ct.region + '). Capital: ' + ct.capital + ', Language: ' + ct.lang + ', Crops: ' + ct.crop + ', Fun fact: ' + ct.fact + '. Generate 4 short fun presentation prompts. Return ONLY a JSON array of 4 strings under 15 words each.';
   let prompts;
   try {
@@ -3319,7 +3326,7 @@ async function rRoleplay(gc, ct) {
     '<div style="text-align:center;margin-bottom:.6rem;"><span style="font-size:.64rem;text-transform:uppercase;letter-spacing:2px;color:var(--or);font-weight:700;">You are now…</span></div>' +
     buildCardHTML(ct) +
     '<div style="background:var(--wm);border-radius:10px;padding:.9rem;margin-top:.82rem;max-width:340px;margin-left:auto;margin-right:auto;">' +
-      '<div style="font-weight:800;font-size:.87rem;margin-bottom:.5rem;">🎤 AI-generated prompts:</div>' +
+      '<div style="font-weight:800;font-size:.87rem;margin-bottom:.5rem;">🎤 Your prompts:</div>' +
       '<ol style="color:var(--mu);font-size:.76rem;line-height:1.78;padding-left:1.1rem;">' +
         prompts.map(function(p) { return '<li>' + p + '</li>'; }).join('') +
       '</ol>' +
@@ -3935,32 +3942,25 @@ function buildScheduledNotifs() {
 
 
 function initPuzzleZoom() {
+  /* Remove previous listeners by cloning the wrap */
   var oldWrap = document.getElementById('pz-canvas-wrap');
   if (!oldWrap) { return; }
   var wrap = oldWrap.cloneNode(true);
   oldWrap.parentNode.replaceChild(wrap, oldWrap);
 
-  /* Scroll wheel zoom */
+  /* Re-attach the canvas since clone loses references */
+  /* Scroll wheel zoom on the wrap */
   wrap.addEventListener('wheel', function(e) {
     e.preventDefault();
     pzZoom = Math.max(0.5, Math.min(4.0, pzZoom + (e.deltaY < 0 ? 0.15 : -0.15)));
     applyPuzzleTransform();
   }, { passive: false });
 
-  /* Touch: pinch-zoom with 2 fingers, single-finger tap to place piece */
+  /* Touch pinch zoom */
   var lastDist = 0;
-  var touchStartX = 0, touchStartY = 0, touchMoved = false;
-
   wrap.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 2) {
-      lastDist = getTouchDist(e);
-    } else if (e.touches.length === 1) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-      touchMoved = false;
-    }
+    if (e.touches.length === 2) { lastDist = getTouchDist(e); }
   }, { passive: true });
-
   wrap.addEventListener('touchmove', function(e) {
     if (e.touches.length === 2) {
       e.preventDefault();
@@ -3968,37 +3968,13 @@ function initPuzzleZoom() {
       if (lastDist > 0) { pzZoom = Math.max(0.5, Math.min(4.0, pzZoom * (d / lastDist))); }
       lastDist = d;
       applyPuzzleTransform();
-    } else if (e.touches.length === 1) {
-      var dx = e.touches[0].clientX - touchStartX;
-      var dy = e.touches[0].clientY - touchStartY;
-      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { touchMoved = true; }
-      if (pzZoom > 1 && touchMoved) {
-        e.preventDefault();
-        pzPanX = e.touches[0].clientX - touchStartX + pzPanX;
-        pzPanY = e.touches[0].clientY - touchStartY + pzPanY;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        applyPuzzleTransform();
-      }
     }
   }, { passive: false });
 
-  wrap.addEventListener('touchend', function(e) {
-    lastDist = 0;
-    /* Single tap (no significant move) = treat as board click for piece placement */
-    if (!touchMoved && e.changedTouches.length === 1) {
-      var touch = e.changedTouches[0];
-      var syntheticEvent = { clientX: touch.clientX, clientY: touch.clientY };
-      var bc = document.getElementById('pz-canvas');
-      if (bc && e.target === bc) {
-        handleBoardClick(syntheticEvent);
-      }
-    }
-  }, { passive: true });
-
-  /* Mouse pan (desktop zoomed in) */
+  /* Pan: mousedown/move/up on the wrap itself */
   wrap.addEventListener('mousedown', function(e) {
-    if (pzZoom > 1 && e.target.id === 'pz-canvas') {
+    if (pzZoom > 1 && e.target.id !== 'pz-canvas') { return; }
+    if (pzZoom > 1) {
       pzDragging = true;
       pzDragStartX = e.clientX - pzPanX;
       pzDragStartY = e.clientY - pzPanY;
@@ -4013,7 +3989,7 @@ function initPuzzleZoom() {
   });
   document.addEventListener('mouseup', function() { pzDragging = false; });
 
-  /* Re-wire board click after clone */
+  /* Re-wire the board click handler since we cloned the wrap */
   var bc = document.getElementById('pz-canvas');
   if (bc) {
     bc.removeEventListener('click', handleBoardClick);
@@ -4057,46 +4033,43 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
-  if (PZ_HINTS >= PZ_MAX_HINTS) {
-    var btn0 = document.querySelector('[onclick="useHint()"]');
-    if (btn0) { btn0.textContent='💡 No hints left'; btn0.disabled=true; btn0.style.opacity='.4'; }
-    return;
-  }
   const unplaced = [];
-  for (let i = 0; i < PZ.total; i++) { if (!PZ.placed[i]) { unplaced.push(i); } }
+  for (let i = 0; i < PZ.total; i++) {
+    if (!PZ.placed[i]) { unplaced.push(i); }
+  }
   if (!unplaced.length) { return; }
+  /* Pick a random unplaced piece */
   const idx = unplaced[Math.floor(Math.random() * unplaced.length)];
   const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
-  const remaining = PZ_MAX_HINTS - PZ_HINTS;
-  /* Highlight board slot */
+  /* Briefly highlight the board cell */
   const bc = document.getElementById('pz-canvas');
   const ctx = bc.getContext('2d');
   ctx.save();
   jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
-  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(240,124,42,0.45)';
+  ctx.fill();
+  ctx.strokeStyle = '#F07C2A';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
   ctx.restore();
-  /* Flash matching tray piece */
-  document.querySelectorAll('.t-pc:not(.placed)').forEach(function(tp) {
+  /* Find and flash the matching tray piece */
+  const trayPieces = document.querySelectorAll('.t-pc:not(.placed)');
+  trayPieces.forEach(function(tp) {
+    /* The tray pieces are in shuffled order — we stored data-idx on each */
     if (parseInt(tp.dataset.idx) === idx) {
       tp.style.outline = '3px solid #F07C2A';
       tp.style.background = 'rgba(240,124,42,0.15)';
-      tp.scrollIntoView({ behavior:'smooth', block:'nearest' });
-      setTimeout(function() { tp.style.outline=''; tp.style.background=''; }, 2500);
+      tp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setTimeout(function() {
+        tp.style.outline = '';
+        tp.style.background = '';
+      }, 2500);
     }
   });
-  /* Update counter */
   const hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS+'/'+PZ_MAX_HINTS; }
-  var hintBtn = document.querySelector('[onclick="useHint()"]');
-  if (hintBtn) {
-    if (remaining <= 0) {
-      hintBtn.textContent='💡 No hints left'; hintBtn.disabled=true; hintBtn.style.opacity='.4';
-    } else {
-      hintBtn.textContent='💡 Hint ('+remaining+' left)';
-    }
-  }
+  if (hintEl) { hintEl.textContent = PZ_HINTS; }
+  /* Fade the board highlight after 2.5s */
   setTimeout(drawBoard, 2500);
 }
 
