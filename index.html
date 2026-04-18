@@ -544,36 +544,11 @@ img{max-width:100%;}
   .nav-btn{white-space:nowrap;font-size:.7rem;padding:.32rem .55rem;flex-shrink:0;}
   .mode-grid{grid-template-columns:1fr 1fr;}
   .cb-grid{grid-template-columns:1fr;}
-  .tray-box{max-height:none;}
-  .tray-grid{grid-template-columns:repeat(6,1fr);gap:5px;}
 }
-/* ── MOBILE ── */
-@media (max-width: 640px) {
-  .nav{padding:.25rem .4rem;gap:.15rem;flex-wrap:nowrap;height:auto;min-height:48px;}
-  .nav-logo{width:22px;height:22px;flex-shrink:0;}
-  .nav-center{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:.1rem;flex:1 1 0;min-width:0;}
-  .nav-center::-webkit-scrollbar{display:none;}
-  .nav-btn{white-space:nowrap;font-size:.62rem;padding:.24rem .38rem;flex-shrink:0;}
-  .nav-right{flex-shrink:0;gap:.15rem;align-items:center;}
-  .nav-right .pill-user,
-  .nav-right .pill-trial,
-  .nav-right #nav-trial-pill,
-  .nav-right #nav-upgrade-btn{display:none!important;}
-  .nav-right [onclick="doLogout()"]{font-size:.6rem;padding:.22rem .42rem;}
-  .pz-hdr{flex-direction:column;align-items:stretch;gap:.4rem;}
-  .pz-hdr > div:nth-child(2){justify-content:space-around;}
-  .pz-hdr > div:last-child{justify-content:flex-start;overflow-x:auto;scrollbar-width:none;}
-  .pz-hdr > div:last-child::-webkit-scrollbar{display:none;}
-  .pz-board{padding:.65rem;}
-  .pz-canvas-wrap{min-height:220px;touch-action:none;}
-  .tray-box{max-height:none;padding:.6rem;}
-  .tray-grid{grid-template-columns:repeat(4,1fr);gap:6px;}
-  .t-pc{min-height:56px;}
-  .p-title{font-size:1.2rem;}
-  .land-features{flex-direction:column;align-items:center;}
-  .fact-toast{right:auto;left:50%;transform:translateX(-50%) translateY(120px);max-width:92vw;bottom:1rem;}
-  .fact-toast.on{transform:translateX(-50%) translateY(0);}
-}
+
+
+
+/* ── ZOOM CONTROLS ── */
 .zoom-bar{display:flex;align-items:center;gap:.4rem;background:var(--cr);border:1px solid var(--bd);
   border-radius:20px;padding:.22rem .65rem;font-size:.72rem;font-weight:700;color:var(--dk);}
 .zoom-bar button{background:none;border:none;font-size:.9rem;cursor:pointer;padding:0 .15rem;color:var(--dk);}
@@ -598,22 +573,34 @@ img{max-width:100%;}
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {
-  .nav { padding:.3rem .5rem; gap:.25rem; }
-  .nav-logo { width:26px; height:26px; }
-  .nav-center { flex-wrap:nowrap; overflow-x:auto; gap:.15rem; flex:1; min-width:0; }
-  .nav-btn { white-space:nowrap; font-size:.66rem; padding:.28rem .44rem; flex-shrink:0; }
-  .nav-right { flex-shrink:0; gap:.25rem; }
-  .nav-right .pill-role, .nav-right #nav-trial-pill { display:none; }
-  .nav-right #nav-upgrade-btn { font-size:.66rem; padding:.28rem .55rem; }
+  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
+  .nav-logo { width:22px; height:22px; flex-shrink:0; }
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
+  .nav-center::-webkit-scrollbar { display:none; }
+  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
+  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
+  .nav-right .pill-user,
+  .nav-right .pill-trial,
+  .nav-right #nav-trial-pill,
+  .nav-right #nav-upgrade-btn { display:none !important; }
+  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
+  .pz-hdr { flex-direction:column; align-items:stretch; gap:.4rem; }
+  .pz-board { padding:.65rem; }
+  .pz-canvas-wrap { min-height:220px; touch-action:none; }
+  .tray-box { max-height:none; padding:.6rem; }
+  .tray-grid { grid-template-columns:repeat(4,1fr); gap:6px; }
+  .t-pc { min-height:56px; }
   .p-title { font-size:1.2rem; }
   .land-features { flex-direction:column; align-items:center; }
-  /* Toast at bottom-center on small screens */
   .fact-toast { right:auto; left:50%; transform:translateX(-50%) translateY(120px); max-width:92vw; bottom:1rem; }
   .fact-toast.on { transform:translateX(-50%) translateY(0); }
 }
 </style>
 </head>
 <body>
+
+
 
 
 <!-- ═══════════════ LANDING ═══════════════ -->
@@ -1092,6 +1079,7 @@ let MEM_USERS   = {};
 let MEM_PUZZLES = [];
 let MEM_NOTIFS  = [];
 let CARD_IMAGES = {};
+let CARD_UPLOAD_MAP = {}; /* safeId → countryName — avoids putting names in HTML attrs */
 
 /* Admin-configurable plan prices — can be overridden from Firestore */
 let PLANS_PRICES = {
@@ -1119,6 +1107,7 @@ const ACCESS = {
 
 /* ── PUZZLE SESSION STATE ── */
 let PZ_HINTS    = 0;   /* hints used this game */
+let PZ_MAX_HINTS = 0;  /* 10% of total pieces — set on each launch */
 let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
 let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
 let pzDragStartX = 0, pzDragStartY = 0;
@@ -2270,9 +2259,13 @@ function launchPuzzle() {
     buildTray();
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
+    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
     initPuzzleZoom();
     applyPuzzleTransform();
-    const hintEl=document.getElementById("pz-hints"); if(hintEl){hintEl.textContent="0";}
+    const hintEl=document.getElementById('pz-hints');
+    if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
+    var hintBtn=document.querySelector('[onclick="useHint()"]');
+    if(hintBtn){ hintBtn.textContent='💡 Hint ('+PZ_MAX_HINTS+' left)'; hintBtn.disabled=false; hintBtn.style.opacity=''; }
     /* Wire board click for piece placement */
     const bc2 = document.getElementById('pz-canvas');
     if (bc2) {
@@ -2416,15 +2409,8 @@ function drawBoard() {
       } else {
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
-        /* Highlight the slot matching the selected tray piece */
-        if (PZ_SELECTED === pidx) {
-          ctx.fillStyle = 'rgba(240,124,42,0.30)'; ctx.fill();
-          ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.0; ctx.stroke();
-          /* Pulsing outline — animate via repeated draw */
-        } else {
-          ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
-          ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
-        }
+        ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
         ctx.restore();
       }
     }
@@ -2512,24 +2498,11 @@ function selectTrayPiece(idx, wrapEl) {
   });
   if (PZ.placed[idx]) { return; } /* already placed */
   PZ_SELECTED = idx;
-  /* Highlight the selected tray piece */
+  /* Highlight selected tray piece only — no board guidance, use Hint button */
   wrapEl.style.outline = '3px solid #F07C2A';
   wrapEl.style.background = 'rgba(240,124,42,0.15)';
   wrapEl.style.transform = 'scale(1.08)';
-  /* Redraw board with the matching slot highlighted */
   drawBoard();
-  /* Scroll the matching board slot into view hint */
-  const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
-  const bc = document.getElementById('pz-canvas');
-  if (bc) {
-    /* Flash a tooltip above the board showing which row/col */
-    const hint = document.getElementById('slot-hint');
-    if (hint) {
-      hint.textContent = 'Place it at row ' + (row+1) + ', column ' + (col+1);
-      hint.style.opacity = '1';
-      setTimeout(function() { hint.style.opacity = '0'; }, 2000);
-    }
-  }
 }
 
 /* Board canvas click — place selected piece */
@@ -2893,14 +2866,14 @@ function renderBrowser() {
 
 /* GAME MODES */
 const MODES = [
-  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! AI generates smart distractors.',          c:'#F07C2A'},
+  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! Smart distractors keep you on your toes.',   c:'#F07C2A'},
   {n:2, name:'Country Matching',      desc:'Pair capitals or crops to their countries.',               c:'#2A5C25'},
   {n:3, name:'Igiti Card War',        desc:'Top Trumps — pick a stat, highest value wins.',            c:'#8B1A1A'},
-  {n:4, name:'Guess the Country',     desc:'AI crafts clever clues — guess from 4 options.',           c:'#1A4068'},
+  {n:4, name:'Guess the Country',     desc:'Clever clues — guess the country from 4 options.',         c:'#1A4068'},
   {n:5, name:'Who Am I?',             desc:'Card to forehead — get clues, guess your country.',        c:'#3A3A88'},
   {n:6, name:'Regional Challenges',   desc:'Collect one card from each of Africa\'s 5 regions.',       c:'#7A2050'},
-  {n:7, name:'Thematic Discovery',    desc:'AI finds what connects 3 random cards.',                   c:'#5A4010'},
-  {n:8, name:'Country Roleplay Day',  desc:'Become a country! AI gives you presentation prompts.',    c:'#1A5A68'},
+  {n:7, name:'Thematic Discovery',    desc:'Find what connects 3 random cards.',                       c:'#5A4010'},
+  {n:8, name:'Country Roleplay Day',  desc:'Become a country! Get fun presentation prompts.',          c:'#1A5A68'},
 ];
 
 
@@ -3132,12 +3105,19 @@ async function rQF(gc, ct) {
       .map(function(c) { return c[field]; }).filter(function(v) { return v !== correct; }).slice(0,3);
   }
   const opts = [correct].concat(wrongs).sort(function() { return Math.random() - .5; });
+  window._quizOpts = opts; window._quizCorrect = correct;
   gc.innerHTML = buildCardHTML(ct) +
     '<div class="quiz-q">' + labels[field] + ' <strong>' + ct.name + '</strong>?</div>' +
-    '<div class="quiz-opts">' + opts.map(function(o) {
-      return '<div class="q-opt" onclick="chkA(this,' + JSON.stringify(o) + ',' + JSON.stringify(correct) + ')">' + o + '</div>';
+    '<div class="quiz-opts">' + opts.map(function(o, i) {
+      return '<div class="q-opt" data-i="' + i + '" onclick="chkIdx(this,' + i + ')">' + o + '</div>';
     }).join('') + '</div>' +
     '<div style="text-align:center;color:var(--mu);font-size:.72rem;">Round ' + GS.round + ' of ' + GS.max + '</div>';
+}
+
+function chkIdx(el, i) {
+  var sel = (window._quizOpts || [])[i];
+  var cor = window._quizCorrect || '';
+  chkA(el, sel, cor);
 }
 
 function chkA(el, sel, cor) {
@@ -3226,7 +3206,7 @@ function rWar(gc, ct) {
 
 /* MODE 4 — AI Guess Country */
 async function rGuess(gc, ct) {
-  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>AI is crafting clues…</p></div>';
+  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>Crafting clues…</p></div>';
   const prompt = 'African geography game for kids. Create 4 short clues for ' + ct.name + ' without saying the name. Use: region=' + ct.region + ', capital=' + ct.capital + ', language=' + ct.lang + ', crop=' + ct.crop + '. Return ONLY a JSON array of 4 strings, each under 12 words.';
   let clues;
   try {
@@ -3240,11 +3220,12 @@ async function rGuess(gc, ct) {
     CTRS.filter(function(c) { return c.name !== ct.name; })
         .sort(function() { return Math.random() - .5; }).slice(0,3).map(function(c) { return c.name; })
   ).sort(function() { return Math.random() - .5; });
+  window._quizOpts = opts; window._quizCorrect = ct.name;
   gc.innerHTML =
     '<div class="quiz-q"><div style="margin-bottom:.6rem;">Guess the country from the clues:</div>' +
     clues.map(function(cl) { return '<div style="background:var(--wm);border-radius:6px;padding:.26rem .6rem;margin:.18rem 0;font-size:.83rem;">💡 ' + cl + '</div>'; }).join('') + '</div>' +
-    '<div class="quiz-opts">' + opts.map(function(o) {
-      return '<div class="q-opt" onclick="chkA(this,' + JSON.stringify(o) + ',' + JSON.stringify(ct.name) + ')">' + o + '</div>';
+    '<div class="quiz-opts">' + opts.map(function(o, i) {
+      return '<div class="q-opt" data-i="' + i + '" onclick="chkIdx(this,' + i + ')">' + o + '</div>';
     }).join('') + '</div>';
 }
 
@@ -3297,7 +3278,7 @@ function rRegional(gc) {
 /* MODE 7 — AI Thematic */
 async function rThematic(gc) {
   const sam = CTRS.slice().sort(function() { return Math.random() - .5; }).slice(0,3);
-  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>AI is finding a theme…</p></div>';
+  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>Finding a theme…</p></div>';
   const prompt = 'Teacher activity for kids. These 3 African countries: ' + sam.map(function(c) { return c.name; }).join(', ') + '. Crops: ' + sam.map(function(c) { return c.crop; }).join(' | ') + '. Regions: ' + sam.map(function(c) { return c.region; }).join(' | ') + '. Write ONE connecting theme sentence under 15 words. Return ONLY the sentence.';
   let theme;
   try {
@@ -3316,7 +3297,7 @@ async function rThematic(gc) {
 
 /* MODE 8 — AI Roleplay */
 async function rRoleplay(gc, ct) {
-  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>AI is preparing your role…</p></div>';
+  gc.innerHTML = '<div class="ai-load"><div class="spinner"></div><p>Preparing your role…</p></div>';
   const prompt = 'Fun roleplay for kids aged 6-14. Student will be: ' + ct.name + ' (' + ct.region + '). Capital: ' + ct.capital + ', Language: ' + ct.lang + ', Crops: ' + ct.crop + ', Fun fact: ' + ct.fact + '. Generate 4 short fun presentation prompts. Return ONLY a JSON array of 4 strings under 15 words each.';
   let prompts;
   try {
@@ -3759,49 +3740,75 @@ function buildModesManager() {
 
 
 /* ─── ADMIN: Country card image upload list ─── */
+/* Called by upload button — opens file picker for a country by safeId */
+function triggerCardUpload(safeId) {
+  var inp = document.getElementById('fi_' + safeId);
+  if (inp) { inp.click(); }
+}
+
+/* Called by file input onchange — reads safeId from input's id attribute */
+function handleCardFileChange(inp) {
+  var safeId = inp.id.replace('fi_', '');
+  var countryName = CARD_UPLOAD_MAP[safeId];
+  if (!countryName) { alert('Country not found for: ' + safeId); return; }
+  uploadSingleCardImage(countryName, inp);
+}
+
 function buildCountryUploadList() {
   const container = document.getElementById('country-upload-list');
   if (!container) { return; }
-  const sorted = CTRS.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
-  const uploadedCount = sorted.filter(function(ct){ return !!CARD_IMAGES[ct.name]; }).length;
-  container.innerHTML =
-    '<div style="font-size:.76rem;color:var(--mu);margin-bottom:.6rem;font-weight:700;">' +
-      uploadedCount + ' / ' + sorted.length + ' cards uploaded' +
-    '</div>' +
-    sorted.map(function(ct) {
-      const safeElId = ct.name.toLowerCase().replace(/[^a-z0-9]/g,'');
-      const hasImg = !!CARD_IMAGES[ct.name];
-      const imgSrc = CARD_IMAGES[ct.name] || '';
-      return '<div id="card-row-' + safeElId + '" style="display:flex;align-items:center;gap:.6rem;' +
-        'padding:.4rem .5rem;border-radius:7px;margin-bottom:.25rem;' +
-        'background:' + (hasImg ? 'var(--gn-pale)' : 'var(--cr)') + ';' +
-        'border:1px solid ' + (hasImg ? 'var(--gn)' : 'var(--bd2)') + ';">' +
-        /* thumbnail */ (hasImg
-          ? '<img id="card-preview-' + safeElId + '" src="' + imgSrc + '" ' +
-              'style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;">'
-          : '<div id="card-preview-' + safeElId + '" style="width:36px;height:36px;background:var(--wm);' +
-              'border-radius:4px;display:flex;align-items:center;justify-content:center;' +
-              'font-size:1.1rem;flex-shrink:0;">🃏</div>') +
-        /* name */
-        '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg?'700':'400') + ';">' + ct.name + '</span>' +
-        /* status label — this is what uploadSingleCardImage updates */
-        '<span id="card-status-' + safeElId + '" style="font-size:.65rem;color:' +
-          (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;">' +
-          (hasImg ? '✅ Done' : '—') +
-        '</span>' +
-        /* upload button — button triggers hidden input via ID; data-country avoids any quote-breaking */
-        '<button type="button" ' +
-          'onclick="document.getElementById(\'fi_' + safeElId + '\').click();" ' +
-          'style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;' +
-          'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;border:none;">' +
-          (hasImg ? '↩ Replace' : '⬆ Upload') +
-        '</button>' +
-        '<input type="file" id="fi_' + safeElId + '" accept="image/png,image/jpeg,image/webp" ' +
-          'data-country="' + ct.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '" ' +
-          'style="position:absolute;width:0;height:0;opacity:0;overflow:hidden;" ' +
-          'onchange="uploadSingleCardImage(this.dataset.country,this)">' +
-      '</div>';
-    }).join('');
+  const sorted = CTRS.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+  const uploadedCount = sorted.filter(function(ct) { return !!CARD_IMAGES[ct.name]; }).length;
+
+  /* Build the global lookup map: safeId → countryName */
+  CARD_UPLOAD_MAP = {};
+  sorted.forEach(function(ct) {
+    var sid = ct.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    CARD_UPLOAD_MAP[sid] = ct.name;
+  });
+
+  var rows = sorted.map(function(ct) {
+    var safeElId = ct.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    var hasImg   = !!CARD_IMAGES[ct.name];
+    var imgSrc   = CARD_IMAGES[ct.name] || '';
+
+    var thumb = hasImg
+      ? '<img id="card-preview-' + safeElId + '" src="' + imgSrc + '" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;">'
+      : '<div id="card-preview-' + safeElId + '" style="width:36px;height:36px;background:var(--wm);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">🃏</div>';
+
+    var row = document.createElement('div');
+    row.id = 'card-row-' + safeElId;
+    row.style.cssText = 'display:flex;align-items:center;gap:.6rem;padding:.4rem .5rem;border-radius:7px;margin-bottom:.25rem;' +
+      'background:' + (hasImg ? 'var(--gn-pale)' : 'var(--cr)') + ';' +
+      'border:1px solid ' + (hasImg ? 'var(--gn)' : 'var(--bd2)') + ';';
+
+    row.innerHTML = thumb +
+      '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg ? '700' : '400') + ';">' + ct.name + '</span>' +
+      '<span id="card-status-' + safeElId + '" style="font-size:.65rem;color:' + (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;">' + (hasImg ? '✅ Done' : '—') + '</span>';
+
+    /* Button triggers file picker via programmatic click — NO country name in any attribute */
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = hasImg ? '↩ Replace' : '⬆ Upload';
+    btn.style.cssText = 'cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;border:none;';
+    btn.onclick = function() { triggerCardUpload(safeElId); };
+
+    /* Hidden file input — onchange uses handleCardFileChange(this) which reads safeId from id */
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.id = 'fi_' + safeElId;
+    inp.accept = 'image/png,image/jpeg,image/webp';
+    inp.style.cssText = 'position:absolute;width:0;height:0;opacity:0;overflow:hidden;';
+    inp.onchange = function() { handleCardFileChange(this); };
+
+    row.appendChild(btn);
+    row.appendChild(inp);
+    return row;
+  });
+
+  container.innerHTML = '<div style="font-size:.76rem;color:var(--mu);margin-bottom:.6rem;font-weight:700;">' +
+    uploadedCount + ' / ' + sorted.length + ' cards uploaded</div>';
+  rows.forEach(function(r) { container.appendChild(r); });
 }
 
 /* ─── ADMIN: Plans pricing editor ─── */
@@ -4045,43 +4052,46 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
-  const unplaced = [];
-  for (let i = 0; i < PZ.total; i++) {
-    if (!PZ.placed[i]) { unplaced.push(i); }
+  if (PZ_HINTS >= PZ_MAX_HINTS) {
+    var b = document.querySelector('[onclick="useHint()"]');
+    if (b) { b.textContent='💡 No hints left'; b.disabled=true; b.style.opacity='.4'; }
+    return;
   }
+  var unplaced = [];
+  for (var i = 0; i < PZ.total; i++) { if (!PZ.placed[i]) { unplaced.push(i); } }
   if (!unplaced.length) { return; }
-  /* Pick a random unplaced piece */
-  const idx = unplaced[Math.floor(Math.random() * unplaced.length)];
-  const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
+  var idx = unplaced[Math.floor(Math.random() * unplaced.length)];
+  var col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
-  /* Briefly highlight the board cell */
-  const bc = document.getElementById('pz-canvas');
-  const ctx = bc.getContext('2d');
+  var remaining = PZ_MAX_HINTS - PZ_HINTS;
+  /* Highlight board slot */
+  var bc = document.getElementById('pz-canvas');
+  var ctx = bc.getContext('2d');
   ctx.save();
   jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)';
-  ctx.fill();
-  ctx.strokeStyle = '#F07C2A';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
+  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.restore();
-  /* Find and flash the matching tray piece */
-  const trayPieces = document.querySelectorAll('.t-pc:not(.placed)');
-  trayPieces.forEach(function(tp) {
-    /* The tray pieces are in shuffled order — we stored data-idx on each */
+  /* Flash tray piece */
+  document.querySelectorAll('.t-pc:not(.placed)').forEach(function(tp) {
     if (parseInt(tp.dataset.idx) === idx) {
       tp.style.outline = '3px solid #F07C2A';
       tp.style.background = 'rgba(240,124,42,0.15)';
-      tp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      setTimeout(function() {
-        tp.style.outline = '';
-        tp.style.background = '';
-      }, 2500);
+      tp.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      setTimeout(function() { tp.style.outline=''; tp.style.background=''; }, 2500);
     }
   });
-  const hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS; }
-  /* Fade the board highlight after 2.5s */
+  /* Update counter + button */
+  var hintEl = document.getElementById('pz-hints');
+  if (hintEl) { hintEl.textContent = PZ_HINTS+'/'+PZ_MAX_HINTS; }
+  var hintBtn = document.querySelector('[onclick="useHint()"]');
+  if (hintBtn) {
+    if (remaining <= 0) {
+      hintBtn.textContent='💡 No hints left'; hintBtn.disabled=true; hintBtn.style.opacity='.4';
+    } else {
+      hintBtn.textContent='💡 Hint ('+remaining+' left)';
+    }
+  }
   setTimeout(drawBoard, 2500);
 }
 
