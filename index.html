@@ -544,11 +544,40 @@ img{max-width:100%;}
   .nav-btn{white-space:nowrap;font-size:.7rem;padding:.32rem .55rem;flex-shrink:0;}
   .mode-grid{grid-template-columns:1fr 1fr;}
   .cb-grid{grid-template-columns:1fr;}
+  .tray-box{max-height:none;}
+  .tray-grid{grid-template-columns:repeat(6,1fr);gap:5px;}
 }
-
-
-
-/* ── ZOOM CONTROLS ── */
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+  /* Nav: hide user pill so Puzzles/Cards buttons never get covered */
+  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
+  .nav-logo { width:22px; height:22px; flex-shrink:0; }
+  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
+  .nav-center::-webkit-scrollbar { display:none; }
+  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
+  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
+  .nav-right .pill-user,
+  .nav-right .pill-trial,
+  .nav-right #nav-trial-pill,
+  .nav-right #nav-upgrade-btn { display:none !important; }
+  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
+  /* Puzzle header: stack cleanly */
+  .pz-hdr { flex-direction:column; align-items:stretch; gap:.4rem; }
+  .pz-hdr > div:nth-child(2) { justify-content:space-around; }
+  .pz-hdr > div:last-child { justify-content:flex-start; overflow-x:auto; scrollbar-width:none; }
+  .pz-hdr > div:last-child::-webkit-scrollbar { display:none; }
+  .pz-board { padding:.65rem; }
+  .pz-canvas-wrap { min-height:220px; touch-action:none; }
+  /* Tray: larger tap targets */
+  .tray-box { max-height:none; padding:.6rem; }
+  .tray-grid { grid-template-columns:repeat(4,1fr); gap:6px; }
+  .t-pc { min-height:56px; }
+  .p-title { font-size:1.2rem; }
+  .land-features { flex-direction:column; align-items:center; }
+  .fact-toast { right:auto; left:50%; transform:translateX(-50%) translateY(120px); max-width:92vw; bottom:1rem; }
+  .fact-toast.on { transform:translateX(-50%) translateY(0); }
+}
 .zoom-bar{display:flex;align-items:center;gap:.4rem;background:var(--cr);border:1px solid var(--bd);
   border-radius:20px;padding:.22rem .65rem;font-size:.72rem;font-weight:700;color:var(--dk);}
 .zoom-bar button{background:none;border:none;font-size:.9rem;cursor:pointer;padding:0 .15rem;color:var(--dk);}
@@ -589,19 +618,6 @@ img{max-width:100%;}
 </style>
 </head>
 <body>
-</head>
-<body>
-
-</head>
-<body>
-
-</head>
-<body>
-
-</head>
-<body>
-
-
 
 
 <!-- ═══════════════ LANDING ═══════════════ -->
@@ -612,7 +628,7 @@ img{max-width:100%;}
     <div class="land-tag">Igiti Enterprises</div>
     <div class="land-hero-title">Explore Africa.<br>One puzzle at a time.</div>
     <div class="land-features">
-      <div class="land-feat"><span>🗺</span><b>54 Countries</b><small>Jigsaw maps of most African nations</small></div>
+      <div class="land-feat"><span>🗺</span><b>54 Countries</b><small>Jigsaw maps of every African nation</small></div>
       <div class="land-feat"><span>🃏</span><b>Card Games</b><small>8 fun modes — quiz, war, roleplay &amp; more</small></div>
       <div class="land-feat"><span>💡</span><b>Fun Facts</b><small>Discover Africa piece by piece</small></div>
     </div>
@@ -1107,6 +1123,7 @@ const ACCESS = {
 
 /* ── PUZZLE SESSION STATE ── */
 let PZ_HINTS    = 0;   /* hints used this game */
+let PZ_MAX_HINTS = 0;  /* 10% of total pieces — set on each launch */
 let PZ_SELECTED = -1;  /* tray piece currently selected (-1 = none) */
 let pzZoom = 1.0, pzPanX = 0, pzPanY = 0, pzDragging = false;
 let pzDragStartX = 0, pzDragStartY = 0;
@@ -1321,6 +1338,21 @@ async function db_saveProgress(email, progress) {
   await db.collection('users').doc(email).update({ progress:progress });
 }
 
+/* PUZZLE SESSION — save/load in-progress state so user can resume later */
+async function db_savePuzzleState(email, state) {
+  /* state: { puzzleId, pieceCount, placed (array of bools), hintsUsed, factsFound } */
+  try {
+    await db.collection('users').doc(email).update({ puzzleState: state });
+  } catch(e) { console.warn('savePuzzleState:', e.message); }
+}
+async function db_clearPuzzleState(email) {
+  try {
+    await db.collection('users').doc(email).update({
+      puzzleState: firebase.firestore.FieldValue.delete()
+    });
+  } catch(e) { console.warn('clearPuzzleState:', e.message); }
+}
+
 /* ══════════════════════════════════════════════════════
    UI HELPERS
    ══════════════════════════════════════════════════════ */
@@ -1433,6 +1465,7 @@ function doLogin() {
     .then(function(profile) {
       CU = Object.assign({}, profile, { email:em });
       CU_PROGRESS = profile.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
+      if (profile.puzzleState) { CU.puzzleState = profile.puzzleState; }
       showLoading('Loading platform data…');
       return loadAllData();
     })
@@ -1551,6 +1584,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (!profile) { hideLoading(); goScreen('s-land'); return; }
           CU = Object.assign({}, profile, { email:user.email });
           CU_PROGRESS = profile.progress || { puzzlesCompleted:0, cardsPlayed:0, factsFound:0 };
+          if (profile.puzzleState) { CU.puzzleState = profile.puzzleState; }
           return loadAllData();
         })
         .then(function() {
@@ -1864,18 +1898,24 @@ function buildPuzzleThumbCard(pz) {
       thumbHtml = '<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:var(--wm);border-radius:8px 8px 0 0;">🖼️</div>';
     }
   } else if (pz.img) {
-    /* Image still loading from base64 — render and let browser complete it */
     thumbHtml = '<img src="' + (pz.imgData || '') + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;display:block;">';
   } else if (pz.imgData) {
     thumbHtml = '<img src="' + pz.imgData + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;display:block;">';
   } else {
     thumbHtml = '<div style="height:100px;display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--mu);background:var(--wm);border-radius:8px 8px 0 0;">🗺️</div>';
   }
-  return '<div class="pz-thumb-card" onclick="launchPuzzleById(\'' + pz.id + '\')">' +
-    thumbHtml +
+  /* Check for in-progress save */
+  var saved = CU && CU.puzzleState && CU.puzzleState.puzzleId === pz.id ? CU.puzzleState : null;
+  var resumeBadge = saved
+    ? '<div style="position:absolute;top:6px;left:6px;background:var(--or);color:#fff;font-size:.58rem;font-weight:700;padding:.1rem .4rem;border-radius:4px;letter-spacing:.5px;">▶ RESUME</div>'
+    : '';
+  return '<div class="pz-thumb-card" style="position:relative;" onclick="launchPuzzleById(\'' + pz.id + '\')">' +
+    thumbHtml + resumeBadge +
     '<div class="pz-thumb-info" style="padding:.5rem .7rem;">' +
       '<h4 style="margin:0 0 .2rem;font-size:.84rem;">' + pz.name + '</h4>' +
-      '<p style="margin:0;font-size:.72rem;color:var(--mu);">' + (pz.pieces||[]).join(' · ') + ' pieces · ' + (pz.plays||0) + ' plays</p>' +
+      '<p style="margin:0;font-size:.72rem;color:var(--mu);">' +
+        (saved ? Math.round(saved.placed.filter(Boolean).length/saved.placed.length*100)+'% done · ' : '') +
+        (pz.pieces||[]).join(' · ') + ' pieces</p>' +
     '</div></div>';
 }
 
@@ -2001,6 +2041,21 @@ function launchPuzzleById(id) {
   document.getElementById('pz-selected-name').textContent = pz.name;
   document.getElementById('player-puzzle-library').style.display = 'none';
   document.getElementById('pz-game').style.display = 'none';
+
+  /* Check for saved in-progress state */
+  var saved = CU && CU.puzzleState && CU.puzzleState.puzzleId === id ? CU.puzzleState : null;
+  if (saved && saved.placed && saved.placed.filter(Boolean).length > 0) {
+    var donePct = Math.round(saved.placed.filter(Boolean).length / saved.placed.length * 100);
+    if (confirm('You have a puzzle in progress (' + donePct + '% done).\n\nResume where you left off?')) {
+      _doLaunchWithState(pz, saved);
+      return;
+    } else {
+      /* Fresh start — wipe saved state */
+      CU.puzzleState = null;
+      db_clearPuzzleState(CU.email);
+    }
+  }
+
   // Show only piece counts this puzzle has, respecting plan
   const acc = ACCESS[CU.plan];
   document.querySelectorAll('.pc-btn').forEach(function(btn) {
@@ -2176,6 +2231,82 @@ function setCustomPieces() {
   }
 }
 
+/* Resume a saved puzzle session — restores placed pieces without reshuffling tray */
+function _doLaunchWithState(pz, saved) {
+  /* Resolve image */
+  var img = pz.img || (pz.imgData ? (function(){ var i=new Image(); i.src=pz.imgData; return i; })() : null);
+  if (!img) { alert('This puzzle has no image yet.'); return; }
+  function doResume(img) {
+    PZ.img = img;
+    PZ.pieces = saved.pieceCount;
+    const r = Math.sqrt(saved.pieceCount * (4/3));
+    PZ.cols = Math.max(2, Math.round(r));
+    PZ.rows = Math.max(2, Math.round(saved.pieceCount / PZ.cols));
+    PZ.placed = saved.placed.slice();
+    PZ.np = PZ.placed.filter(Boolean).length;
+    PZ.nf = saved.factsFound || 0;
+    PZ.refOn = false;
+    var activePz = getPuzzles().find(function(p){ return p.id===ACTIVE_PZ_ID; });
+    var factSource = (activePz && activePz.customFacts && activePz.customFacts.length)
+      ? activePz.customFacts.map(function(t){ return {e:'💡', t:t}; }) : ALL_FACTS;
+    PZ.factQueue = factSource.slice().sort(function() { return Math.random() - .5; });
+    PZ.factIdx = PZ.nf;
+    document.getElementById('pz-placed').textContent   = PZ.np;
+    document.getElementById('pz-facts').textContent    = PZ.nf;
+    document.getElementById('pz-total').textContent    = PZ.total;
+    const pct = Math.round(PZ.np / PZ.total * 100);
+    document.getElementById('prog-fill').style.width   = pct + '%';
+    document.getElementById('prog-pct').textContent    = pct + '% complete';
+    document.getElementById('prog-frac').textContent   = PZ.np + '/' + PZ.total;
+    document.getElementById('pz-title-label').textContent = pz.name;
+    document.getElementById('pz-complete').classList.remove('on');
+    document.getElementById('ref-overlay').style.display = 'none';
+    document.getElementById('pz-game').style.display = 'block';
+    document.getElementById('player-puzzle-library').style.display = 'none';
+    document.getElementById('pz-game').scrollIntoView({behavior:'smooth', block:'start'});
+    const wrap = document.getElementById('pz-canvas-wrap');
+    const mw = Math.max(300, wrap.offsetWidth - 24);
+    const sw = img.width || img.naturalWidth || 600;
+    const sh = img.height || img.naturalHeight || 450;
+    const sc = Math.min(mw/sw, 400/sh);
+    PZ.pw = Math.floor(sw * sc / PZ.cols);
+    PZ.ph = Math.floor(sh * sc / PZ.rows);
+    const bc = document.getElementById('pz-canvas');
+    bc.width  = Math.floor(sw * sc);
+    bc.height = Math.floor(sh * sc);
+    document.getElementById('ref-sidebar-wrap').style.display = ACCESS[CU.plan].ref ? 'block' : 'none';
+    PZ_SELECTED = -1;
+    syncRefCanvases();
+    drawBoard();
+    buildTray(); /* tray hides already-placed pieces via .placed class */
+    /* Restore tray placed state */
+    PZ.placed.forEach(function(isPlaced, i) {
+      if (isPlaced) {
+        var tp = document.querySelector('.t-pc[data-idx="'+i+'"]');
+        if (tp) { tp.classList.add('placed'); }
+      }
+    });
+    pzZoom=1; pzPanX=0; pzPanY=0;
+    PZ_HINTS = saved.hintsUsed || 0;
+    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
+    initPuzzleZoom(); applyPuzzleTransform();
+    const hintEl=document.getElementById('pz-hints');
+    if(hintEl){ hintEl.textContent=PZ_HINTS+'/'+PZ_MAX_HINTS; }
+    var hintBtn=document.querySelector('[onclick="useHint()"]');
+    var hLeft = PZ_MAX_HINTS - PZ_HINTS;
+    if(hintBtn){
+      if(hLeft<=0){hintBtn.textContent='💡 No hints left';hintBtn.disabled=true;hintBtn.style.opacity='.4';}
+      else{hintBtn.textContent='💡 Hint ('+hLeft+' left)';hintBtn.disabled=false;hintBtn.style.opacity='';}
+    }
+    const bc2 = document.getElementById('pz-canvas');
+    if (bc2) { bc2.removeEventListener('click', handleBoardClick); bc2.addEventListener('click', handleBoardClick); }
+  }
+  if (!img.complete || img.naturalWidth === 0) {
+    img.onload = function() { doResume(img); };
+    img.onerror = function() { alert('Image failed to load.'); };
+  } else { doResume(img); }
+}
+
 function launchPuzzle() {
   /* Find the active puzzle and resolve its image before drawing anything */
   const pz = ACTIVE_PZ_ID
@@ -2258,9 +2389,13 @@ function launchPuzzle() {
     buildTray();
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
+    PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
     initPuzzleZoom();
     applyPuzzleTransform();
-    const hintEl=document.getElementById("pz-hints"); if(hintEl){hintEl.textContent="0";}
+    const hintEl=document.getElementById('pz-hints');
+    if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
+    var hintBtn=document.querySelector('[onclick="useHint()"]');
+    if(hintBtn){ hintBtn.textContent='💡 Hint ('+PZ_MAX_HINTS+' left)'; hintBtn.disabled=false; hintBtn.style.opacity=''; }
     /* Wire board click for piece placement */
     const bc2 = document.getElementById('pz-canvas');
     if (bc2) {
@@ -2404,15 +2539,9 @@ function drawBoard() {
       } else {
         ctx.save();
         jigsawPath(ctx, col, row, pw, ph, cols, rows);
-        /* Highlight the slot matching the selected tray piece */
-        if (PZ_SELECTED === pidx) {
-          ctx.fillStyle = 'rgba(240,124,42,0.30)'; ctx.fill();
-          ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.0; ctx.stroke();
-          /* Pulsing outline — animate via repeated draw */
-        } else {
-          ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
-          ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
-        }
+        /* All empty slots look identical — no placement guidance without hint */
+        ctx.fillStyle = 'rgba(190,165,120,.18)'; ctx.fill();
+        ctx.strokeStyle = 'rgba(130,95,40,.2)'; ctx.lineWidth = 0.7; ctx.stroke();
         ctx.restore();
       }
     }
@@ -2474,50 +2603,30 @@ function buildTray() {
 }
 
 /* ── PIECE SELECTION + PLACEMENT ──────────────────────
-   Click a tray piece → it's selected.
-   The board highlights its matching empty slot in orange.
-   Click the highlighted slot (or the board anywhere) to place.
-   Click a different tray piece to change selection.
-   Click the selected piece again to deselect.
+   Tap tray piece → selected (orange outline on piece only).
+   Tap any board slot → attempt placement.
+   Correct slot → placed + fact toast.
+   Wrong slot → red flash + shake.
+   Use Hint (10% cap) to reveal a slot.
    ──────────────────────────────────────────────────── */
 function selectTrayPiece(idx, wrapEl) {
-  /* Deselect if already selected */
   if (PZ_SELECTED === idx) {
     PZ_SELECTED = -1;
     document.querySelectorAll('.t-pc').forEach(function(tp) {
-      tp.style.outline = '';
-      tp.style.background = '';
-      tp.style.transform = '';
+      tp.style.outline = ''; tp.style.background = ''; tp.style.transform = '';
     });
     drawBoard();
     return;
   }
-  /* Deselect previous */
   document.querySelectorAll('.t-pc').forEach(function(tp) {
-    tp.style.outline = '';
-    tp.style.background = '';
-    tp.style.transform = '';
+    tp.style.outline = ''; tp.style.background = ''; tp.style.transform = '';
   });
-  if (PZ.placed[idx]) { return; } /* already placed */
+  if (PZ.placed[idx]) { return; }
   PZ_SELECTED = idx;
-  /* Highlight the selected tray piece */
   wrapEl.style.outline = '3px solid #F07C2A';
   wrapEl.style.background = 'rgba(240,124,42,0.15)';
   wrapEl.style.transform = 'scale(1.08)';
-  /* Redraw board with the matching slot highlighted */
   drawBoard();
-  /* Scroll the matching board slot into view hint */
-  const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
-  const bc = document.getElementById('pz-canvas');
-  if (bc) {
-    /* Flash a tooltip above the board showing which row/col */
-    const hint = document.getElementById('slot-hint');
-    if (hint) {
-      hint.textContent = 'Place it at row ' + (row+1) + ', column ' + (col+1);
-      hint.style.opacity = '1';
-      setTimeout(function() { hint.style.opacity = '0'; }, 2000);
-    }
-  }
 }
 
 /* Board canvas click — place selected piece */
@@ -2586,7 +2695,6 @@ function placePiece(idx, el) {
   /* Fact on every piece — reshuffle queue when it loops */
   const qi = PZ.factIdx % PZ.factQueue.length;
   if (qi === 0 && PZ.factIdx > 0) {
-    /* Use puzzle-specific custom facts if admin provided them; else use generic Africa facts */
     var activePz = ACTIVE_PZ_ID ? getPuzzles().find(function(p){ return p.id===ACTIVE_PZ_ID; }) : null;
     var factSource = (activePz && activePz.customFacts && activePz.customFacts.length)
       ? activePz.customFacts.map(function(t){ return {e:'💡', t:t}; })
@@ -2598,11 +2706,24 @@ function placePiece(idx, el) {
   document.getElementById('pz-facts').textContent = PZ.nf;
   CU_PROGRESS.factsFound++;
   showFactToast(fact.e, fact.t);
+  /* Save in-progress state so user can resume later */
+  if (CU && CU.email && ACTIVE_PZ_ID) {
+    db_savePuzzleState(CU.email, {
+      puzzleId:   ACTIVE_PZ_ID,
+      pieceCount: PZ.pieces,
+      placed:     Array.from(PZ.placed),
+      hintsUsed:  PZ_HINTS,
+      factsFound: PZ.nf
+    });
+  }
   /* Complete? */
   if (PZ.np === PZ.total) {
     CU_PROGRESS.puzzlesCompleted++;
     if (ACTIVE_PZ_ID) { db_updatePuzzlePlays(ACTIVE_PZ_ID); }
-    if (CU && CU.email) { db_saveProgress(CU.email, CU_PROGRESS); }
+    if (CU && CU.email) {
+      db_saveProgress(CU.email, CU_PROGRESS);
+      db_clearPuzzleState(CU.email); /* clear resume state — puzzle finished */
+    }
     setTimeout(function() {
       document.getElementById('final-facts').textContent = PZ.nf;
       const hEl=document.getElementById('final-hints'); if(hEl){hEl.textContent=PZ_HINTS;}
@@ -2627,13 +2748,14 @@ function resetPuzzle() {
 function showFactToast(emoji, text) {
   if (factTimer) { clearTimeout(factTimer); }
   const ft = document.getElementById('fact-toast');
+  if (!ft) { return; }
   ft.classList.remove('on');
-  requestAnimationFrame(function() {
-    document.getElementById('ft-em').textContent  = emoji;
-    document.getElementById('ft-txt').textContent = text;
-    ft.classList.add('on');
-    factTimer = setTimeout(hideFactToast, 7000);
-  });
+  /* Force reflow so the transition from hidden→visible plays every time */
+  void ft.offsetHeight;
+  document.getElementById('ft-em').textContent  = emoji || '🌍';
+  document.getElementById('ft-txt').textContent = text  || '';
+  ft.classList.add('on');
+  factTimer = setTimeout(hideFactToast, 7000);
 }
 function hideFactToast() { document.getElementById('fact-toast').classList.remove('on'); }
 
@@ -2758,11 +2880,8 @@ async function loadCardImages() {
 function buildCardsPanel() {
   buildModeGrid();
   renderBrowser();
-  /* Always reload card images from Firestore so users see latest uploads */
-  loadCardImages().then(function() {
-    buildModeGrid();
-    renderBrowser();
-  }).catch(function(e) { console.warn('buildCardsPanel reload:', e && e.message); });
+  loadCardImages().then(function() { buildModeGrid(); renderBrowser(); })
+    .catch(function(e) { console.warn('buildCardsPanel reload:', e && e.message); });
 }
 
 function buildSubscriptionModal() {
@@ -2884,14 +3003,14 @@ function renderBrowser() {
 
 /* GAME MODES */
 const MODES = [
-  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! Smart distractors keep you on your toes.',   c:'#F07C2A'},
+  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! Smart distractors keep you guessing.',      c:'#F07C2A'},
   {n:2, name:'Country Matching',      desc:'Pair capitals or crops to their countries.',               c:'#2A5C25'},
   {n:3, name:'Igiti Card War',        desc:'Top Trumps — pick a stat, highest value wins.',            c:'#8B1A1A'},
-  {n:4, name:'Guess the Country',     desc:'Clever clues — guess the country from 4 options.',         c:'#1A4068'},
+  {n:4, name:'Guess the Country',     desc:'Clever clues — can you guess the country from 4 options?', c:'#1A4068'},
   {n:5, name:'Who Am I?',             desc:'Card to forehead — get clues, guess your country.',        c:'#3A3A88'},
   {n:6, name:'Regional Challenges',   desc:'Collect one card from each of Africa\'s 5 regions.',       c:'#7A2050'},
   {n:7, name:'Thematic Discovery',    desc:'Find what connects 3 random cards.',                       c:'#5A4010'},
-  {n:8, name:'Country Roleplay Day',  desc:'Become a country! Get presentation prompts.',              c:'#1A5A68'},
+  {n:8, name:'Country Roleplay Day',  desc:'Become a country! Get fun presentation prompts.',          c:'#1A5A68'},
 ];
 
 
@@ -3780,14 +3899,13 @@ function buildCountryUploadList() {
           (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;">' +
           (hasImg ? '✅ Done' : '—') +
         '</span>' +
-        /* upload button */
-        '<label style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;' +
-          'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;">' +
-          (hasImg ? '↩ Replace' : '⬆ Upload') +
-          '<input type="file" accept="image/png,image/jpeg,image/webp" ' +
-            'style="position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;" ' +
-            'tabindex="-1" onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
-        '</label>' +
+        /* upload button — use button+programmatic click, works on all browsers including iOS */
+        '<button onclick="(function(){document.getElementById(\'fu_' + safeElId + '\').click();})()" ' +
+          'style="cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;' +
+          'font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;border:none;">' +
+          (hasImg ? '↩ Replace' : '⬆ Upload') + '</button>' +
+        '<input type="file" id="fu_' + safeElId + '" accept="image/png,image/jpeg,image/webp" style="display:none;" ' +
+          'onchange="uploadSingleCardImage(' + JSON.stringify(ct.name) + ',this)">' +
       '</div>';
     }).join('');
 }
@@ -4033,43 +4151,46 @@ function zoomOut() { pzZoom = Math.max(0.5, pzZoom - 0.25); applyPuzzleTransform
 
 function useHint() {
   if (!PZ || !PZ.placed || !PZ.placed.length) { return; }
-  const unplaced = [];
-  for (let i = 0; i < PZ.total; i++) {
-    if (!PZ.placed[i]) { unplaced.push(i); }
+  if (PZ_HINTS >= PZ_MAX_HINTS) {
+    var b=document.querySelector('[onclick="useHint()"]');
+    if(b){b.textContent='💡 No hints left';b.disabled=true;b.style.opacity='.4';}
+    return;
   }
+  const unplaced = [];
+  for (let i = 0; i < PZ.total; i++) { if (!PZ.placed[i]) { unplaced.push(i); } }
   if (!unplaced.length) { return; }
-  /* Pick a random unplaced piece */
   const idx = unplaced[Math.floor(Math.random() * unplaced.length)];
   const col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
-  /* Briefly highlight the board cell */
+  const remaining = PZ_MAX_HINTS - PZ_HINTS;
+  /* Highlight board slot */
   const bc = document.getElementById('pz-canvas');
   const ctx = bc.getContext('2d');
   ctx.save();
   jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)';
-  ctx.fill();
-  ctx.strokeStyle = '#F07C2A';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
+  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.restore();
-  /* Find and flash the matching tray piece */
-  const trayPieces = document.querySelectorAll('.t-pc:not(.placed)');
-  trayPieces.forEach(function(tp) {
-    /* The tray pieces are in shuffled order — we stored data-idx on each */
+  /* Flash matching tray piece */
+  document.querySelectorAll('.t-pc:not(.placed)').forEach(function(tp) {
     if (parseInt(tp.dataset.idx) === idx) {
       tp.style.outline = '3px solid #F07C2A';
       tp.style.background = 'rgba(240,124,42,0.15)';
-      tp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      setTimeout(function() {
-        tp.style.outline = '';
-        tp.style.background = '';
-      }, 2500);
+      tp.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      setTimeout(function() { tp.style.outline=''; tp.style.background=''; }, 2500);
     }
   });
+  /* Update counter and button */
   const hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS; }
-  /* Fade the board highlight after 2.5s */
+  if (hintEl) { hintEl.textContent = PZ_HINTS+'/'+PZ_MAX_HINTS; }
+  var hintBtn = document.querySelector('[onclick="useHint()"]');
+  if (hintBtn) {
+    if (remaining <= 0) {
+      hintBtn.textContent='💡 No hints left'; hintBtn.disabled=true; hintBtn.style.opacity='.4';
+    } else {
+      hintBtn.textContent='💡 Hint ('+remaining+' left)';
+    }
+  }
   setTimeout(drawBoard, 2500);
 }
 
