@@ -573,28 +573,24 @@ img{max-width:100%;}
 
 /* ── MOBILE ── */
 @media (max-width: 640px) {
-  .nav { padding:.25rem .4rem; gap:.15rem; flex-wrap:nowrap; height:auto; min-height:48px; }
-  .nav-logo { width:22px; height:22px; flex-shrink:0; }
-  .nav-center { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
-                scrollbar-width:none; gap:.1rem; flex:1 1 0; min-width:0; }
-  .nav-center::-webkit-scrollbar { display:none; }
-  .nav-btn { white-space:nowrap; font-size:.62rem; padding:.24rem .38rem; flex-shrink:0; }
-  .nav-right { flex-shrink:0; gap:.15rem; align-items:center; }
-  .nav-right .pill-user,
-  .nav-right .pill-trial,
-  .nav-right #nav-trial-pill,
-  .nav-right #nav-upgrade-btn { display:none !important; }
-  .nav-right [onclick="doLogout()"] { font-size:.6rem; padding:.22rem .42rem; }
-  .pz-hdr { flex-direction:column; align-items:stretch; gap:.4rem; }
-  .pz-board { padding:.65rem; }
-  .pz-canvas-wrap { min-height:220px; touch-action:none; }
-  .tray-box { max-height:none; padding:.6rem; }
-  .tray-grid { grid-template-columns:repeat(4,1fr); gap:6px; }
-  .t-pc { min-height:56px; }
-  .p-title { font-size:1.2rem; }
-  .land-features { flex-direction:column; align-items:center; }
-  .fact-toast { right:auto; left:50%; transform:translateX(-50%) translateY(120px); max-width:92vw; bottom:1rem; }
-  .fact-toast.on { transform:translateX(-50%) translateY(0); }
+  .nav{padding:.25rem .4rem;gap:.15rem;flex-wrap:nowrap;height:auto;min-height:48px;}
+  .nav-logo{width:22px;height:22px;flex-shrink:0;}
+  .nav-center{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:.1rem;flex:1 1 0;min-width:0;}
+  .nav-center::-webkit-scrollbar{display:none;}
+  .nav-btn{white-space:nowrap;font-size:.62rem;padding:.24rem .38rem;flex-shrink:0;}
+  .nav-right{flex-shrink:0;gap:.15rem;align-items:center;}
+  .nav-right .pill-user,.nav-right .pill-trial,.nav-right #nav-trial-pill,.nav-right #nav-upgrade-btn{display:none!important;}
+  .nav-right [onclick="doLogout()"]{font-size:.6rem;padding:.22rem .42rem;}
+  .pz-hdr{flex-direction:column;align-items:stretch;gap:.4rem;}
+  .pz-board{padding:.65rem;}
+  .pz-canvas-wrap{min-height:220px;touch-action:none;}
+  .tray-box{max-height:none;padding:.6rem;}
+  .tray-grid{grid-template-columns:repeat(4,1fr);gap:6px;}
+  .t-pc{min-height:56px;}
+  .p-title{font-size:1.2rem;}
+  .land-features{flex-direction:column;align-items:center;}
+  .fact-toast{right:auto;left:50%;transform:translateX(-50%) translateY(120px);max-width:92vw;bottom:1rem;}
+  .fact-toast.on{transform:translateX(-50%) translateY(0);}
 }
 </style>
 </head>
@@ -611,9 +607,9 @@ img{max-width:100%;}
     <div class="land-tag">Igiti Enterprises</div>
     <div class="land-hero-title">Explore Africa.<br>One puzzle at a time.</div>
     <div class="land-features">
-      <div class="land-feat"><span>🗺</span><b>54 Countries</b><small>Jigsaw maps of African nations one at a time</small></div>
+      <div class="land-feat"><span>🗺</span><b>54 Countries</b><small>Jigsaw maps of every African nation</small></div>
       <div class="land-feat"><span>🃏</span><b>Card Games</b><small>8 fun modes — quiz, war, roleplay &amp; more</small></div>
-      <div class="land-feat"><span>💡</span><b>Fun Facts</b><small>Discover Africa's wonders piece by piece</small></div>
+      <div class="land-feat"><span>💡</span><b>Fun Facts</b><small>Discover Africa piece by piece</small></div>
     </div>
     <div class="land-btns">
       <button class="btn btn-or" onclick="showAuth('login')">▶ Sign In &amp; Play</button>
@@ -1079,7 +1075,7 @@ let MEM_USERS   = {};
 let MEM_PUZZLES = [];
 let MEM_NOTIFS  = [];
 let CARD_IMAGES = {};
-let CARD_UPLOAD_MAP = {}; /* safeId → countryName — avoids putting names in HTML attrs */
+let CARD_UPLOAD_MAP = {}; /* safeId → real country name — avoids country names in HTML attributes */
 
 /* Admin-configurable plan prices — can be overridden from Firestore */
 let PLANS_PRICES = {
@@ -2260,8 +2256,7 @@ function launchPuzzle() {
     /* Reset zoom, hints, selection */
     pzZoom=1; pzPanX=0; pzPanY=0; PZ_HINTS=0;
     PZ_MAX_HINTS = Math.max(1, Math.floor(PZ.total * 0.10));
-    initPuzzleZoom();
-    applyPuzzleTransform();
+    initPuzzleZoom(); applyPuzzleTransform();
     const hintEl=document.getElementById('pz-hints');
     if(hintEl){ hintEl.textContent='0/'+PZ_MAX_HINTS; }
     var hintBtn=document.querySelector('[onclick="useHint()"]');
@@ -2498,7 +2493,6 @@ function selectTrayPiece(idx, wrapEl) {
   });
   if (PZ.placed[idx]) { return; } /* already placed */
   PZ_SELECTED = idx;
-  /* Highlight selected tray piece only — no board guidance, use Hint button */
   wrapEl.style.outline = '3px solid #F07C2A';
   wrapEl.style.background = 'rgba(240,124,42,0.15)';
   wrapEl.style.transform = 'scale(1.08)';
@@ -2656,15 +2650,18 @@ function uploadSingleCardImage(countryName, inputEl) {
     imgEl.onerror = function() { setStatus('❌ Image error', 'red'); alert('Could not load image. Try a PNG or JPG file.'); };
     imgEl.onload = function() {
       setStatus('⏳ Compressing…', 'var(--mu)');
-      /* Compress: max 400px wide, JPEG 60% → ~80-200KB base64 */
-      var MAX = 400;
+      /* Compress: max 500px wide, white background (covers transparent PNGs), JPEG 75% */
+      var MAX = 500;
       var scale = Math.min(1, MAX / imgEl.width);
       var cw = Math.round(imgEl.width * scale);
       var ch = Math.round(imgEl.height * scale);
       var canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
-      canvas.getContext('2d').drawImage(imgEl, 0, 0, cw, ch);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.60);
+      var cctx = canvas.getContext('2d');
+      cctx.fillStyle = '#ffffff';   /* white background — removes dark/transparent areas */
+      cctx.fillRect(0, 0, cw, ch);
+      cctx.drawImage(imgEl, 0, 0, cw, ch);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
       var kbSize = Math.round(dataUrl.length / 1024);
       console.log('Card compressed:', kbSize, 'KB for', countryName);
 
@@ -2782,22 +2779,25 @@ function rClass(region) {
 
 function buildCardHTML(ct) {
   const imgSrc = CARD_IMAGES[ct.name];
-  /* If admin has uploaded a PNG for this country, show it as the full card face.
-     If not uploaded yet, show the data grid with a placeholder in the image area. */
+
+  /* Flag/image area: uploaded PNG or placeholder */
+  var flagArea;
   if (imgSrc) {
-    /* Uploaded card: show the PNG as the entire card artwork */
-    return '<div class="igiti-card ' + rClass(ct.region) + '" style="padding:0;overflow:hidden;">' +
-      '<div class="ic-border" style="padding:4px;"><div class="ic-inner" style="padding:0;">' +
+    /* Show uploaded image in the map/flag area with white background — contained, not cropped */
+    flagArea = '<div style="width:100%;background:#fff;display:flex;align-items:center;justify-content:center;' +
+      'min-height:110px;padding:4px;">' +
       '<img src="' + imgSrc + '" alt="' + ct.name + '" ' +
-        'style="width:100%;display:block;border-radius:8px;object-fit:cover;">' +
-      '</div></div></div>';
+        'style="max-width:100%;max-height:160px;object-fit:contain;border-radius:4px;display:block;">' +
+      '</div>';
+  } else {
+    flagArea = '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;' +
+      'justify-content:center;background:#f0ebe0;border-radius:4px;gap:4px;">' +
+      '<span style="font-size:1.4rem;opacity:.3;">🖼</span>' +
+      '<span style="font-size:.52rem;color:#9A7040;text-align:center;line-height:1.3;font-style:italic;">No image uploaded</span>' +
+      '</div>';
   }
-  /* Not yet uploaded: show data grid with placeholder */
-  const flagArea = '<div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;' +
-    'justify-content:center;background:#f0ebe0;border-radius:4px;gap:4px;">' +
-    '<span style="font-size:1.4rem;opacity:.3;">🖼</span>' +
-    '<span style="font-size:.52rem;color:#9A7040;text-align:center;line-height:1.3;font-style:italic;">No image uploaded</span>' +
-    '</div>';
+
+  /* Always render the full data card — white background, always readable */
   return '<div class="igiti-card ' + rClass(ct.region) + '">' +
     '<div class="ic-border"><div class="ic-inner">' +
     '<div class="ic-title-row"><div class="ic-title">' + ct.name + '</div></div>' +
@@ -2866,14 +2866,14 @@ function renderBrowser() {
 
 /* GAME MODES */
 const MODES = [
-  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! Smart distractors keep you on your toes.',   c:'#F07C2A'},
+  {n:1, name:'Quick Facts Showdown',  desc:'Race to answer! Smart distractors keep you on your toes.',          c:'#F07C2A'},
   {n:2, name:'Country Matching',      desc:'Pair capitals or crops to their countries.',               c:'#2A5C25'},
   {n:3, name:'Igiti Card War',        desc:'Top Trumps — pick a stat, highest value wins.',            c:'#8B1A1A'},
-  {n:4, name:'Guess the Country',     desc:'Clever clues — guess the country from 4 options.',         c:'#1A4068'},
+  {n:4, name:'Guess the Country',     desc:'Clever clues — guess the country from 4 options.',           c:'#1A4068'},
   {n:5, name:'Who Am I?',             desc:'Card to forehead — get clues, guess your country.',        c:'#3A3A88'},
   {n:6, name:'Regional Challenges',   desc:'Collect one card from each of Africa\'s 5 regions.',       c:'#7A2050'},
-  {n:7, name:'Thematic Discovery',    desc:'Find what connects 3 random cards.',                       c:'#5A4010'},
-  {n:8, name:'Country Roleplay Day',  desc:'Become a country! Get fun presentation prompts.',          c:'#1A5A68'},
+  {n:7, name:'Thematic Discovery',    desc:'Find what connects 3 random cards.',                   c:'#5A4010'},
+  {n:8, name:'Country Roleplay Day',  desc:'Become a country! Get fun presentation prompts.',    c:'#1A5A68'},
 ];
 
 
@@ -3109,15 +3109,13 @@ async function rQF(gc, ct) {
   gc.innerHTML = buildCardHTML(ct) +
     '<div class="quiz-q">' + labels[field] + ' <strong>' + ct.name + '</strong>?</div>' +
     '<div class="quiz-opts">' + opts.map(function(o, i) {
-      return '<div class="q-opt" data-i="' + i + '" onclick="chkIdx(this,' + i + ')">' + o + '</div>';
+      return '<div class="q-opt" onclick="chkIdx(this,' + i + ')">' + o + '</div>';
     }).join('') + '</div>' +
     '<div style="text-align:center;color:var(--mu);font-size:.72rem;">Round ' + GS.round + ' of ' + GS.max + '</div>';
 }
 
 function chkIdx(el, i) {
-  var sel = (window._quizOpts || [])[i];
-  var cor = window._quizCorrect || '';
-  chkA(el, sel, cor);
+  chkA(el, (window._quizOpts||[])[i], window._quizCorrect||'');
 }
 
 function chkA(el, sel, cor) {
@@ -3225,7 +3223,7 @@ async function rGuess(gc, ct) {
     '<div class="quiz-q"><div style="margin-bottom:.6rem;">Guess the country from the clues:</div>' +
     clues.map(function(cl) { return '<div style="background:var(--wm);border-radius:6px;padding:.26rem .6rem;margin:.18rem 0;font-size:.83rem;">💡 ' + cl + '</div>'; }).join('') + '</div>' +
     '<div class="quiz-opts">' + opts.map(function(o, i) {
-      return '<div class="q-opt" data-i="' + i + '" onclick="chkIdx(this,' + i + ')">' + o + '</div>';
+      return '<div class="q-opt" onclick="chkIdx(this,' + i + ')">' + o + '</div>';
     }).join('') + '</div>';
 }
 
@@ -3740,75 +3738,85 @@ function buildModesManager() {
 
 
 /* ─── ADMIN: Country card image upload list ─── */
-/* Called by upload button — opens file picker for a country by safeId */
+/* Called by upload button — opens picker via programmatic click (works on iOS/Mac/Android) */
 function triggerCardUpload(safeId) {
   var inp = document.getElementById('fi_' + safeId);
   if (inp) { inp.click(); }
 }
-
-/* Called by file input onchange — reads safeId from input's id attribute */
+/* Called by file input — reads country name from global map, never from HTML attributes */
 function handleCardFileChange(inp) {
   var safeId = inp.id.replace('fi_', '');
   var countryName = CARD_UPLOAD_MAP[safeId];
-  if (!countryName) { alert('Country not found for: ' + safeId); return; }
+  if (!countryName) { alert('Country lookup failed for id: ' + safeId); return; }
   uploadSingleCardImage(countryName, inp);
 }
 
 function buildCountryUploadList() {
-  const container = document.getElementById('country-upload-list');
+  var container = document.getElementById('country-upload-list');
   if (!container) { return; }
-  const sorted = CTRS.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
-  const uploadedCount = sorted.filter(function(ct) { return !!CARD_IMAGES[ct.name]; }).length;
+  var sorted = CTRS.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+  var uploadedCount = sorted.filter(function(ct) { return !!CARD_IMAGES[ct.name]; }).length;
 
-  /* Build the global lookup map: safeId → countryName */
+  /* Build global safeId→name map so upload handlers never need names in attributes */
   CARD_UPLOAD_MAP = {};
   sorted.forEach(function(ct) {
-    var sid = ct.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    CARD_UPLOAD_MAP[sid] = ct.name;
+    CARD_UPLOAD_MAP[ct.name.toLowerCase().replace(/[^a-z0-9]/g, '')] = ct.name;
   });
 
-  var rows = sorted.map(function(ct) {
-    var safeElId = ct.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    var hasImg   = !!CARD_IMAGES[ct.name];
-    var imgSrc   = CARD_IMAGES[ct.name] || '';
+  /* Header */
+  container.innerHTML = '<div style="font-size:.76rem;color:var(--mu);margin-bottom:.6rem;font-weight:700;">' +
+    uploadedCount + ' / ' + sorted.length + ' cards uploaded</div>';
 
-    var thumb = hasImg
-      ? '<img id="card-preview-' + safeElId + '" src="' + imgSrc + '" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;">'
-      : '<div id="card-preview-' + safeElId + '" style="width:36px;height:36px;background:var(--wm);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">🃏</div>';
+  /* Build each row with createElement — country name NEVER touches an HTML attribute */
+  sorted.forEach(function(ct) {
+    var sid    = ct.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    var hasImg = !!CARD_IMAGES[ct.name];
+    var imgSrc = CARD_IMAGES[ct.name] || '';
 
     var row = document.createElement('div');
-    row.id = 'card-row-' + safeElId;
+    row.id = 'card-row-' + sid;
     row.style.cssText = 'display:flex;align-items:center;gap:.6rem;padding:.4rem .5rem;border-radius:7px;margin-bottom:.25rem;' +
-      'background:' + (hasImg ? 'var(--gn-pale)' : 'var(--cr)') + ';' +
-      'border:1px solid ' + (hasImg ? 'var(--gn)' : 'var(--bd2)') + ';';
+      'background:' + (hasImg ? 'var(--gn-pale)' : 'var(--cr)') + ';border:1px solid ' + (hasImg ? 'var(--gn)' : 'var(--bd2)') + ';';
 
-    row.innerHTML = thumb +
-      '<span style="font-size:.78rem;flex:1;font-weight:' + (hasImg ? '700' : '400') + ';">' + ct.name + '</span>' +
-      '<span id="card-status-' + safeElId + '" style="font-size:.65rem;color:' + (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;">' + (hasImg ? '✅ Done' : '—') + '</span>';
+    /* Thumbnail */
+    var thumb = document.createElement(hasImg ? 'img' : 'div');
+    thumb.id = 'card-preview-' + sid;
+    thumb.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;' + (hasImg ? '' : 'background:var(--wm);display:flex;align-items:center;justify-content:center;font-size:1.1rem;');
+    if (hasImg) { thumb.src = imgSrc; } else { thumb.textContent = '🃏'; }
 
-    /* Button triggers file picker via programmatic click — NO country name in any attribute */
+    /* Country name */
+    var nameEl = document.createElement('span');
+    nameEl.style.cssText = 'font-size:.78rem;flex:1;font-weight:' + (hasImg ? '700' : '400') + ';';
+    nameEl.textContent = ct.name;
+
+    /* Status */
+    var status = document.createElement('span');
+    status.id = 'card-status-' + sid;
+    status.style.cssText = 'font-size:.65rem;color:' + (hasImg ? 'var(--gn)' : 'var(--mu)') + ';font-weight:700;min-width:60px;text-align:right;';
+    status.textContent = hasImg ? '✅ Done' : '—';
+
+    /* Upload button — onclick uses only safeId (no special chars), country name looked up from map */
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.textContent = hasImg ? '↩ Replace' : '⬆ Upload';
     btn.style.cssText = 'cursor:pointer;background:var(--or);color:#fff;font-size:.65rem;font-weight:700;padding:.22rem .6rem;border-radius:4px;flex-shrink:0;white-space:nowrap;border:none;';
-    btn.onclick = function() { triggerCardUpload(safeElId); };
+    btn.textContent = hasImg ? '↩ Replace' : '⬆ Upload';
+    btn.onclick = (function(s) { return function() { triggerCardUpload(s); }; })(sid);
 
-    /* Hidden file input — onchange uses handleCardFileChange(this) which reads safeId from id */
+    /* Hidden file input — id only contains safeId (alphanumeric), onchange uses function ref */
     var inp = document.createElement('input');
     inp.type = 'file';
-    inp.id = 'fi_' + safeElId;
+    inp.id = 'fi_' + sid;
     inp.accept = 'image/png,image/jpeg,image/webp';
     inp.style.cssText = 'position:absolute;width:0;height:0;opacity:0;overflow:hidden;';
     inp.onchange = function() { handleCardFileChange(this); };
 
+    row.appendChild(thumb);
+    row.appendChild(nameEl);
+    row.appendChild(status);
     row.appendChild(btn);
     row.appendChild(inp);
-    return row;
+    container.appendChild(row);
   });
-
-  container.innerHTML = '<div style="font-size:.76rem;color:var(--mu);margin-bottom:.6rem;font-weight:700;">' +
-    uploadedCount + ' / ' + sorted.length + ' cards uploaded</div>';
-  rows.forEach(function(r) { container.appendChild(r); });
 }
 
 /* ─── ADMIN: Plans pricing editor ─── */
@@ -4061,38 +4069,31 @@ function useHint() {
   for (var i = 0; i < PZ.total; i++) { if (!PZ.placed[i]) { unplaced.push(i); } }
   if (!unplaced.length) { return; }
   var idx = unplaced[Math.floor(Math.random() * unplaced.length)];
-  var col = idx % PZ.cols, row = Math.floor(idx / PZ.cols);
+  var hcol = idx % PZ.cols, hrow = Math.floor(idx / PZ.cols);
   PZ_HINTS++;
   var remaining = PZ_MAX_HINTS - PZ_HINTS;
-  /* Highlight board slot */
   var bc = document.getElementById('pz-canvas');
   var ctx = bc.getContext('2d');
   ctx.save();
-  jigsawPath(ctx, col, row, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
-  ctx.fillStyle = 'rgba(240,124,42,0.45)'; ctx.fill();
-  ctx.strokeStyle = '#F07C2A'; ctx.lineWidth = 2.5; ctx.stroke();
+  jigsawPath(ctx, hcol, hrow, PZ.pw, PZ.ph, PZ.cols, PZ.rows);
+  ctx.fillStyle='rgba(240,124,42,0.45)'; ctx.fill();
+  ctx.strokeStyle='#F07C2A'; ctx.lineWidth=2.5; ctx.stroke();
   ctx.restore();
-  /* Flash tray piece */
   document.querySelectorAll('.t-pc:not(.placed)').forEach(function(tp) {
     if (parseInt(tp.dataset.idx) === idx) {
-      tp.style.outline = '3px solid #F07C2A';
-      tp.style.background = 'rgba(240,124,42,0.15)';
-      tp.scrollIntoView({ behavior:'smooth', block:'nearest' });
-      setTimeout(function() { tp.style.outline=''; tp.style.background=''; }, 2500);
+      tp.style.outline='3px solid #F07C2A'; tp.style.background='rgba(240,124,42,0.15)';
+      tp.scrollIntoView({behavior:'smooth',block:'nearest'});
+      setTimeout(function(){tp.style.outline='';tp.style.background='';},2500);
     }
   });
-  /* Update counter + button */
-  var hintEl = document.getElementById('pz-hints');
-  if (hintEl) { hintEl.textContent = PZ_HINTS+'/'+PZ_MAX_HINTS; }
-  var hintBtn = document.querySelector('[onclick="useHint()"]');
-  if (hintBtn) {
-    if (remaining <= 0) {
-      hintBtn.textContent='💡 No hints left'; hintBtn.disabled=true; hintBtn.style.opacity='.4';
-    } else {
-      hintBtn.textContent='💡 Hint ('+remaining+' left)';
-    }
+  var hintEl=document.getElementById('pz-hints');
+  if(hintEl){hintEl.textContent=PZ_HINTS+'/'+PZ_MAX_HINTS;}
+  var hintBtn=document.querySelector('[onclick="useHint()"]');
+  if(hintBtn){
+    if(remaining<=0){hintBtn.textContent='💡 No hints left';hintBtn.disabled=true;hintBtn.style.opacity='.4';}
+    else{hintBtn.textContent='💡 Hint ('+remaining+' left)';}
   }
-  setTimeout(drawBoard, 2500);
+  setTimeout(drawBoard,2500);
 }
 
 /* ════════════════════════════════════════════════════
