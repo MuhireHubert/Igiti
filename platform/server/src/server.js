@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import admin from "firebase-admin";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -25,6 +26,13 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(express.json({ limit: "64kb" }));
+app.use("/v1", rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests. Please try again shortly." },
+}));
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "igiti-play-api" }));
 
