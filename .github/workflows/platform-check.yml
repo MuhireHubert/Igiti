@@ -1,0 +1,54 @@
+name: Igiti Play platform checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform/**"
+      - ".github/workflows/platform-check.yml"
+  push:
+    branches: [feat/platform-foundation]
+    paths:
+      - "platform/**"
+      - ".github/workflows/platform-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Build player experience
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: platform/package.json
+      - name: Install frontend dependencies
+        working-directory: platform
+        run: npm install
+      - name: Build frontend
+        working-directory: platform
+        run: npm run build
+
+  api:
+    name: Check API and database schema
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install API dependencies
+        run: npm install
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Validate Prisma schema
+        env:
+          DATABASE_URL: mysql://test:test@127.0.0.1:3306/igiti_play
+        run: npx prisma validate --schema=prisma/schema.prisma
