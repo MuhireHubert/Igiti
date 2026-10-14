@@ -45,7 +45,39 @@ export async function getGames({ signal } = {}) {
   });
   if (!response.ok) throw new Error("The game library could not be loaded.");
   const payload = await response.json();
-  return { data: payload.data ?? [], source: "api" };
+  const games = (payload.data ?? []).flatMap((game) => {
+    if (!game.puzzles?.length) {
+      return [{
+        id: game.id,
+        title: game.title,
+        category: game.category,
+        description: game.description,
+        difficulty: "Relaxed",
+        pieces: 0,
+        image: game.coverImage,
+        status: "coming-soon",
+      }];
+    }
+    return game.puzzles.map((puzzle) => ({
+      id: puzzle.id,
+      title: game.puzzles.length === 1 ? game.title : `${game.title}: ${puzzle.title}`,
+      category: game.category,
+      description: game.description,
+      difficulty: ({
+        RELAXED: "Relaxed",
+        CURIOUS: "Curious",
+        CHALLENGING: "Challenging",
+        EXPERT: "Challenging",
+      })[puzzle.difficulty] || "Curious",
+      pieces: puzzle.pieceCount,
+      image: puzzle.imageUrl || game.coverImage,
+      status: "available",
+      gameId: game.id,
+      gameSlug: game.slug,
+      puzzleSlug: puzzle.slug,
+    }));
+  });
+  return { data: games, source: "api" };
 }
 
 export async function getGameById(id, options) {
