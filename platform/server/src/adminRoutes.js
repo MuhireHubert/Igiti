@@ -1,10 +1,9 @@
 import express from "express";
 import admin from "firebase-admin";
-import { PrismaClient } from "@prisma/client";
+import prisma from "./db.js";
 import { z } from "zod";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 const adminEmails = new Set((process.env.ADMIN_EMAILS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
 
 async function requireAdmin(req, res, next) {
