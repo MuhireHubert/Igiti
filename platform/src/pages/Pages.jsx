@@ -47,7 +47,7 @@ export function GamePage() {
   return <PageLayout eyebrow="YOUR NEXT ADVENTURE" title={game ? game.title : "A story in the making"} subtitle={game ? game.description : "Explore the growing world of Igiti Play."}>
     {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && (playing
       ? <PuzzleGame game={game} onBack={() => setPlaying(false)} />
-      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>This playable staging version lets you arrange the picture pieces, track moves and time, and use a reference image. Progress saving will be added separately.</span></div><button className="button button-primary" onClick={() => setPlaying(true)}>Start puzzle <ArrowRight size={16} /></button></div></div>)}
+      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div><button className="button button-primary" onClick={() => setPlaying(true)}>Start puzzle <ArrowRight size={16} /></button></div></div>)}
   </PageLayout>;
 }
 
@@ -56,10 +56,10 @@ export function HowToPlayPage() {
     ["01", "Choose a story", "Pick a puzzle that sparks your curiosity. New collections will be added over time."],
     ["02", "Find your rhythm", "Start with a relaxed challenge and build confidence at your own pace."],
     ["03", "Explore the picture", "Use the image and the details around you to understand how the pieces fit together."],
-    ["04", "Celebrate the finish", "Save your progress and return whenever you are ready. Progress persistence is part of the next integration stage."],
+    ["04", "Celebrate the finish", "Your progress saves automatically in this browser, so you can refresh and return to the same arrangement. Account-based saves will let you continue across devices."],
   ];
   return <PageLayout eyebrow="A LITTLE GUIDE" title={<>Take your time.<br /><em>Enjoy the discovery.</em></>} subtitle="Igiti games are made to be thoughtful, welcoming and fun for curious minds of every age.">
     <div className="steps-grid">{steps.map(([number, title, description]) => <article key={number} className="step-card"><span>{number}</span><h2>{title}</h2><p>{description}</p></article>)}</div>
-    <div className="how-callout"><span className="how-icon"><ShieldCheck size={23} /></span><div><h2>Designed to feel welcoming</h2><p>Clear controls, responsive layouts and a steady pace come first. The new platform is being built alongside the existing game so familiar functionality is not removed before its replacement is ready.</p><Link to="/games">Find your first game <ArrowRight size={15} /></Link></div></div>
+    <div className="how-callout"><span className="how-icon"><ShieldCheck size={23} /></span><div><h2>Designed to feel welcoming</h2><p>Clear controls, responsive layouts and a steady pace come first. Igiti Play is being prepared as a dedicated home for the digital puzzle collection, while the existing Igiti experience remains separate until the new platform passes its launch checks.</p><Link to="/games">Find your first game <ArrowRight size={15} /></Link></div></div>
   </PageLayout>;
 }
