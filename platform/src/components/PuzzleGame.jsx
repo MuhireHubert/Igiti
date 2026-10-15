@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, Eye, RotateCcw, Shuffle, Timer } from "lucide-react";
+import { getApiBaseUrl } from "../lib/api.js";
+import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import "./PuzzleGame.css";
 
 function shufflePieces(count) {
@@ -21,6 +23,9 @@ function formatTime(totalSeconds) {
 }
 
 export default function PuzzleGame({ game, onBack }) {
+  const { user } = usePlayerAuth();
+  const apiBase = getApiBaseUrl();
+  const cloudEligible = Boolean(user && apiBase && game.gameId && game.puzzleSlug);
   const pieceCount = Math.max(2, Number(game.pieces) || 60);
   const columns = 10;
   const rows = Math.ceil(pieceCount / columns);
@@ -113,7 +118,7 @@ export default function PuzzleGame({ game, onBack }) {
     <section className="puzzle-game" aria-label={`Play ${game.title}`}>
       <div className="puzzle-game-top">
         <button className="puzzle-back" onClick={onBack}><ArrowLeft size={16} /> Back to details</button>
-        <span className="puzzle-live-label"><span /> PLAYABLE STAGING BUILD</span>
+        <span className="puzzle-live-label"><span /> {cloudEligible ? "ACCOUNT SYNC ENABLED" : "PLAYABLE PUZZLE"}</span>
       </div>
       <div className="puzzle-heading">
         <div>
@@ -174,7 +179,7 @@ export default function PuzzleGame({ game, onBack }) {
       </div>
       {showReference && <div className="puzzle-reference"><img src={game.image} alt={`Reference image for ${game.title}`} /><p>Use this picture as your guide while you arrange the pieces.</p></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
-      <p className="puzzle-footnote">Progress saves automatically on this browser, including your arrangement, moves, and timer. Account and cross-device saving are not yet enabled.</p>
+      <p className="puzzle-footnote">{cloudEligible ? (cloudStatus === "syncing" ? "Syncing your arrangement to your account…" : cloudStatus === "saved" ? "Your arrangement, moves and timer are syncing to your account, so you can return on another device." : "Cloud sync is temporarily unavailable. Your progress is still saved on this browser.") : user ? "This preview puzzle saves on this browser. Sign-in and cloud saves will be available for published puzzles." : "Progress saves automatically on this browser, including your arrangement, moves, and timer. Sign in to use account-based saves on published puzzles."}</p>
     </section>
   );
 }
