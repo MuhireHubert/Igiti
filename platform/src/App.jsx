@@ -5,6 +5,7 @@ import {
   ShieldCheck, Sparkles, Trophy, X,
 } from "lucide-react";
 import { getGames } from "./lib/api.js";
+import PuzzleGame from "./components/PuzzleGame.jsx";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
@@ -64,6 +65,8 @@ function GameCard({ game, onSelect }) {
 }
 
 function GamePreview({ game, onBack }) {
+  const [playing, setPlaying] = useState(false);
+  if (playing) return <PuzzleGame game={game} onBack={() => setPlaying(false)} />;
   return (
     <section className="detail-panel" aria-live="polite">
       <button className="back-link" onClick={onBack}>← Back to the library</button>
@@ -74,8 +77,8 @@ function GamePreview({ game, onBack }) {
           <h2>{game.title}</h2>
           <p>{game.description}</p>
           <div className="detail-stats"><span><Puzzle size={16} /> {game.pieces} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div>
-          <div className="notice"><Sparkles size={17} /><span>This is the new platform preview. The full puzzle engine will be connected after the game mechanics are migrated and tested.</span></div>
-          <button className="button button-primary" onClick={() => window.alert("The new puzzle engine is being prepared. Your existing Igiti game remains available while this preview is built.")}>Puzzle experience coming next <ArrowRight size={17} /></button>
+          <div className="notice"><Sparkles size={17} /><span>Your puzzle is ready to play in this staging build. Arrange the image pieces, track your moves, and use the picture guide when you need it.</span></div>
+          <button className="button button-primary" onClick={() => setPlaying(true)}>Start puzzle <ArrowRight size={17} /></button>
         </div>
       </div>
     </section>
