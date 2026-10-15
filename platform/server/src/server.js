@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import admin from "firebase-admin";
 import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
+import adminRoutes from "./adminRoutes.js";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -13,7 +14,14 @@ const port = Number(process.env.PORT || 4000);
 const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:5173")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
 
-if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.applicationDefault() });
+if (!admin.apps.length) {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (serviceAccountJson) {
+    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(serviceAccountJson)) });
+  } else {
+    admin.initializeApp({ credential: admin.credential.applicationDefault() });
+  }
+}
 
 app.disable("x-powered-by");
 app.use(helmet());
@@ -35,6 +43,7 @@ app.use("/v1", rateLimit({
 }));
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "igiti-play-api" }));
+app.use("/v1/admin", adminRoutes);
 
 app.get("/v1/games", async (_req, res, next) => {
   try {
