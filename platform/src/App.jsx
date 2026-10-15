@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight, ArrowRight, BookOpen, Check, ChevronDown, Compass,
