@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { getGames } from "./lib/api.js";
 import PuzzleGame from "./components/PuzzleGame.jsx";
+import PlayerAccount from "./components/PlayerAccount.jsx";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
@@ -32,6 +33,7 @@ function Header({ onExplore }) {
         </nav>
         <div className="top-actions">
           <span className="member-note"><ShieldCheck size={15} /> Play at your pace</span>
+          <PlayerAccount />
           <button className="icon-button mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X size={21} /> : <Menu size={21} />}
           </button>
