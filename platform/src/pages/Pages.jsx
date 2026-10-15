@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Gamepad2, Leaf, Puzzle, ShieldCheck, Sparkles } from "lucide-react";
 import { getGameById, getGames } from "../lib/api.js";
+import PuzzleGame from "../components/PuzzleGame.jsx";
 
 function PageHeader() {
   return <header className="page-header"><Link to="/" className="brand"><span className="brand-mark"><Leaf size={21} /></span><span className="brand-name">igiti<span>play</span></span></Link><Link className="back-link" to="/"><ArrowLeft size={15} /> Home</Link></header>;
@@ -34,13 +35,19 @@ export function GamePage() {
   const { gameId } = useParams();
   const [game, setGame] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [playing, setPlaying] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    getGameById(gameId, { signal: controller.signal }).then(setGame).finally(() => setLoaded(true));
+    getGameById(gameId, { signal: controller.signal })
+      .then(setGame)
+      .catch(() => setGame(null))
+      .finally(() => setLoaded(true));
     return () => controller.abort();
   }, [gameId]);
   return <PageLayout eyebrow="YOUR NEXT ADVENTURE" title={game ? game.title : "A story in the making"} subtitle={game ? game.description : "Explore the growing world of Igiti Play."}>
-    {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>The new puzzle runtime is the next migration milestone. The current game remains available while the engine is carefully moved and tested.</span></div><Link className="button button-primary" to="/games">Back to the collection <ArrowRight size={16} /></Link></div></div>}
+    {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && (playing
+      ? <PuzzleGame game={game} onBack={() => setPlaying(false)} />
+      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>This playable staging version lets you arrange the picture pieces, track moves and time, and use a reference image. Progress saving will be added separately.</span></div><button className="button button-primary" onClick={() => setPlaying(true)}>Start puzzle <ArrowRight size={16} /></button></div></div>)}
   </PageLayout>;
 }
 
