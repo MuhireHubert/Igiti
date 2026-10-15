@@ -71,6 +71,74 @@ export default function PuzzleGame({ game, onBack }) {
   }, [saveKey, pieces, moves, seconds]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!cloudEligible || !user) {
+      setCloudReady(true);
+      setCloudStatus("local");
+      return undefined;
+    }
+    setCloudReady(false);
+    setCloudStatus("syncing");
+    async function restoreCloudProgress() {
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch(`${apiBase}/v1/me/progress`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "Cloud progress could not be loaded.");
+        if (cancelled) return;
+        const saved = (payload.data || []).find((item) => item.puzzleId === game.id);
+        const state = saved?.state;
+        const validPieces = Array.isArray(state?.pieces) &&
+          state.pieces.length === pieceCount &&
+          state.pieces.every((piece) => Number.isInteger(piece) && piece >= 0 && piece < pieceCount) &&
+          new Set(state.pieces).size === pieceCount;
+        if (saved && validPieces && !initialProgress) {
+          setPieces(state.pieces);
+          setMoves(Number.isFinite(state.moves) ? state.moves : 0);
+          setSeconds(Number.isFinite(saved.elapsedSeconds) ? saved.elapsedSeconds : (Number.isFinite(state.seconds) ? state.seconds : 0));
+        }
+        setCloudStatus("saved");
+      } catch {
+        if (!cancelled) setCloudStatus("offline");
+      } finally {
+        if (!cancelled) setCloudReady(true);
+      }
+    }
+    restoreCloudProgress();
+    return () => { cancelled = true; };
+  }, [cloudEligible, user, apiBase, game.id, pieceCount, initialProgress]);
+
+  useEffect(() => {
+    if (!cloudEligible || !cloudReady || !user) return undefined;
+    const timeout = window.setTimeout(async () => {
+      try {
+        setCloudStatus("syncing");
+        const token = await user.getIdToken();
+        const response = await fetch(`${apiBase}/v1/me/progress/${game.id}`, {
+          method: "PUT",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            state: { pieces, moves, seconds },
+            elapsedSeconds: seconds,
+            completed: complete,
+          }),
+        });
+        if (!response.ok) throw new Error("Cloud progress could not be saved.");
+        setCloudStatus("saved");
+      } catch {
+        setCloudStatus("offline");
+      }
+    }, 900);
+    return () => window.clearTimeout(timeout);
+  }, [cloudEligible, cloudReady, user, apiBase, game.id, pieces, moves, seconds, complete]);
+
+  useEffect(() => {
     if (complete) return undefined;
     const interval = window.setInterval(() => setSeconds((current) => current + 1), 1000);
     return () => window.clearInterval(interval);
