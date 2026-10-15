@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./PlayerAccount.css";
 import { CheckCircle2, LogIn, LogOut, UserRound, X } from "lucide-react";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 
