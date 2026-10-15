@@ -87,7 +87,7 @@ export default function PuzzleGame({ game, onBack }) {
       </div>
       <div className="puzzle-heading">
         <div>
-          <span className="eyebrow">IGITI PLAY · ${pieceCount} PIECES</span>
+          <span className="eyebrow">{`IGITI PLAY · ${pieceCount} PIECES`}</span>
           <h2>{game.title}</h2>
           <p>Choose one piece, then choose another to swap them. You can also drag pieces on desktop.</p>
         </div>
