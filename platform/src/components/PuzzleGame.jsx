@@ -24,10 +24,27 @@ export default function PuzzleGame({ game, onBack }) {
   const pieceCount = Math.max(2, Number(game.pieces) || 60);
   const columns = 10;
   const rows = Math.ceil(pieceCount / columns);
-  const [pieces, setPieces] = useState(() => shufflePieces(pieceCount));
+  const saveKey = `igiti-puzzle-progress:${game.slug || game.id || game.title}:${pieceCount}`;
+  const [initialProgress] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(saveKey);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      if (
+        Array.isArray(saved.pieces) &&
+        saved.pieces.length === pieceCount &&
+        saved.pieces.every((piece) => Number.isInteger(piece) && piece >= 0 && piece < pieceCount) &&
+        new Set(saved.pieces).size === pieceCount
+      ) return saved;
+    } catch {
+      // Storage may be unavailable or contain invalid data; start a fresh puzzle.
+    }
+    return null;
+  });
+  const [pieces, setPieces] = useState(() => initialProgress?.pieces || shufflePieces(pieceCount));
   const [selected, setSelected] = useState(null);
-  const [moves, setMoves] = useState(0);
-  const [seconds, setSeconds] = useState(0);
+  const [moves, setMoves] = useState(() => Number.isFinite(initialProgress?.moves) ? initialProgress.moves : 0);
+  const [seconds, setSeconds] = useState(() => Number.isFinite(initialProgress?.seconds) ? initialProgress.seconds : 0);
   const [showReference, setShowReference] = useState(false);
   const [dragging, setDragging] = useState(null);
   const solvedCount = pieces.reduce((count, piece, slot) => count + (piece === slot ? 1 : 0), 0);
@@ -41,12 +58,25 @@ export default function PuzzleGame({ game, onBack }) {
   }), [columns, rows, game.image]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(saveKey, JSON.stringify({ pieces, moves, seconds }));
+    } catch {
+      // The puzzle remains playable if browser storage is disabled or full.
+    }
+  }, [saveKey, pieces, moves, seconds]);
+
+  useEffect(() => {
     if (complete) return undefined;
     const interval = window.setInterval(() => setSeconds((current) => current + 1), 1000);
     return () => window.clearInterval(interval);
   }, [complete]);
 
   function resetPuzzle() {
+    try {
+      window.localStorage.removeItem(saveKey);
+    } catch {
+      // Reset should still work if browser storage is unavailable.
+    }
     setPieces(shufflePieces(pieceCount));
     setSelected(null);
     setDragging(null);
@@ -144,7 +174,7 @@ export default function PuzzleGame({ game, onBack }) {
       </div>
       {showReference && <div className="puzzle-reference"><img src={game.image} alt={`Reference image for ${game.title}`} /><p>Use this picture as your guide while you arrange the pieces.</p></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
-      <p className="puzzle-footnote">This is the first playable staging version. Your game is not yet saved to a player account.</p>
+      <p className="puzzle-footnote">Progress saves automatically on this browser, including your arrangement, moves, and timer. Account and cross-device saving are not yet enabled.</p>
     </section>
   );
 }
