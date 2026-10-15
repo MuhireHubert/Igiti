@@ -4,12 +4,11 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import admin from "firebase-admin";
-import { PrismaClient } from "@prisma/client";
+import prisma from "./db.js";
 import { z } from "zod";
 import adminRoutes from "./adminRoutes.js";
 
 const app = express();
-const prisma = new PrismaClient();
 const port = Number(process.env.PORT || 4000);
 const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:5173")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
