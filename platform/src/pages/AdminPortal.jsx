@@ -8,6 +8,7 @@ import "./AdminPortal.css";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
 const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", sortOrder: 0, isActive: false };
+const platformRoles = ["PLAYER", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
 
 async function adminRequest(path, token, options = {}) {
   if (!API_BASE) throw new Error("VITE_API_BASE_URL is missing. Add the staging API URL to the Vercel environment variables and redeploy.");
@@ -39,6 +40,7 @@ export default function AdminPortal() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("overview");
   const [overview, setOverview] = useState(null);
+  const [adminSession, setAdminSession] = useState(null);
   const [games, setGames] = useState([]);
   const [players, setPlayers] = useState([]);
   const [gameForm, setGameForm] = useState(blankGame);
@@ -64,11 +66,13 @@ export default function AdminPortal() {
     setWorkspaceError("");
     try {
       const token = await user.getIdToken();
-      const [summary, gameList, playerList] = await Promise.all([
+      const [session, summary, gameList, playerList] = await Promise.all([
+        adminRequest("/session", token),
         adminRequest("/overview", token),
         adminRequest("/games", token),
         adminRequest("/players", token),
       ]);
+      setAdminSession(session);
       setOverview(summary);
       setGames(gameList);
       setPlayers(playerList);
@@ -197,6 +201,14 @@ export default function AdminPortal() {
     }, "Puzzle deleted.");
   }
 
+  async function changePlayerRole(player, role) {
+    if (role === player.role) return;
+    if (!window.confirm(`Change ${player.displayName || "this player's"} role to ${role}?`)) return;
+    await withAdminRequest(async (token) => {
+      await adminRequest(`/players/${player.id}/role`, token, { method: "PATCH", body: JSON.stringify({ role }) });
+    }, "Player role updated.");
+  }
+
   if (authLoading) return <main className="admin-screen"><p>Checking secure sign-in…</p></main>;
 
   if (!firebaseReady || !auth) return (
@@ -289,7 +301,7 @@ export default function AdminPortal() {
         </div>}
 
         {tab === "players" && <div className="admin-content"><section className="admin-panel"><div className="admin-panel-heading"><div><h2>Player directory</h2><p>Latest 200 profiles and saved-session activity. Sensitive authentication credentials are never displayed.</p></div></div>
-          {players.map((player) => <article className="admin-player-row" key={player.id}><span className="admin-player-avatar">{(player.displayName || "P").trim().slice(0, 1).toUpperCase()}</span><div className="admin-list-copy"><strong>{player.displayName || "Player"}</strong><span>Joined {new Date(player.createdAt).toLocaleDateString()} · Last active {new Date(player.updatedAt).toLocaleDateString()}</span></div><span className="admin-player-sessions">{player._count.progress} saved session(s)</span></article>)}
+          {players.map((player) => <article className="admin-player-row" key={player.id}><span className="admin-player-avatar">{(player.displayName || "P").trim().slice(0, 1).toUpperCase()}</span><div className="admin-list-copy"><strong>{player.displayName || "Player"}</strong><span>Joined {new Date(player.createdAt).toLocaleDateString()} · Last active {new Date(player.updatedAt).toLocaleDateString()}</span></div><span className="admin-player-sessions">{player._count.progress} saved session(s)</span><label className="admin-field" aria-label={`Role for ${player.displayName || "player"}`}><select value={player.role} onChange={(event) => changePlayerRole(player, event.target.value)} disabled={saving || adminSession?.role !== "OWNER"}>{platformRoles.map((role) => <option key={role} value={role}>{role.replace("_", " ")}</option>)}</select></label></article>)}
           {!players.length && <p className="admin-empty">Player profiles will appear here when players sign in and save progress.</p>}
         </section></div>}
         <footer className="admin-footer"><span>Igiti Play Administration</span><span>Access is checked by the API on every protected request.</span></footer>
