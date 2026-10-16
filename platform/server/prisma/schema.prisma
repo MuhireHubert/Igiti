@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -49,9 +49,88 @@ model PlayerProfile {
   firebaseUid String           @unique
   displayName String?
   avatarUrl   String?          @db.VarChar(2048)
+  role        UserRole         @default(PLAYER)
+  isDisabled  Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   progress    PuzzleProgress[]
+  entitlements AccessEntitlement[]
+  paymentOrders PaymentOrder[]
+  auditEvents AdminAudit[] @relation("AuditActor")
+}
+
+// Purchases are deliberately server-owned. A browser redirect is never an
+// entitlement: access is granted only after a verified provider callback.
+model PaymentOrder {
+  id               String        @id @default(cuid())
+  playerId         String
+  provider          PaymentProvider
+  providerOrderId  String?       @unique @db.VarChar(191)
+  amountMinor      Int
+  currency         String        @db.Char(3)
+  status           PaymentStatus @default(PENDING)
+  idempotencyKey   String        @unique @db.VarChar(191)
+  metadata         Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  paidAt           DateTime?
+  player           PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  events           PaymentEvent[]
+  entitlements     AccessEntitlement[]
+
+  @@index([playerId, status, createdAt])
+  @@index([provider, status])
+}
+
+model PaymentEvent {
+  id               String       @id @default(cuid())
+  orderId          String
+  providerEventId  String       @unique @db.VarChar(191)
+  eventType        String       @db.VarChar(120)
+  verified         Boolean      @default(false)
+  payload          Json
+  receivedAt       DateTime     @default(now())
+  order            PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, receivedAt])
+}
+
+model AccessEntitlement {
+  id          String        @id @default(cuid())
+  playerId    String
+  orderId     String?
+  resource    String        @db.VarChar(191)
+  status      EntitlementStatus @default(ACTIVE)
+  startsAt    DateTime      @default(now())
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  player      PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  order       PaymentOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([playerId, resource])
+  @@index([resource, status, expiresAt])
+}
+
+model AppSetting {
+  key        String   @id @db.VarChar(120)
+  value      Json
+  updatedAt  DateTime @updatedAt
+  updatedBy  String?  @db.VarChar(191)
+}
+
+model AdminAudit {
+  id          String        @id @default(cuid())
+  actorId     String
+  action      String        @db.VarChar(120)
+  targetType  String        @db.VarChar(80)
+  targetId    String?       @db.VarChar(191)
+  details     Json?
+  createdAt   DateTime      @default(now())
+  actor       PlayerProfile @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
 }
 
 model PuzzleProgress {
@@ -81,4 +160,32 @@ enum Difficulty {
   CURIOUS
   CHALLENGING
   EXPERT
+}
+
+enum UserRole {
+  PLAYER
+  MODERATOR
+  CONTENT_MANAGER
+  ADMIN
+  OWNER
+}
+
+enum PaymentProvider {
+  PESAPAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
 }

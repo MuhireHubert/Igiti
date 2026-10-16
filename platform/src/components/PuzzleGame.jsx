@@ -52,6 +52,8 @@ export default function PuzzleGame({ game, onBack }) {
   const [seconds, setSeconds] = useState(() => Number.isFinite(initialProgress?.seconds) ? initialProgress.seconds : 0);
   const [showReference, setShowReference] = useState(false);
   const [dragging, setDragging] = useState(null);
+  const [cloudReady, setCloudReady] = useState(!cloudEligible);
+  const [cloudStatus, setCloudStatus] = useState("local");
   const solvedCount = pieces.reduce((count, piece, slot) => count + (piece === slot ? 1 : 0), 0);
   const complete = solvedCount === pieceCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);

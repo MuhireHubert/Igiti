@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-The web client runs on Vite. It works in preview mode without a backend; configure `VITE_API_BASE_URL` to connect it to the API.
+The web client runs on Vite. It works in preview mode without a backend; configure `VITE_API_BASE_URL` to connect it to the API. For the Vercel deployment, set that variable in the intended environment (Preview first, then Production only after acceptance testing). If it is absent, the UI intentionally displays its preview collection rather than published games.
 
 ## Structure
 
@@ -29,13 +29,13 @@ This is the first vertical slice: a responsive welcome/library experience, acces
 
 Client: copy `.env.example` to `.env.local` and set `VITE_API_BASE_URL` when an API is available.
 
-API: see `server/.env.example`. The API requires a dedicated database URL and Firebase Admin service-account configuration. Never commit credentials.
+API: see `server/.env.example`. The API requires a dedicated MySQL database URL and Firebase Admin service-account configuration. Never commit credentials.
 
 ## Safe rollout
 
 1. Keep the existing root game available.
 2. Deploy this platform to a staging URL and validate it on desktop and touch devices.
-3. Provision a separate game-domain database; do not run migrations against the store's existing schema.
+3. Provision a separate game-domain MySQL database; do not run migrations against the store's existing schema.
 4. Connect identity through verified Firebase ID tokens initially, then evaluate whether a single identity provider should serve all Igiti properties.
 5. Integrate admin management through authenticated API routes and role checks.
 6. Cut over `play.igiti.africa` only after smoke tests, accessibility checks, and a rollback plan are complete.
