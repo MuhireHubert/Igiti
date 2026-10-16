@@ -253,6 +253,94 @@ router.patch("/players/:playerId/role", requireRole("OWNER"), async (req, res, n
   }
 });
 
+const playerStatusUpdate = z.object({ isDisabled: z.boolean() });
+router.patch("/players/:playerId/status", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = playerStatusUpdate.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a valid player status." });
+  if (req.params.playerId === req.adminUser.id && parsed.data.isDisabled) {
+    return res.status(400).json({ error: "An owner cannot disable their own account." });
+  }
+  try {
+    const player = await prisma.playerProfile.update({
+      where: { id: req.params.playerId }, data: { isDisabled: parsed.data.isDisabled },
+      select: { id: true, displayName: true, role: true, isDisabled: true },
+    });
+    await recordAudit(req.adminUser.id, "player.status_updated", "PlayerProfile", player.id, { isDisabled: player.isDisabled });
+    res.json({ data: player });
+  } catch (error) {
+    if (error?.code === "P2025") return res.status(404).json({ error: "Player not found." });
+    next(error);
+  }
+});
+
+router.get("/payments", requireRole("ADMIN"), async (_req, res, next) => {
+  try {
+    const orders = await prisma.paymentOrder.findMany({
+      orderBy: { createdAt: "desc" }, take: 200,
+      select: {
+        id: true, provider: true, providerOrderId: true, amountMinor: true, currency: true,
+        status: true, createdAt: true, updatedAt: true, paidAt: true,
+        player: { select: { id: true, displayName: true, role: true, isDisabled: true } },
+        entitlements: { select: { id: true, resource: true, status: true, startsAt: true, expiresAt: true } },
+      },
+    });
+    res.json({ data: orders });
+  } catch (error) { next(error); }
+});
+
+router.get("/entitlements", requireRole("ADMIN"), async (_req, res, next) => {
+  try {
+    const entitlements = await prisma.accessEntitlement.findMany({
+      orderBy: { updatedAt: "desc" }, take: 300,
+      select: {
+        id: true, resource: true, status: true, startsAt: true, expiresAt: true, createdAt: true, updatedAt: true,
+        player: { select: { id: true, displayName: true, role: true, isDisabled: true } },
+        order: { select: { id: true, provider: true, status: true, amountMinor: true, currency: true } },
+      },
+    });
+    res.json({ data: entitlements });
+  } catch (error) { next(error); }
+});
+
+const entitlementGrant = z.object({
+  playerId: z.string().trim().min(1).max(191),
+  resource: z.string().trim().min(2).max(191).regex(/^[a-z0-9][a-z0-9_.:-]*$/, "Use lowercase letters, numbers, dots, colons, underscores or hyphens."),
+  expiresAt: z.string().datetime().optional().nullable(),
+});
+router.post("/entitlements", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = entitlementGrant.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a valid player, resource and optional ISO expiry.", details: parsed.error.flatten() });
+  try {
+    const expiry = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+    if (expiry && expiry <= new Date()) return res.status(400).json({ error: "Expiry must be in the future." });
+    const entitlement = await prisma.accessEntitlement.upsert({
+      where: { playerId_resource: { playerId: parsed.data.playerId, resource: parsed.data.resource } },
+      update: { status: "ACTIVE", startsAt: new Date(), expiresAt: expiry },
+      create: { playerId: parsed.data.playerId, resource: parsed.data.resource, expiresAt: expiry },
+      select: { id: true, playerId: true, resource: true, status: true, startsAt: true, expiresAt: true },
+    });
+    await recordAudit(req.adminUser.id, "entitlement.granted", "AccessEntitlement", entitlement.id, { playerId: entitlement.playerId, resource: entitlement.resource, expiresAt: entitlement.expiresAt });
+    res.status(201).json({ data: entitlement });
+  } catch (error) {
+    if (error?.code === "P2003") return res.status(404).json({ error: "Player not found." });
+    next(error);
+  }
+});
+
+router.patch("/entitlements/:entitlementId/revoke", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const entitlement = await prisma.accessEntitlement.update({
+      where: { id: req.params.entitlementId }, data: { status: "REVOKED" },
+      select: { id: true, playerId: true, resource: true, status: true },
+    });
+    await recordAudit(req.adminUser.id, "entitlement.revoked", "AccessEntitlement", entitlement.id, { playerId: entitlement.playerId, resource: entitlement.resource });
+    res.json({ data: entitlement });
+  } catch (error) {
+    if (error?.code === "P2025") return res.status(404).json({ error: "Entitlement not found." });
+    next(error);
+  }
+});
+
 router.get("/audit", requireRole("ADMIN"), async (_req, res, next) => {
   try {
     const events = await prisma.adminAudit.findMany({
