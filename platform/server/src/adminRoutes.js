@@ -144,6 +144,7 @@ router.post("/games", async (req, res, next) => {
   try {
     const data = parsed.data;
     const game = await prisma.game.create({ data: { ...data, publishedAt: data.status === "PUBLISHED" ? new Date() : null }, select: { id: true, slug: true, title: true, status: true, publishedAt: true } });
+    await recordAudit(req.adminUser.id, "game.created", "Game", game.id, { slug: game.slug, status: game.status });
     res.status(201).json({ data: game });
   } catch (error) {
     if (error?.code === "P2002") return res.status(409).json({ error: "That game slug is already in use." });
@@ -159,6 +160,7 @@ router.patch("/games/:gameId", async (req, res, next) => {
     if (data.status === "PUBLISHED") data.publishedAt = new Date();
     if (data.status && data.status !== "PUBLISHED") data.publishedAt = null;
     const game = await prisma.game.update({ where: { id: req.params.gameId }, data, select: { id: true, slug: true, title: true, status: true, publishedAt: true } });
+    await recordAudit(req.adminUser.id, "game.updated", "Game", game.id, { fields: Object.keys(data), status: game.status });
     res.json({ data: game });
   } catch (error) {
     if (error?.code === "P2025") return res.status(404).json({ error: "Game not found." });
@@ -167,9 +169,10 @@ router.patch("/games/:gameId", async (req, res, next) => {
   }
 });
 
-router.delete("/games/:gameId", async (req, res, next) => {
+router.delete("/games/:gameId", requireRole("ADMIN"), async (req, res, next) => {
   try {
-    await prisma.game.delete({ where: { id: req.params.gameId } });
+    const game = await prisma.game.delete({ where: { id: req.params.gameId }, select: { id: true, slug: true, title: true } });
+    await recordAudit(req.adminUser.id, "game.deleted", "Game", game.id, { slug: game.slug, title: game.title });
     res.json({ data: { deleted: true } });
   } catch (error) {
     if (error?.code === "P2025") return res.status(404).json({ error: "Game not found." });
@@ -182,6 +185,7 @@ router.post("/games/:gameId/puzzles", async (req, res, next) => {
   if (!parsed.success) return res.status(400).json({ error: "Check the puzzle fields and try again.", details: parsed.error.flatten() });
   try {
     const puzzle = await prisma.puzzle.create({ data: { ...parsed.data, gameId: req.params.gameId }, select: { id: true, slug: true, title: true, pieceCount: true, isActive: true } });
+    await recordAudit(req.adminUser.id, "puzzle.created", "Puzzle", puzzle.id, { gameId: req.params.gameId, slug: puzzle.slug, isActive: puzzle.isActive });
     res.status(201).json({ data: puzzle });
   } catch (error) {
     if (error?.code === "P2002") return res.status(409).json({ error: "That puzzle slug is already used in this game." });
@@ -195,6 +199,7 @@ router.patch("/puzzles/:puzzleId", async (req, res, next) => {
   if (!parsed.success || Object.keys(parsed.data || {}).length === 0) return res.status(400).json({ error: "Provide valid puzzle fields to update.", details: parsed.success ? undefined : parsed.error.flatten() });
   try {
     const puzzle = await prisma.puzzle.update({ where: { id: req.params.puzzleId }, data: parsed.data, select: { id: true, slug: true, title: true, pieceCount: true, isActive: true } });
+    await recordAudit(req.adminUser.id, "puzzle.updated", "Puzzle", puzzle.id, { fields: Object.keys(parsed.data), isActive: puzzle.isActive });
     res.json({ data: puzzle });
   } catch (error) {
     if (error?.code === "P2025") return res.status(404).json({ error: "Puzzle not found." });
@@ -203,9 +208,10 @@ router.patch("/puzzles/:puzzleId", async (req, res, next) => {
   }
 });
 
-router.delete("/puzzles/:puzzleId", async (req, res, next) => {
+router.delete("/puzzles/:puzzleId", requireRole("ADMIN"), async (req, res, next) => {
   try {
-    await prisma.puzzle.delete({ where: { id: req.params.puzzleId } });
+    const puzzle = await prisma.puzzle.delete({ where: { id: req.params.puzzleId }, select: { id: true, slug: true, title: true, gameId: true } });
+    await recordAudit(req.adminUser.id, "puzzle.deleted", "Puzzle", puzzle.id, { gameId: puzzle.gameId, slug: puzzle.slug, title: puzzle.title });
     res.json({ data: { deleted: true } });
   } catch (error) {
     if (error?.code === "P2025") return res.status(404).json({ error: "Puzzle not found." });
