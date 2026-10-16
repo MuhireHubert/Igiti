@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { ArrowLeft, BarChart3, BookOpen, CheckCircle2, CircleAlert, Gamepad2, LogOut, Plus, RefreshCw, Save, ShieldCheck, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, BarChart3, BookOpen, CheckCircle2, CircleAlert, CreditCard, FileText, Gamepad2, LogOut, Plus, RefreshCw, Save, Settings, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { auth, firebaseReady } from "../lib/firebase.js";
 import "./AdminPortal.css";
@@ -9,6 +9,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
 const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", sortOrder: 0, isActive: false };
 const platformRoles = ["PLAYER", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
+const administratorRoles = new Set(["ADMIN", "OWNER"]);
 
 async function adminRequest(path, token, options = {}) {
   if (!API_BASE) throw new Error("VITE_API_BASE_URL is missing. Add the staging API URL to the Vercel environment variables and redeploy.");
@@ -43,6 +44,13 @@ export default function AdminPortal() {
   const [adminSession, setAdminSession] = useState(null);
   const [games, setGames] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [settings, setSettings] = useState([]);
+  const [auditEvents, setAuditEvents] = useState([]);
+  const [paymentOrders, setPaymentOrders] = useState([]);
+  const [entitlements, setEntitlements] = useState([]);
+  const [settingKey, setSettingKey] = useState("");
+  const [settingValue, setSettingValue] = useState("{}");
+  const [entitlementForm, setEntitlementForm] = useState({ playerId: "", resource: "", expiresAt: "" });
   const [gameForm, setGameForm] = useState(blankGame);
   const [editingGameId, setEditingGameId] = useState(null);
   const [activeGameId, setActiveGameId] = useState(null);
@@ -76,6 +84,18 @@ export default function AdminPortal() {
       setOverview(summary);
       setGames(gameList);
       setPlayers(playerList);
+      if (administratorRoles.has(session.role)) {
+        const [settingList, events, orders, entitlementList] = await Promise.all([
+          adminRequest("/settings", token), adminRequest("/audit", token),
+          adminRequest("/payments", token), adminRequest("/entitlements", token),
+        ]);
+        setSettings(settingList);
+        setAuditEvents(events);
+        setPaymentOrders(orders);
+        setEntitlements(entitlementList);
+      } else {
+        setSettings([]); setAuditEvents([]); setPaymentOrders([]); setEntitlements([]);
+      }
     } catch (error) {
       setWorkspaceError(error.message);
     } finally {
@@ -209,6 +229,38 @@ export default function AdminPortal() {
     }, "Player role updated.");
   }
 
+  async function changePlayerStatus(player, isDisabled) {
+    if (!window.confirm(`${isDisabled ? "Disable" : "Re-enable"} ${player.displayName || "this player"}?`)) return;
+    await withAdminRequest(async (token) => {
+      await adminRequest(`/players/${player.id}/status`, token, { method: "PATCH", body: JSON.stringify({ isDisabled }) });
+    }, isDisabled ? "Player access disabled." : "Player access restored.");
+  }
+
+  async function saveSetting(event) {
+    event.preventDefault();
+    let value;
+    try { value = JSON.parse(settingValue); } catch { setWorkspaceError("Setting value must be valid JSON."); return; }
+    await withAdminRequest(async (token) => {
+      await adminRequest(`/settings/${settingKey}`, token, { method: "PUT", body: JSON.stringify({ value }) });
+      setSettingKey(""); setSettingValue("{}");
+    }, "Platform setting saved.");
+  }
+
+  async function grantEntitlement(event) {
+    event.preventDefault();
+    await withAdminRequest(async (token) => {
+      await adminRequest("/entitlements", token, { method: "POST", body: JSON.stringify({ ...entitlementForm, expiresAt: entitlementForm.expiresAt ? new Date(entitlementForm.expiresAt).toISOString() : null }) });
+      setEntitlementForm({ playerId: "", resource: "", expiresAt: "" });
+    }, "Access entitlement granted.");
+  }
+
+  async function revokeEntitlement(entitlement) {
+    if (!window.confirm(`Revoke ${entitlement.resource} access?`)) return;
+    await withAdminRequest(async (token) => {
+      await adminRequest(`/entitlements/${entitlement.id}/revoke`, token, { method: "PATCH" });
+    }, "Access entitlement revoked.");
+  }
+
   if (authLoading) return <main className="admin-screen"><p>Checking secure sign-in…</p></main>;
 
   if (!firebaseReady || !auth) return (
@@ -247,11 +299,12 @@ export default function AdminPortal() {
         <button className={tab === "overview" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("overview")}><BarChart3 size={17} /> Overview</button>
         <button className={tab === "games" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("games")}><Gamepad2 size={17} /> Games & puzzles</button>
         <button className={tab === "players" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("players")}><Users size={17} /> Players</button>
+        {administratorRoles.has(adminSession?.role) && <><button className={tab === "commerce" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("commerce")}><CreditCard size={17} /> Purchases & access</button><button className={tab === "controls" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("controls")}><Settings size={17} /> Platform controls</button></>}
         <div className="admin-sidebar-bottom"><span className="admin-secure-dot" /> Signed in as <strong>{user.email}</strong><button onClick={() => signOut(auth)}><LogOut size={15} /> Sign out</button></div>
       </aside>
 
       <section className="admin-main">
-        <header className="admin-topbar"><div><span className="admin-eyebrow">IGITI PLAY / CONTROL ROOM</span><h1>{tab === "overview" ? "Platform overview" : tab === "games" ? "Games & puzzles" : "Player activity"}</h1></div><div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">View player site ↗</a><button className="admin-icon-button" onClick={() => loadWorkspace()} disabled={loading} aria-label="Refresh data"><RefreshCw size={17} /></button></div></header>
+        <header className="admin-topbar"><div><span className="admin-eyebrow">IGITI PLAY / CONTROL ROOM</span><h1>{tab === "overview" ? "Platform overview" : tab === "games" ? "Games & puzzles" : tab === "players" ? "Player activity" : tab === "commerce" ? "Purchases & access" : "Platform controls"}</h1></div><div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">View player site ↗</a><button className="admin-icon-button" onClick={() => loadWorkspace()} disabled={loading} aria-label="Refresh data"><RefreshCw size={17} /></button></div></header>
         {workspaceError && <div className="admin-alert" role="alert"><CircleAlert size={17} />{workspaceError}</div>}
         {notice && <div className="admin-success" role="status"><CheckCircle2 size={17} />{notice}<button onClick={() => setNotice("")} aria-label="Dismiss message"><X size={15} /></button></div>}
         {loading && <p className="admin-loading">Loading your workspace…</p>}
@@ -301,9 +354,32 @@ export default function AdminPortal() {
         </div>}
 
         {tab === "players" && <div className="admin-content"><section className="admin-panel"><div className="admin-panel-heading"><div><h2>Player directory</h2><p>Latest 200 profiles and saved-session activity. Sensitive authentication credentials are never displayed.</p></div></div>
-          {players.map((player) => <article className="admin-player-row" key={player.id}><span className="admin-player-avatar">{(player.displayName || "P").trim().slice(0, 1).toUpperCase()}</span><div className="admin-list-copy"><strong>{player.displayName || "Player"}</strong><span>Joined {new Date(player.createdAt).toLocaleDateString()} · Last active {new Date(player.updatedAt).toLocaleDateString()}</span></div><span className="admin-player-sessions">{player._count.progress} saved session(s)</span><label className="admin-field" aria-label={`Role for ${player.displayName || "player"}`}><select value={player.role} onChange={(event) => changePlayerRole(player, event.target.value)} disabled={saving || adminSession?.role !== "OWNER"}>{platformRoles.map((role) => <option key={role} value={role}>{role.replace("_", " ")}</option>)}</select></label></article>)}
+          {players.map((player) => <article className="admin-player-row" key={player.id}><span className="admin-player-avatar">{(player.displayName || "P").trim().slice(0, 1).toUpperCase()}</span><div className="admin-list-copy"><strong>{player.displayName || "Player"}{player.isDisabled ? " · Disabled" : ""}</strong><span>Joined {new Date(player.createdAt).toLocaleDateString()} · Last active {new Date(player.updatedAt).toLocaleDateString()}</span></div><span className="admin-player-sessions">{player._count.progress} saved session(s)</span><label className="admin-field" aria-label={`Role for ${player.displayName || "player"}`}><select value={player.role} onChange={(event) => changePlayerRole(player, event.target.value)} disabled={saving || adminSession?.role !== "OWNER"}>{platformRoles.map((role) => <option key={role} value={role}>{role.replace("_", " ")}</option>)}</select></label>{adminSession?.role === "OWNER" && <button className="admin-row-action" onClick={() => changePlayerStatus(player, !player.isDisabled)} disabled={saving}>{player.isDisabled ? "Enable" : "Disable"}</button>}</article>)}
           {!players.length && <p className="admin-empty">Player profiles will appear here when players sign in and save progress.</p>}
         </section></div>}
+
+        {tab === "commerce" && <div className="admin-content admin-game-layout">
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Verified payment orders</h2><p>Payment redirects never grant play access. Only a server-verified provider callback can mark an order paid.</p></div></div>
+            {paymentOrders.map((order) => <article className="admin-list-row" key={order.id}><div className="admin-list-copy"><strong>{order.player.displayName || "Player"} · {order.amountMinor} {order.currency}</strong><span>{order.provider} · {order.providerOrderId || "Awaiting provider reference"} · {new Date(order.createdAt).toLocaleString()}</span></div><span className={`admin-status status-${order.status === "PAID" ? "published" : "draft"}`}>{order.status}</span></article>)}
+            {!paymentOrders.length && <p className="admin-empty">No game payment orders have been recorded yet.</p>}
+          </section>
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Access entitlements</h2><p>Owners can grant or revoke access for support cases. All changes are logged.</p></div></div>
+            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={grantEntitlement}><label className="admin-field">Player ID<input value={entitlementForm.playerId} onChange={(e) => setEntitlementForm({ ...entitlementForm, playerId: e.target.value })} required /></label><label className="admin-field">Resource key<input placeholder="game:premium" value={entitlementForm.resource} onChange={(e) => setEntitlementForm({ ...entitlementForm, resource: e.target.value.toLowerCase() })} required /></label><label className="admin-field">Expiry (optional)<input type="datetime-local" value={entitlementForm.expiresAt} onChange={(e) => setEntitlementForm({ ...entitlementForm, expiresAt: e.target.value })} /></label><button className="admin-button admin-button-primary" type="submit" disabled={saving}><Plus size={15} /> Grant access</button></form>}
+            {entitlements.map((entitlement) => <article className="admin-list-row" key={entitlement.id}><div className="admin-list-copy"><strong>{entitlement.resource} · {entitlement.player.displayName || "Player"}</strong><span>{entitlement.expiresAt ? `Expires ${new Date(entitlement.expiresAt).toLocaleString()}` : "No expiry"}{entitlement.order ? ` · ${entitlement.order.provider} order` : " · Manual grant"}</span></div><span className={`admin-status status-${entitlement.status === "ACTIVE" ? "published" : "archived"}`}>{entitlement.status}</span>{adminSession?.role === "OWNER" && entitlement.status === "ACTIVE" && <button className="admin-row-action danger-text" onClick={() => revokeEntitlement(entitlement)}>Revoke</button>}</article>)}
+          </section>
+        </div>}
+
+        {tab === "controls" && <div className="admin-content admin-game-layout">
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Platform settings</h2><p>Structured JSON configuration is server-owned and fully audited. Never add payment credentials here.</p></div></div>
+            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveSetting}><label className="admin-field">Setting key<input placeholder="game.access" value={settingKey} onChange={(e) => setSettingKey(e.target.value.toLowerCase())} required /></label><label className="admin-field">JSON value<textarea rows={5} value={settingValue} onChange={(e) => setSettingValue(e.target.value)} required /></label><button className="admin-button admin-button-primary" type="submit" disabled={saving}><Save size={15} /> Save setting</button></form>}
+            {settings.map((setting) => <article className="admin-list-row" key={setting.key}><div className="admin-list-copy"><strong>{setting.key}</strong><span>{JSON.stringify(setting.value)} · Updated {new Date(setting.updatedAt).toLocaleString()}</span></div></article>)}
+            {!settings.length && <p className="admin-empty">No runtime settings have been created.</p>}
+          </section>
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Administrative audit trail</h2><p>Latest 200 privileged actions.</p></div><FileText size={18} /></div>
+            {auditEvents.map((event) => <article className="admin-list-row" key={event.id}><div className="admin-list-copy"><strong>{event.action}</strong><span>{event.actor.displayName || event.actor.role} · {event.targetType}{event.targetId ? ` · ${event.targetId}` : ""} · {new Date(event.createdAt).toLocaleString()}</span></div></article>)}
+            {!auditEvents.length && <p className="admin-empty">Privileged actions will appear here.</p>}
+          </section>
+        </div>}
         <footer className="admin-footer"><span>Igiti Play Administration</span><span>Access is checked by the API on every protected request.</span></footer>
       </section>
     </main>
