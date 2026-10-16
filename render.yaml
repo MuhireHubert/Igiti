@@ -1,17 +1,17 @@
-# Igiti Play staging API only. Reuses the existing igiti-play-mysql-staging service/database.
+# Igiti Play staging API only. Reuses the existing `mysql` private service/database.
 # Set DATABASE_URL in the Render API service to the existing MySQL internal connection string.
 services:
   - type: web
     name: igiti-play-api-staging
     runtime: node
     plan: free
-    region: frankfurt
-    branch: feat/render-game-backend
+    region: oregon
+    branch: feat/platform-foundation
     rootDir: platform/server
     buildCommand: npm install && npx prisma generate
     startCommand: npm run db:migrate && npm start
     healthCheckPath: /health
-    autoDeploy: false
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
