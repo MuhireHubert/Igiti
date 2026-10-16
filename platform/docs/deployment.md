@@ -1,17 +1,16 @@
 # Deployment and rollout
 
-Target: `play.igiti.africa`. The DNS record, hosting project, TLS certificate, secrets and production database must be configured by the account owner; none are changed by this repository commit.
+Target game subdomain: `play.igiti.africa`. DNS, TLS, hosting resources and secret values require account-owner access and are not created by a Git commit.
 
-## Staging sequence
+## Staging
 
-1. Deploy `platform/` as the frontend root to a staging host (Vercel, Cloudflare Pages, or equivalent).
-2. Deploy `platform/server/` as a separate Node.js service; configure `DATABASE_URL`, `WEB_ORIGIN`, and workload/service-account credentials in the hosting secret manager.
-3. Provision a dedicated database named for Igiti Play. Do not point the API at the existing commerce schema.
-4. Generate and review a migration using Prisma against a disposable development database, then apply to staging.
-5. Seed sample games and puzzles through a controlled seed script or migration fixture.
-6. Verify catalogue visibility, invalid-token rejection, per-player data isolation, request-size limits, responsive UI, and error handling.
-7. Configure `play.igiti.africa` DNS and TLS after staging validation. Keep the current game available as a fallback during initial rollout.
+1. Deploy `platform/` as the frontend root to Vercel or another static frontend host.
+2. Use the root `render.yaml` on branch `feat/render-game-backend` to provision the separate Render API and PostgreSQL database. Follow [Render staging setup](./render-staging.md).
+3. Set Firebase web-app configuration in the frontend host and Firebase Admin service-account JSON plus verified admin allow-list in Render's secret environment settings.
+4. Confirm the API health endpoint, public game catalogue, invalid-token rejection, admin allow-list enforcement and per-player progress isolation.
+5. Seed only sample content in staging and test desktop and touch devices.
+6. Add the exact staging frontend origin to `WEB_ORIGIN`; do not use wildcard CORS.
 
 ## Production gate
 
-Do not cut over the subdomain until tests, accessibility review, backups, monitoring, secrets, admin authorization, and a rollback procedure are in place. The new API currently has no admin write routes and should not be treated as a complete production service yet.
+Do not cut over `play.igiti.africa` until staging tests, accessibility review, backups, monitoring, secrets, admin authorization, Firebase authorized domains and rollback steps are confirmed. The new relational database does not automatically contain legacy Firebase game data. Keep the existing game available until a separately planned data migration and cutover have been tested.
