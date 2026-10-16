@@ -1,0 +1,35 @@
+# Igiti Play staging only. Free plans are for testing; do not use for production.
+# Render Free Postgres expires after 30 days and has no backups. Export test data before expiry.
+databases:
+  - name: igiti-play-db-staging
+    databaseName: igiti_play_staging
+    user: igiti_play_staging
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: igiti-play-api-staging
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: feat/render-game-backend
+    rootDir: platform/server
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm run db:migrate && npm start
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: igiti-play-db-staging
+          property: connectionString
+      - key: WEB_ORIGIN
+        value: https://play.igiti.africa,http://localhost:5173
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false

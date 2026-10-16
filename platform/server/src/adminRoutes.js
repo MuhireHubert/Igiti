@@ -10,6 +10,7 @@ async function requireAdmin(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   if (!token) return res.status(401).json({ error: "Sign in with an administrator account to continue." });
+  if (!admin.apps.length) return res.status(503).json({ error: "Firebase authentication is not configured on the API." });
   if (adminEmails.size === 0) return res.status(503).json({ error: "Admin access is not configured yet. Set ADMIN_EMAILS in the API service." });
   try {
     const decoded = await admin.auth().verifyIdToken(token);

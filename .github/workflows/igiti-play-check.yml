@@ -1,0 +1,55 @@
+name: Igiti Play checks
+
+on:
+  pull_request:
+    paths:
+      - "platform/**"
+      - "render.yaml"
+      - ".github/workflows/igiti-play-check.yml"
+  push:
+    branches:
+      - feat/render-game-backend
+    paths:
+      - "platform/**"
+      - "render.yaml"
+      - ".github/workflows/igiti-play-check.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install API dependencies
+        working-directory: platform/server
+        run: npm install --no-audit --no-fund
+
+      - name: Validate Prisma schema
+        working-directory: platform/server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/igiti_play_test?schema=public
+        run: npx prisma validate
+
+      - name: Generate Prisma Client
+        working-directory: platform/server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/igiti_play_test?schema=public
+        run: npx prisma generate
+
+      - name: Check API JavaScript syntax
+        working-directory: platform/server
+        run: npm run check
+
+      - name: Install frontend dependencies
+        working-directory: platform
+        run: npm install --no-audit --no-fund
+
+      - name: Build game frontend
+        working-directory: platform
+        run: npm run build
