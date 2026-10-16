@@ -1,4 +1,6 @@
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+// Vercel proxies this path to the staging API. Keeping the explicit variable
+// first allows other hosts to opt into a different API without changing code.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
 const previewGames = [
   {

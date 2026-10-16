@@ -5,14 +5,13 @@ import { Link } from "react-router-dom";
 import { auth, firebaseReady } from "../lib/firebase.js";
 import "./AdminPortal.css";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
 const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", sortOrder: 0, isActive: false };
 const platformRoles = ["PLAYER", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
 const administratorRoles = new Set(["ADMIN", "OWNER"]);
 
 async function adminRequest(path, token, options = {}) {
-  if (!API_BASE) throw new Error("VITE_API_BASE_URL is missing. Add the staging API URL to the Vercel environment variables and redeploy.");
   const response = await fetch(`${API_BASE}/v1/admin${path}`, {
     ...options,
     headers: {
