@@ -16,9 +16,13 @@ const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:5173")
 if (!admin.apps.length) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (serviceAccountJson) {
-    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(serviceAccountJson)) });
-  } else {
+    // Invalid JSON should fail clearly during boot instead of silently disabling auth.
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     admin.initializeApp({ credential: admin.credential.applicationDefault() });
+  } else {
+    console.warn("Firebase Admin credentials are not configured; authenticated routes will return 503.");
   }
 }
 
@@ -41,7 +45,22 @@ app.use("/v1", rateLimit({
   message: { error: "Too many requests. Please try again shortly." },
 }));
 
-app.get("/health", (_req, res) => res.json({ status: "ok", service: "igiti-play-api" }));
+// Render uses this endpoint to verify that the API and its database are reachable.
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({
+      status: "ok",
+      service: "igiti-play-api",
+      database: "ok",
+      firebaseAuthConfigured: admin.apps.length > 0,
+    });
+  } catch (error) {
+    console.error("Igiti Play health check failed", error);
+    return res.status(503).json({ status: "degraded", service: "igiti-play-api", database: "unavailable" });
+  }
+});
+
 app.use("/v1/admin", adminRoutes);
 
 app.get("/v1/games", async (_req, res, next) => {
@@ -75,6 +94,7 @@ async function requirePlayer(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   if (!token) return res.status(401).json({ error: "Authentication required." });
+  if (!admin.apps.length) return res.status(503).json({ error: "Firebase authentication is not configured on the API." });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     const player = await prisma.playerProfile.upsert({
