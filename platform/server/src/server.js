@@ -102,6 +102,7 @@ async function requirePlayer(req, res, next) {
       update: { displayName: decoded.name || undefined, avatarUrl: decoded.picture || undefined },
       create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null },
     });
+    if (player.isDisabled) return res.status(403).json({ error: "This player account is unavailable." });
     req.player = player;
     next();
   } catch {
@@ -120,6 +121,18 @@ app.get("/v1/me/progress", requirePlayer, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get("/v1/me/entitlements", requirePlayer, async (req, res, next) => {
+  try {
+    const now = new Date();
+    const entitlements = await prisma.accessEntitlement.findMany({
+      where: { playerId: req.player.id, status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      select: { resource: true, startsAt: true, expiresAt: true, orderId: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ data: entitlements });
+  } catch (error) { next(error); }
+});
+
 app.put("/v1/me/progress/:puzzleId", requirePlayer, async (req, res, next) => {
   try {
     const parsed = progressSchema.safeParse({ ...req.body, puzzleId: req.params.puzzleId });
@@ -127,9 +140,11 @@ app.put("/v1/me/progress/:puzzleId", requirePlayer, async (req, res, next) => {
     const { puzzleId, state, elapsedSeconds = 0, completed = false } = parsed.data;
     const puzzle = await prisma.puzzle.findFirst({ where: { id: puzzleId, isActive: true, game: { status: "PUBLISHED" } }, select: { id: true } });
     if (!puzzle) return res.status(404).json({ error: "Puzzle not found." });
+    // Completion is monotonic: later autosaves must not turn a completed
+    // puzzle back into an incomplete one merely because the UI remounted.
     const progress = await prisma.puzzleProgress.upsert({
       where: { playerId_puzzleId: { playerId: req.player.id, puzzleId } },
-      update: { state, elapsedSeconds, completedAt: completed ? new Date() : null },
+      update: { state, elapsedSeconds, ...(completed ? { completedAt: new Date() } : {}) },
       create: { playerId: req.player.id, puzzleId, state, elapsedSeconds, completedAt: completed ? new Date() : null },
       select: { id: true, puzzleId: true, state: true, completedAt: true, elapsedSeconds: true, updatedAt: true },
     });
