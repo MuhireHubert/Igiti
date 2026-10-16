@@ -3,21 +3,21 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Game {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String     @id @default(cuid())
+  slug        String     @unique
   title       String
-  description String   @db.Text
+  description String     @db.Text
   category    String
-  coverImage  String   @db.VarChar(2048)
+  coverImage  String     @db.VarChar(2048)
   status      GameStatus @default(DRAFT)
   publishedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   puzzles     Puzzle[]
 
   @@index([status, publishedAt])
@@ -25,46 +25,46 @@ model Game {
 }
 
 model Puzzle {
-  id             String   @id @default(cuid())
-  gameId         String
-  slug           String
-  title          String
-  imageUrl       String   @db.VarChar(2048)
-  pieceCount     Int
-  difficulty     Difficulty
-  sortOrder      Int      @default(0)
-  isActive       Boolean  @default(false)
-  metadata       Json?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  game           Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  progress       PuzzleProgress[]
+  id         String     @id @default(cuid())
+  gameId     String
+  slug       String
+  title      String
+  imageUrl   String     @db.VarChar(2048)
+  pieceCount Int
+  difficulty Difficulty
+  sortOrder  Int        @default(0)
+  isActive   Boolean    @default(false)
+  metadata   Json?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  game       Game       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  progress   PuzzleProgress[]
 
   @@unique([gameId, slug])
   @@index([gameId, isActive, sortOrder])
 }
 
 model PlayerProfile {
-  id          String   @id @default(cuid())
-  firebaseUid String   @unique
+  id          String           @id @default(cuid())
+  firebaseUid String           @unique
   displayName String?
-  avatarUrl   String?  @db.VarChar(2048)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  avatarUrl   String?          @db.VarChar(2048)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
   progress    PuzzleProgress[]
 }
 
 model PuzzleProgress {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   playerId       String
   puzzleId       String
   state          Json
   completedAt    DateTime?
-  elapsedSeconds Int         @default(0)
-  updatedAt      DateTime    @updatedAt
-  createdAt      DateTime    @default(now())
+  elapsedSeconds Int           @default(0)
+  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime      @default(now())
   player         PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  puzzle         Puzzle       @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+  puzzle         Puzzle        @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
 
   @@unique([playerId, puzzleId])
   @@index([playerId, updatedAt])
