@@ -147,6 +147,49 @@ router.put("/settings/:key", requireRole("OWNER"), async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+const countryAssetInput = z.object({
+  country: z.string().trim().min(2).max(120),
+  imageUrl: z.string().url().max(2048),
+  caption: z.string().trim().max(280).optional().nullable(),
+});
+
+// Media URLs are stored here after an owner uploads an image to the approved
+// media provider (Firebase Storage or Sanity). The game only consumes these
+// reviewed URLs; it never accepts a browser-supplied file into the API.
+router.get("/country-assets", requireRole("CONTENT_MANAGER"), async (_req, res, next) => {
+  try {
+    const assets = await prisma.countryAsset.findMany({ orderBy: { country: "asc" } });
+    res.json({ data: assets });
+  } catch (error) { next(error); }
+});
+
+router.post("/country-assets", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = countryAssetInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a country name and a valid image URL." });
+  try {
+    const asset = await prisma.countryAsset.create({ data: parsed.data });
+    await recordAudit(req.adminUser.id, "country_asset.created", "CountryAsset", asset.id, { country: asset.country });
+    res.status(201).json({ data: asset });
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ error: "That country already has an image. Update the existing entry instead." });
+    next(error);
+  }
+});
+
+router.patch("/country-assets/:assetId", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = countryAssetInput.partial().safeParse(req.body);
+  if (!parsed.success || Object.keys(parsed.data || {}).length === 0) return res.status(400).json({ error: "Provide valid country image fields to update." });
+  try {
+    const asset = await prisma.countryAsset.update({ where: { id: req.params.assetId }, data: parsed.data });
+    await recordAudit(req.adminUser.id, "country_asset.updated", "CountryAsset", asset.id, { country: asset.country, fields: Object.keys(parsed.data) });
+    res.json({ data: asset });
+  } catch (error) {
+    if (error?.code === "P2025") return res.status(404).json({ error: "Country image not found." });
+    if (error?.code === "P2002") return res.status(409).json({ error: "That country already has an image." });
+    next(error);
+  }
+});
+
 router.get("/games", async (_req, res, next) => {
   try {
     const games = await prisma.game.findMany({ orderBy: { updatedAt: "desc" }, select: gameSelect });
@@ -322,6 +365,53 @@ router.get("/payments", requireRole("ADMIN"), async (_req, res, next) => {
     });
     res.json({ data: orders });
   } catch (error) { next(error); }
+});
+
+const offerKey = z.string().trim().min(2).max(120).regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, "Use lowercase letters, numbers, dots, underscores, and hyphens.");
+const accessOfferInput = z.object({
+  key: offerKey,
+  title: z.string().trim().min(2).max(140),
+  description: z.string().trim().max(500).optional().nullable(),
+  kind: z.enum(["GAME", "ACCOUNT"]),
+  resource: z.string().trim().min(2).max(191),
+  amountMinor: z.number().int().min(0).max(100000000),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  interval: z.enum(["ONE_TIME", "MONTHLY", "YEARLY"]),
+  isActive: z.boolean().default(false),
+});
+
+router.get("/offers", requireRole("ADMIN"), async (_req, res, next) => {
+  try {
+    const offers = await prisma.accessOffer.findMany({ orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }] });
+    res.json({ data: offers });
+  } catch (error) { next(error); }
+});
+
+router.post("/offers", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = accessOfferInput.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Check the offer fields and try again." });
+  try {
+    const offer = await prisma.accessOffer.create({ data: parsed.data });
+    await recordAudit(req.adminUser.id, "offer.created", "AccessOffer", offer.id, { key: offer.key, amountMinor: offer.amountMinor, currency: offer.currency });
+    res.status(201).json({ data: offer });
+  } catch (error) {
+    if (error?.code === "P2002") return res.status(409).json({ error: "That offer key is already in use." });
+    next(error);
+  }
+});
+
+router.patch("/offers/:offerId", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = accessOfferInput.partial().safeParse(req.body);
+  if (!parsed.success || Object.keys(parsed.data || {}).length === 0) return res.status(400).json({ error: "Provide valid offer fields to update." });
+  try {
+    const offer = await prisma.accessOffer.update({ where: { id: req.params.offerId }, data: parsed.data });
+    await recordAudit(req.adminUser.id, "offer.updated", "AccessOffer", offer.id, { key: offer.key, fields: Object.keys(parsed.data) });
+    res.json({ data: offer });
+  } catch (error) {
+    if (error?.code === "P2025") return res.status(404).json({ error: "Offer not found." });
+    if (error?.code === "P2002") return res.status(409).json({ error: "That offer key is already in use." });
+    next(error);
+  }
 });
 
 router.get("/entitlements", requireRole("ADMIN"), async (_req, res, next) => {

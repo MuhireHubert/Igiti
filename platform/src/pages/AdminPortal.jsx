@@ -8,6 +8,8 @@ import "./AdminPortal.css";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
 const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", sortOrder: 0, isActive: false };
+const blankCountryAsset = { country: "", imageUrl: "", caption: "" };
+const blankOffer = { key: "", title: "", description: "", kind: "GAME", resource: "", amountMinor: "", currency: "USD", interval: "ONE_TIME", isActive: false };
 const platformRoles = ["PLAYER", "SCHOOL", "TEACHER", "STUDENT", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
 const administratorRoles = new Set(["ADMIN", "OWNER"]);
 
@@ -47,6 +49,8 @@ export default function AdminPortal() {
   const [auditEvents, setAuditEvents] = useState([]);
   const [paymentOrders, setPaymentOrders] = useState([]);
   const [entitlements, setEntitlements] = useState([]);
+  const [countryAssets, setCountryAssets] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [settingKey, setSettingKey] = useState("");
   const [settingValue, setSettingValue] = useState("{}");
   const [entitlementForm, setEntitlementForm] = useState({ playerId: "", resource: "", expiresAt: "" });
@@ -55,6 +59,10 @@ export default function AdminPortal() {
   const [activeGameId, setActiveGameId] = useState(null);
   const [puzzleForm, setPuzzleForm] = useState(blankPuzzle);
   const [editingPuzzleId, setEditingPuzzleId] = useState(null);
+  const [countryAssetForm, setCountryAssetForm] = useState(blankCountryAsset);
+  const [editingCountryAssetId, setEditingCountryAssetId] = useState(null);
+  const [offerForm, setOfferForm] = useState(blankOffer);
+  const [editingOfferId, setEditingOfferId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -84,16 +92,18 @@ export default function AdminPortal() {
       setGames(gameList);
       setPlayers(playerList);
       if (administratorRoles.has(session.role)) {
-        const [settingList, events, orders, entitlementList] = await Promise.all([
+        const [settingList, events, orders, entitlementList, assetList, offerList] = await Promise.all([
           adminRequest("/settings", token), adminRequest("/audit", token),
-          adminRequest("/payments", token), adminRequest("/entitlements", token),
+          adminRequest("/payments", token), adminRequest("/entitlements", token), adminRequest("/country-assets", token), adminRequest("/offers", token),
         ]);
         setSettings(settingList);
         setAuditEvents(events);
         setPaymentOrders(orders);
         setEntitlements(entitlementList);
+        setCountryAssets(assetList);
+        setOffers(offerList);
       } else {
-        setSettings([]); setAuditEvents([]); setPaymentOrders([]); setEntitlements([]);
+        setSettings([]); setAuditEvents([]); setPaymentOrders([]); setEntitlements([]); setCountryAssets([]); setOffers([]);
       }
     } catch (error) {
       setWorkspaceError(error.message);
@@ -260,6 +270,36 @@ export default function AdminPortal() {
     }, "Access entitlement revoked.");
   }
 
+  function editCountryAsset(asset) {
+    setEditingCountryAssetId(asset.id);
+    setCountryAssetForm({ country: asset.country, imageUrl: asset.imageUrl, caption: asset.caption || "" });
+    setTab("countries");
+  }
+
+  async function saveCountryAsset(event) {
+    event.preventDefault();
+    await withAdminRequest(async (token) => {
+      const path = editingCountryAssetId ? `/country-assets/${editingCountryAssetId}` : "/country-assets";
+      await adminRequest(path, token, { method: editingCountryAssetId ? "PATCH" : "POST", body: JSON.stringify({ ...countryAssetForm, caption: countryAssetForm.caption || null }) });
+      setCountryAssetForm(blankCountryAsset); setEditingCountryAssetId(null);
+    }, editingCountryAssetId ? "Country image updated." : "Country image added.");
+  }
+
+  function editOffer(offer) {
+    setEditingOfferId(offer.id);
+    setOfferForm({ ...offer, description: offer.description || "", amountMinor: String(offer.amountMinor) });
+    setTab("commerce");
+  }
+
+  async function saveOffer(event) {
+    event.preventDefault();
+    await withAdminRequest(async (token) => {
+      const path = editingOfferId ? `/offers/${editingOfferId}` : "/offers";
+      await adminRequest(path, token, { method: editingOfferId ? "PATCH" : "POST", body: JSON.stringify({ ...offerForm, amountMinor: Number(offerForm.amountMinor), description: offerForm.description || null }) });
+      setOfferForm(blankOffer); setEditingOfferId(null);
+    }, editingOfferId ? "Price offer updated." : "Price offer created.");
+  }
+
   if (authLoading) return <main className="admin-screen"><p>Checking secure sign-in…</p></main>;
 
   if (!firebaseReady || !auth) return (
@@ -298,12 +338,13 @@ export default function AdminPortal() {
         <button className={tab === "overview" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("overview")}><BarChart3 size={17} /> Overview</button>
         <button className={tab === "games" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("games")}><Gamepad2 size={17} /> Games & puzzles</button>
         <button className={tab === "players" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("players")}><Users size={17} /> Players</button>
+        {adminSession?.role === "OWNER" && <button className={tab === "countries" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("countries")}><BookOpen size={17} /> Country media</button>}
         {administratorRoles.has(adminSession?.role) && <><button className={tab === "commerce" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("commerce")}><CreditCard size={17} /> Purchases & access</button><button className={tab === "controls" ? "admin-nav active" : "admin-nav"} onClick={() => setTab("controls")}><Settings size={17} /> Platform controls</button></>}
         <div className="admin-sidebar-bottom"><span className="admin-secure-dot" /> Signed in as <strong>{user.email}</strong><button onClick={() => signOut(auth)}><LogOut size={15} /> Sign out</button></div>
       </aside>
 
       <section className="admin-main">
-        <header className="admin-topbar"><div><span className="admin-eyebrow">IGITI PLAY / CONTROL ROOM</span><h1>{tab === "overview" ? "Platform overview" : tab === "games" ? "Games & puzzles" : tab === "players" ? "Player activity" : tab === "commerce" ? "Purchases & access" : "Platform controls"}</h1></div><div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">View player site ↗</a><button className="admin-icon-button" onClick={() => loadWorkspace()} disabled={loading} aria-label="Refresh data"><RefreshCw size={17} /></button></div></header>
+        <header className="admin-topbar"><div><span className="admin-eyebrow">IGITI PLAY / CONTROL ROOM</span><h1>{tab === "overview" ? "Platform overview" : tab === "games" ? "Games & puzzles" : tab === "players" ? "Player activity" : tab === "countries" ? "Country media" : tab === "commerce" ? "Purchases & access" : "Platform controls"}</h1></div><div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">View player site ↗</a><button className="admin-icon-button" onClick={() => loadWorkspace()} disabled={loading} aria-label="Refresh data"><RefreshCw size={17} /></button></div></header>
         {workspaceError && <div className="admin-alert" role="alert"><CircleAlert size={17} />{workspaceError}</div>}
         {notice && <div className="admin-success" role="status"><CheckCircle2 size={17} />{notice}<button onClick={() => setNotice("")} aria-label="Dismiss message"><X size={15} /></button></div>}
         {loading && <p className="admin-loading">Loading your workspace…</p>}
@@ -357,7 +398,19 @@ export default function AdminPortal() {
           {!players.length && <p className="admin-empty">Player profiles will appear here when players sign in and save progress.</p>}
         </section></div>}
 
+        {tab === "countries" && adminSession?.role === "OWNER" && <div className="admin-content admin-game-layout">
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingCountryAssetId ? "Update country image" : "Add country image"}</h2><p>Use an approved Firebase Storage or Sanity asset URL. Every change is audited.</p></div>{editingCountryAssetId && <button className="admin-icon-button" onClick={() => { setEditingCountryAssetId(null); setCountryAssetForm(blankCountryAsset); }}><X size={16} /></button>}</div>
+            <form className="admin-form" onSubmit={saveCountryAsset}><label className="admin-field">Country<input value={countryAssetForm.country} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, country: e.target.value })} required /></label><label className="admin-field">Image URL<input type="url" value={countryAssetForm.imageUrl} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, imageUrl: e.target.value })} required /></label><label className="admin-field">Caption <small>(optional)</small><input value={countryAssetForm.caption} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, caption: e.target.value })} maxLength={280} /></label><button className="admin-button admin-button-primary admin-button-wide" disabled={saving}><Save size={15} /> {editingCountryAssetId ? "Save image" : "Add country image"}</button></form>
+          </section>
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Country image catalogue</h2><p>{countryAssets.length} country image(s) available to game content.</p></div></div>{countryAssets.map((asset) => <article className="admin-list-row" key={asset.id}><img src={asset.imageUrl} alt="" /><div className="admin-list-copy"><strong>{asset.country}</strong><span>{asset.caption || "No caption"}</span></div><button className="admin-row-action" onClick={() => editCountryAsset(asset)}>Update</button></article>)}{!countryAssets.length && <p className="admin-empty">No country images have been added yet.</p>}</section>
+        </div>}
+
         {tab === "commerce" && <div className="admin-content admin-game-layout">
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingOfferId ? "Update offer" : "Game and account prices"}</h2><p>Only the owner can activate an offer. Checkout will always use this server-side price.</p></div>{editingOfferId && <button className="admin-icon-button" onClick={() => { setEditingOfferId(null); setOfferForm(blankOffer); }}><X size={16} /></button>}</div>
+            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveOffer}><label className="admin-field">Offer key<input value={offerForm.key} onChange={(e) => setOfferForm({ ...offerForm, key: e.target.value.toLowerCase().replace(/\s+/g, "-") })} placeholder="game.a54" required /></label><label className="admin-field">Title<input value={offerForm.title} onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })} required /></label><label className="admin-field">Description<input value={offerForm.description} onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })} maxLength={500} /></label><div className="admin-form-two"><label className="admin-field">For<select value={offerForm.kind} onChange={(e) => setOfferForm({ ...offerForm, kind: e.target.value })}><option value="GAME">Specific game</option><option value="ACCOUNT">Account plan</option></select></label><label className="admin-field">Access resource<input value={offerForm.resource} onChange={(e) => setOfferForm({ ...offerForm, resource: e.target.value.toLowerCase() })} placeholder="game:a54" required /></label></div><div className="admin-form-two"><label className="admin-field">Price in minor units<input type="number" min="0" value={offerForm.amountMinor} onChange={(e) => setOfferForm({ ...offerForm, amountMinor: e.target.value })} required /></label><label className="admin-field">Currency<input value={offerForm.currency} onChange={(e) => setOfferForm({ ...offerForm, currency: e.target.value.toUpperCase() })} maxLength={3} required /></label></div><div className="admin-form-two"><label className="admin-field">Billing<select value={offerForm.interval} onChange={(e) => setOfferForm({ ...offerForm, interval: e.target.value })}><option value="ONE_TIME">One-time</option><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select></label><label className="admin-checkbox"><input type="checkbox" checked={offerForm.isActive} onChange={(e) => setOfferForm({ ...offerForm, isActive: e.target.checked })} /> Visible for checkout</label></div><button className="admin-button admin-button-primary admin-button-wide" disabled={saving}><Save size={15} /> {editingOfferId ? "Save price" : "Create price offer"}</button></form>}
+            {offers.map((offer) => <article className="admin-list-row" key={offer.id}><div className="admin-list-copy"><strong>{offer.title} · {offer.amountMinor} {offer.currency}</strong><span>{offer.kind} · {offer.interval.replace("_", " ")} · {offer.resource}</span></div><span className={`admin-status status-${offer.isActive ? "published" : "draft"}`}>{offer.isActive ? "ACTIVE" : "DRAFT"}</span>{adminSession?.role === "OWNER" && <button className="admin-row-action" onClick={() => editOffer(offer)}>Edit</button>}</article>)}
+            {!offers.length && <p className="admin-empty">No paid game or account offers have been configured.</p>}
+          </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Verified payment orders</h2><p>Payment redirects never grant play access. Only a server-verified provider callback can mark an order paid.</p></div></div>
             {paymentOrders.map((order) => <article className="admin-list-row" key={order.id}><div className="admin-list-copy"><strong>{order.player.displayName || "Player"} · {order.amountMinor} {order.currency}</strong><span>{order.provider} · {order.providerOrderId || "Awaiting provider reference"} · {new Date(order.createdAt).toLocaleString()}</span></div><span className={`admin-status status-${order.status === "PAID" ? "published" : "draft"}`}>{order.status}</span></article>)}
             {!paymentOrders.length && <p className="admin-empty">No game payment orders have been recorded yet.</p>}

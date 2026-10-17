@@ -2,6 +2,7 @@ import { useState } from "react";
 import "./PlayerAccount.css";
 import { CheckCircle2, LogIn, LogOut, UserRound, X } from "lucide-react";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
+import RoleWorkspace from "./RoleWorkspace.jsx";
 
 function authErrorMessage(error) {
   if (error?.code === "auth/invalid-credential") return "The email or password is incorrect.";
@@ -71,6 +72,7 @@ export default function PlayerAccount() {
             {message && <p className="account-message" role="status">{message}</p>}
             {error && <p className="account-error" role="alert">{error}</p>}
             <button className="button button-dark account-wide" onClick={handleSignOut}><LogOut size={16} /> Sign out</button>
+            <RoleWorkspace user={user} onOpenAdmin={() => { window.location.assign("/admin"); }} />
             <p className="account-copy account-small">Your browser save remains available even when you sign out.</p>
           </> : <>
             <p className="account-copy">{mode === "signup" ? "Create an account to begin using account-based progress where available." : "Sign in to access account-based progress where available."}</p>

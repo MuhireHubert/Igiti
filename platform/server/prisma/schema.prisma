@@ -25,6 +25,19 @@ model Game {
   @@index([category, status])
 }
 
+// Country media is deliberately separate from the card-deck source so an
+// owner can improve visuals without changing gameplay data or redeploying.
+model CountryAsset {
+  id        String   @id @default(cuid())
+  country   String   @unique @db.VarChar(120)
+  imageUrl  String   @db.VarChar(2048)
+  caption   String?  @db.VarChar(280)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
 model Puzzle {
   id         String     @id @default(cuid())
   gameId     String
@@ -159,6 +172,25 @@ model AccessEntitlement {
   @@index([resource, status, expiresAt])
 }
 
+// Owner-managed catalogue. A price is never accepted from the browser: a
+// future Pesapal order will look up this server-owned offer by its key.
+model AccessOffer {
+  id          String        @id @default(cuid())
+  key         String        @unique @db.VarChar(120)
+  title       String        @db.VarChar(140)
+  description String?       @db.VarChar(500)
+  kind        OfferKind
+  resource    String        @db.VarChar(191)
+  amountMinor Int
+  currency    String        @db.Char(3)
+  interval    OfferInterval @default(ONE_TIME)
+  isActive    Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([isActive, kind])
+}
+
 model AppSetting {
   key        String   @id @db.VarChar(120)
   value      Json
@@ -243,4 +275,15 @@ enum EntitlementStatus {
   ACTIVE
   REVOKED
   EXPIRED
+}
+
+enum OfferKind {
+  GAME
+  ACCOUNT
+}
+
+enum OfferInterval {
+  ONE_TIME
+  MONTHLY
+  YEARLY
 }

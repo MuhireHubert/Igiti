@@ -76,6 +76,17 @@ app.get("/health", async (_req, res) => {
 
 app.use("/v1/admin", adminRoutes);
 
+app.get("/v1/offers", async (_req, res, next) => {
+  try {
+    const offers = await prisma.accessOffer.findMany({
+      where: { isActive: true }, orderBy: [{ kind: "asc" }, { amountMinor: "asc" }],
+      select: { key: true, title: true, description: true, kind: true, resource: true, amountMinor: true, currency: true, interval: true },
+    });
+    res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+    res.json({ data: offers });
+  } catch (error) { next(error); }
+});
+
 app.get("/v1/games", async (_req, res, next) => {
   try {
     const games = await prisma.game.findMany({
@@ -128,6 +139,32 @@ async function requirePlayer(req, res, next) {
 const assignmentSchema = z.object({
   gameId: z.string().min(1).max(64), recipientId: z.string().min(1).max(64), schoolId: z.string().min(1).max(64).optional(),
   dueAt: z.string().datetime().optional(),
+});
+
+app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
+  try {
+    const player = req.player;
+    const base = { role: player.role, player: { id: player.id, displayName: player.displayName } };
+    if (player.role === "SCHOOL") {
+      const school = await prisma.school.findUnique({
+        where: { ownerId: player.id },
+        select: { id: true, name: true, memberships: { where: { role: "TEACHER" }, orderBy: { player: { displayName: "asc" } }, select: { player: { select: { id: true, displayName: true } } } } },
+      });
+      return res.json({ data: { ...base, workspace: "SCHOOL", school, recipients: school?.memberships.map((member) => member.player) || [] } });
+    }
+    if (player.role === "TEACHER") {
+      const membership = await prisma.schoolMembership.findFirst({
+        where: { playerId: player.id, role: "TEACHER" },
+        select: { school: { select: { id: true, name: true, memberships: { where: { role: "STUDENT" }, orderBy: { player: { displayName: "asc" } }, select: { player: { select: { id: true, displayName: true } } } } } } },
+      });
+      return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: membership?.school.memberships.map((member) => member.player) || [] } });
+    }
+    const assignments = await prisma.gameAssignment.findMany({
+      where: { recipientId: player.id }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+      select: { id: true, dueAt: true, createdAt: true, game: { select: { id: true, title: true, slug: true, coverImage: true } }, assignedBy: { select: { displayName: true, role: true } }, school: { select: { name: true } } },
+    });
+    return res.json({ data: { ...base, workspace: player.role === "STUDENT" ? "STUDENT" : "PLAYER", assignments } });
+  } catch (error) { next(error); }
 });
 
 app.get("/v1/me/assignments", requirePlayer, async (req, res, next) => {
