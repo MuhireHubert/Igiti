@@ -10,6 +10,9 @@ import adminRoutes from "./adminRoutes.js";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
+// Render terminates TLS and forwards the original address in X-Forwarded-For.
+// Trust exactly the first proxy hop so rate limits remain per client.
+app.set("trust proxy", 1);
 const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:5173")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
 const bootstrapRoles = (() => {
