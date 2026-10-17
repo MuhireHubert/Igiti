@@ -7,6 +7,7 @@ import admin from "firebase-admin";
 import prisma from "./db.js";
 import { z } from "zod";
 import adminRoutes from "./adminRoutes.js";
+import { createPesapalOrder, getPesapalTransaction, pesapalConfiguration } from "./pesapal.js";
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -87,6 +88,10 @@ app.get("/v1/offers", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// This is intentionally safe to expose: it contains no provider credentials,
+// only whether checkout can be started and the selected non-secret environment.
+app.get("/v1/checkout/status", (_req, res) => res.json({ data: pesapalConfiguration() }));
+
 app.get("/v1/games", async (_req, res, next) => {
   try {
     const games = await prisma.game.findMany({
@@ -129,12 +134,124 @@ async function requirePlayer(req, res, next) {
       create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null, role: bootstrapRole },
     });
     if (player.isDisabled) return res.status(403).json({ error: "This player account is unavailable." });
-    req.player = player;
+    req.player = { ...player, email };
     next();
   } catch {
     return res.status(401).json({ error: "The session could not be verified." });
   }
 }
+
+const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120) });
+
+function expiryFor(interval, now = new Date()) {
+  if (interval === "ONE_TIME") return null;
+  const expiry = new Date(now);
+  if (interval === "MONTHLY") expiry.setMonth(expiry.getMonth() + 1);
+  if (interval === "YEARLY") expiry.setFullYear(expiry.getFullYear() + 1);
+  return expiry;
+}
+
+function paymentStatusFromPesapal(transaction) {
+  const status = String(transaction.payment_status_description || "").toUpperCase();
+  if (status === "COMPLETED" || Number(transaction.status_code) === 1) return "PAID";
+  if (status === "FAILED" || Number(transaction.status_code) === 2) return "FAILED";
+  if (status === "REVERSED" || Number(transaction.status_code) === 3) return "REFUNDED";
+  return "PROCESSING";
+}
+
+async function reconcilePesapalPayment({ orderTrackingId, merchantReference }) {
+  const order = await prisma.paymentOrder.findFirst({
+    where: { provider: "PESAPAL", OR: [{ providerOrderId: orderTrackingId }, { id: merchantReference }] },
+    include: { player: { select: { id: true } } },
+  });
+  if (!order) return { order: null, status: "unknown" };
+  const transaction = await getPesapalTransaction(orderTrackingId);
+  // The provider response must map to the specific server-created order before
+  // it can affect access. Browser callback query parameters are never trusted.
+  if (transaction.merchant_reference !== order.id || String(transaction.currency || "").toUpperCase() !== order.currency || Math.round(Number(transaction.amount) * 100) !== order.amountMinor) {
+    throw new Error("Pesapal verification did not match the expected order.");
+  }
+  const status = paymentStatusFromPesapal(transaction);
+  const providerEventId = `${orderTrackingId}:${transaction.status_code || transaction.payment_status_description || "unknown"}`.slice(0, 191);
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentEvent.upsert({
+      where: { providerEventId },
+      update: { verified: true, payload: transaction },
+      create: { orderId: order.id, providerEventId, eventType: "pesapal.transaction_status", verified: true, payload: transaction },
+    });
+    await tx.paymentOrder.update({ where: { id: order.id }, data: { status, paidAt: status === "PAID" ? (order.paidAt || new Date()) : order.paidAt } });
+    if (status === "PAID") {
+      const metadata = order.metadata || {};
+      const resource = String(metadata.resource || "");
+      const interval = String(metadata.interval || "ONE_TIME");
+      if (!resource) throw new Error("Paid order is missing its access resource.");
+      await tx.accessEntitlement.upsert({
+        where: { playerId_resource: { playerId: order.playerId, resource } },
+        update: { status: "ACTIVE", orderId: order.id, startsAt: new Date(), expiresAt: expiryFor(interval) },
+        create: { playerId: order.playerId, orderId: order.id, resource, expiresAt: expiryFor(interval) },
+      });
+    }
+  });
+  return { order, status };
+}
+
+app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
+  const parsed = checkoutSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose a valid offer." });
+  if (!pesapalConfiguration().configured) return res.status(503).json({ error: "Pesapal checkout is not configured yet." });
+  try {
+    const offer = await prisma.accessOffer.findFirst({ where: { key: parsed.data.offerKey, isActive: true } });
+    if (!offer) return res.status(404).json({ error: "That offer is no longer available." });
+    if (offer.amountMinor < 1) return res.status(400).json({ error: "This offer does not have a payable price." });
+    const order = await prisma.paymentOrder.create({
+      data: {
+        playerId: req.player.id, provider: "PESAPAL", amountMinor: offer.amountMinor, currency: offer.currency,
+        idempotencyKey: `pesapal:${crypto.randomUUID()}`,
+        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title },
+      },
+    });
+    try {
+      const checkout = await createPesapalOrder({
+        merchantReference: order.id, amountMinor: offer.amountMinor, currency: offer.currency,
+        description: offer.title,
+        billingAddress: { email_address: req.player.email || "", phone_number: "", country_code: "", first_name: req.player.displayName || "Igiti", middle_name: "", last_name: "Player", line_1: "", line_2: "", city: "", state: "", postal_code: "", zip_code: "" },
+      });
+      await prisma.paymentOrder.update({ where: { id: order.id }, data: { providerOrderId: checkout.order_tracking_id, status: "PROCESSING" } });
+      return res.status(201).json({ data: { redirectUrl: checkout.redirect_url, orderId: order.id } });
+    } catch (error) {
+      await prisma.paymentOrder.update({ where: { id: order.id }, data: { status: "FAILED", metadata: { ...(order.metadata || {}), providerError: "checkout_creation_failed" } } });
+      throw error;
+    }
+  } catch (error) { next(error); }
+});
+
+// Pesapal sends an IPN when payment changes. We always query its API again;
+// no access is granted from the IPN or browser redirect parameters themselves.
+async function pesapalIpn(req, res) {
+  const orderTrackingId = String(req.query.OrderTrackingId || req.body?.OrderTrackingId || "").trim();
+  const merchantReference = String(req.query.OrderMerchantReference || req.body?.OrderMerchantReference || "").trim();
+  if (!orderTrackingId || !merchantReference) return res.status(400).json({ status: 500, error: "Missing Pesapal order identifiers." });
+  try {
+    await reconcilePesapalPayment({ orderTrackingId, merchantReference });
+    return res.json({ orderNotificationType: String(req.query.OrderNotificationType || req.body?.OrderNotificationType || "IPNCHANGE"), orderTrackingId, orderMerchantReference: merchantReference, status: 200 });
+  } catch (error) {
+    console.error("Pesapal IPN processing failed", error);
+    return res.status(500).json({ orderTrackingId, orderMerchantReference: merchantReference, status: 500 });
+  }
+}
+
+app.get("/v1/payments/pesapal/ipn", pesapalIpn);
+app.post("/v1/payments/pesapal/ipn", pesapalIpn);
+app.get("/v1/payments/pesapal/return", async (req, res) => {
+  // A return route is deliberately informational. The IPN path above performs
+  // the authoritative reconciliation before an entitlement is ever created.
+  const orderTrackingId = String(req.query.OrderTrackingId || "").trim();
+  if (orderTrackingId) {
+    try { await reconcilePesapalPayment({ orderTrackingId, merchantReference: String(req.query.OrderMerchantReference || "").trim() }); } catch (error) { console.warn("Pesapal return verification pending", error.message); }
+  }
+  const origin = allowedOrigins[0] || "http://localhost:5173";
+  return res.redirect(`${origin.replace(/\/$/, "")}/?payment=pending`);
+});
 
 const assignmentSchema = z.object({
   gameId: z.string().min(1).max(64), recipientId: z.string().min(1).max(64), schoolId: z.string().min(1).max(64).optional(),
