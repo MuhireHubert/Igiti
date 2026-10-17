@@ -4,7 +4,10 @@ import prisma from "./db.js";
 import { z } from "zod";
 
 const router = express.Router();
-const adminEmails = new Set((process.env.ADMIN_EMAILS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
+const adminEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS]
+  .flatMap((value) => (value || "").split(","))
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean));
 const roleRank = { PLAYER: 0, STUDENT: 0, TEACHER: 1, SCHOOL: 2, MODERATOR: 3, CONTENT_MANAGER: 4, ADMIN: 5, OWNER: 6 };
 
 function requireRole(minimumRole) {
