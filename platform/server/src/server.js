@@ -12,6 +12,16 @@ const app = express();
 const port = Number(process.env.PORT || 4000);
 const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:5173")
   .split(",").map((origin) => origin.trim()).filter(Boolean);
+const bootstrapRoles = (() => {
+  try {
+    const value = JSON.parse(process.env.BOOTSTRAP_ROLE_EMAILS || "{}");
+    return Object.fromEntries(Object.entries(value).map(([email, role]) => [email.trim().toLowerCase(), String(role).toUpperCase()]));
+  } catch {
+    console.warn("BOOTSTRAP_ROLE_EMAILS is not valid JSON; no account roles will be bootstrapped.");
+    return {};
+  }
+})();
+const allowedBootstrapRoles = new Set(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]);
 
 if (!admin.apps.length) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -97,10 +107,12 @@ async function requirePlayer(req, res, next) {
   if (!admin.apps.length) return res.status(503).json({ error: "Firebase authentication is not configured on the API." });
   try {
     const decoded = await admin.auth().verifyIdToken(token);
+    const email = String(decoded.email || "").trim().toLowerCase();
+    const bootstrapRole = allowedBootstrapRoles.has(bootstrapRoles[email]) ? bootstrapRoles[email] : "PLAYER";
     const player = await prisma.playerProfile.upsert({
       where: { firebaseUid: decoded.uid },
       update: { displayName: decoded.name || undefined, avatarUrl: decoded.picture || undefined },
-      create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null },
+      create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null, role: bootstrapRole },
     });
     if (player.isDisabled) return res.status(403).json({ error: "This player account is unavailable." });
     req.player = player;
@@ -109,6 +121,54 @@ async function requirePlayer(req, res, next) {
     return res.status(401).json({ error: "The session could not be verified." });
   }
 }
+
+const assignmentSchema = z.object({
+  gameId: z.string().min(1).max(64), recipientId: z.string().min(1).max(64), schoolId: z.string().min(1).max(64).optional(),
+  dueAt: z.string().datetime().optional(),
+});
+
+app.get("/v1/me/assignments", requirePlayer, async (req, res, next) => {
+  try {
+    const assignments = await prisma.gameAssignment.findMany({
+      where: { recipientId: req.player.id }, orderBy: { createdAt: "desc" },
+      select: { id: true, dueAt: true, createdAt: true, game: { select: { id: true, title: true, slug: true, coverImage: true } }, assignedBy: { select: { displayName: true, role: true } }, school: { select: { id: true, name: true } } },
+    });
+    res.json({ data: assignments });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/me/assignments", requirePlayer, async (req, res, next) => {
+  const parsed = assignmentSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a game, recipient, and an optional ISO due date." });
+  try {
+    const { gameId, recipientId, schoolId, dueAt } = parsed.data;
+    const sender = req.player;
+    if (!["SCHOOL", "TEACHER", "ADMIN", "OWNER"].includes(sender.role)) return res.status(403).json({ error: "Only schools, teachers, and administrators can assign games." });
+    const recipient = await prisma.playerProfile.findUnique({ where: { id: recipientId }, select: { id: true, role: true } });
+    if (!recipient) return res.status(404).json({ error: "Recipient not found." });
+    let resolvedSchoolId = schoolId || null;
+    if (sender.role === "SCHOOL") {
+      const school = await prisma.school.findUnique({ where: { ownerId: sender.id }, select: { id: true } });
+      if (!school || recipient.role !== "TEACHER") return res.status(403).json({ error: "A school may assign games only to its teachers." });
+      const membership = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: recipientId } } });
+      if (!membership || membership.role !== "TEACHER") return res.status(403).json({ error: "That teacher is not a member of your school." });
+      resolvedSchoolId = school.id;
+    }
+    if (sender.role === "TEACHER") {
+      const membership = await prisma.schoolMembership.findFirst({ where: { playerId: sender.id, role: "TEACHER" }, select: { schoolId: true } });
+      const student = membership && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: membership.schoolId, playerId: recipientId } } });
+      if (!membership || recipient.role !== "STUDENT" || student?.role !== "STUDENT") return res.status(403).json({ error: "A teacher may assign games only to students in their school." });
+      resolvedSchoolId = membership.schoolId;
+    }
+    const assignment = await prisma.gameAssignment.upsert({
+      where: { gameId_recipientId: { gameId, recipientId } },
+      update: { assignedById: sender.id, schoolId: resolvedSchoolId, dueAt: dueAt ? new Date(dueAt) : null },
+      create: { gameId, recipientId, assignedById: sender.id, schoolId: resolvedSchoolId, dueAt: dueAt ? new Date(dueAt) : null },
+      select: { id: true, gameId: true, recipientId: true, dueAt: true, schoolId: true },
+    });
+    res.status(201).json({ data: assignment });
+  } catch (error) { next(error); }
+});
 
 app.get("/v1/me/progress", requirePlayer, async (req, res, next) => {
   try {

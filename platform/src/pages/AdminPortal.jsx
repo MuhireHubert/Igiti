@@ -8,7 +8,7 @@ import "./AdminPortal.css";
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
 const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", sortOrder: 0, isActive: false };
-const platformRoles = ["PLAYER", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
+const platformRoles = ["PLAYER", "SCHOOL", "TEACHER", "STUDENT", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
 const administratorRoles = new Set(["ADMIN", "OWNER"]);
 
 async function adminRequest(path, token, options = {}) {

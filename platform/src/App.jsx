@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { getGames } from "./lib/api.js";
 import PuzzleGame from "./components/PuzzleGame.jsx";
+import CardGame from "./components/CardGame.jsx";
 import PlayerAccount from "./components/PlayerAccount.jsx";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
@@ -68,6 +69,7 @@ function GameCard({ game, onSelect }) {
 
 function GamePreview({ game, onBack }) {
   const [playing, setPlaying] = useState(false);
+  if (game.kind === "card") return <CardGame onBack={onBack} />;
   if (playing) return <PuzzleGame game={game} onBack={() => setPlaying(false)} />;
   return (
     <section className="detail-panel" aria-live="polite">
@@ -105,12 +107,15 @@ function App() {
     return () => controller.abort();
   }, []);
 
-  const visibleGames = useMemo(() => games.filter((game) => {
+  const libraryGames = useMemo(() => [{
+    id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck: two cards for every African country, with eight ways to play.", difficulty: "All modes", pieces: 108, image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=85", status: "available",
+  }, ...games], [games]);
+  const visibleGames = useMemo(() => libraryGames.filter((game) => {
     const categoryMatches = category === "All stories" || game.category === category;
     const difficultyMatches = difficulty === "All levels" || game.difficulty === difficulty;
     const query = search.trim().toLowerCase();
     return categoryMatches && difficultyMatches && (!query || `${game.title} ${game.description} ${game.category}`.toLowerCase().includes(query));
-  }), [games, category, difficulty, search]);
+  }), [libraryGames, category, difficulty, search]);
 
   const explore = () => document.getElementById("library")?.scrollIntoView({ behavior: "smooth" });
 

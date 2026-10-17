@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const router = express.Router();
 const adminEmails = new Set((process.env.ADMIN_EMAILS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
-const roleRank = { PLAYER: 0, MODERATOR: 1, CONTENT_MANAGER: 2, ADMIN: 3, OWNER: 4 };
+const roleRank = { PLAYER: 0, STUDENT: 0, TEACHER: 1, SCHOOL: 2, MODERATOR: 3, CONTENT_MANAGER: 4, ADMIN: 5, OWNER: 6 };
 
 function requireRole(minimumRole) {
   return (req, res, next) => {
@@ -92,6 +92,39 @@ router.get("/settings", requireRole("ADMIN"), async (_req, res, next) => {
     const settings = await prisma.appSetting.findMany({ orderBy: { key: "asc" } });
     res.json({ data: settings });
   } catch (error) { next(error); }
+});
+
+router.get("/schools", requireRole("ADMIN"), async (_req, res, next) => {
+  try {
+    const schools = await prisma.school.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, ownerId: true, createdAt: true, owner: { select: { displayName: true, role: true } }, memberships: { select: { playerId: true, role: true, player: { select: { displayName: true, role: true } } } } } });
+    res.json({ data: schools });
+  } catch (error) { next(error); }
+});
+
+const schoolCreate = z.object({ name: z.string().trim().min(2).max(160), ownerId: z.string().min(1).max(64) });
+router.post("/schools", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = schoolCreate.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a school name and school account player ID." });
+  try {
+    const owner = await prisma.playerProfile.findUnique({ where: { id: parsed.data.ownerId }, select: { id: true, role: true } });
+    if (!owner || owner.role !== "SCHOOL") return res.status(400).json({ error: "The school owner must have the SCHOOL role." });
+    const school = await prisma.school.create({ data: parsed.data, select: { id: true, name: true, ownerId: true } });
+    await recordAudit(req.adminUser.id, "school.created", "School", school.id, { name: school.name, ownerId: school.ownerId });
+    res.status(201).json({ data: school });
+  } catch (error) { if (error?.code === "P2002") return res.status(409).json({ error: "That school or school owner is already registered." }); next(error); }
+});
+
+const membershipCreate = z.object({ playerId: z.string().min(1).max(64), role: z.enum(["TEACHER", "STUDENT"]) });
+router.post("/schools/:schoolId/members", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = membershipCreate.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a player and either TEACHER or STUDENT membership." });
+  try {
+    const player = await prisma.playerProfile.findUnique({ where: { id: parsed.data.playerId }, select: { id: true, role: true } });
+    if (!player || player.role !== parsed.data.role) return res.status(400).json({ error: "Set the player's matching platform role before adding them to a school." });
+    const membership = await prisma.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: req.params.schoolId, playerId: parsed.data.playerId } }, update: { role: parsed.data.role }, create: { schoolId: req.params.schoolId, ...parsed.data }, select: { id: true, schoolId: true, playerId: true, role: true } });
+    await recordAudit(req.adminUser.id, "school.membership_updated", "SchoolMembership", membership.id, { schoolId: membership.schoolId, playerId: membership.playerId, role: membership.role });
+    res.json({ data: membership });
+  } catch (error) { if (error?.code === "P2003") return res.status(404).json({ error: "School not found." }); next(error); }
 });
 
 const settingUpdate = z.object({ value: z.record(z.unknown()) });
@@ -233,7 +266,7 @@ router.get("/players", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
-const roleUpdate = z.object({ role: z.enum(["PLAYER", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"]) });
+const roleUpdate = z.object({ role: z.enum(["PLAYER", "SCHOOL", "TEACHER", "STUDENT", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"]) });
 router.patch("/players/:playerId/role", requireRole("OWNER"), async (req, res, next) => {
   const parsed = roleUpdate.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Provide a valid platform role." });

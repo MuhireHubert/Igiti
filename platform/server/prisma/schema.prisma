@@ -19,6 +19,7 @@ model Game {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   puzzles     Puzzle[]
+  assignments GameAssignment[]
 
   @@index([status, publishedAt])
   @@index([category, status])
@@ -57,6 +58,52 @@ model PlayerProfile {
   entitlements AccessEntitlement[]
   paymentOrders PaymentOrder[]
   auditEvents AdminAudit[] @relation("AuditActor")
+  ownedSchool School? @relation("SchoolOwner")
+  schoolMemberships SchoolMembership[]
+  assignmentsSent GameAssignment[] @relation("AssignmentSender")
+  assignmentsReceived GameAssignment[] @relation("AssignmentRecipient")
+}
+
+model School {
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(160)
+  ownerId     String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  owner       PlayerProfile @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  memberships SchoolMembership[]
+  assignments GameAssignment[]
+}
+
+model SchoolMembership {
+  id        String           @id @default(cuid())
+  schoolId  String
+  playerId  String
+  role      SchoolMemberRole
+  createdAt DateTime         @default(now())
+  school    School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  player    PlayerProfile    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, playerId])
+  @@index([playerId, role])
+}
+
+model GameAssignment {
+  id           String        @id @default(cuid())
+  gameId       String
+  assignedById String
+  recipientId  String
+  schoolId     String?
+  dueAt        DateTime?
+  createdAt    DateTime      @default(now())
+  game         Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  assignedBy   PlayerProfile @relation("AssignmentSender", fields: [assignedById], references: [id], onDelete: Restrict)
+  recipient    PlayerProfile @relation("AssignmentRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  school       School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+
+  @@unique([gameId, recipientId])
+  @@index([assignedById, createdAt])
+  @@index([recipientId, dueAt])
 }
 
 // Purchases are deliberately server-owned. A browser redirect is never an
@@ -164,10 +211,18 @@ enum Difficulty {
 
 enum UserRole {
   PLAYER
+  SCHOOL
+  TEACHER
+  STUDENT
   MODERATOR
   CONTENT_MANAGER
   ADMIN
   OWNER
+}
+
+enum SchoolMemberRole {
+  TEACHER
+  STUDENT
 }
 
 enum PaymentProvider {
