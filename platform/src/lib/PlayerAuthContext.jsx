@@ -20,9 +20,16 @@ export function PlayerAuthProvider({ children }) {
     user,
     loading,
     ready: firebaseReady && Boolean(auth),
-    signIn: (email, password) => {
+    signIn: async (email, password) => {
       if (!auth) throw new Error("Player accounts are not configured yet.");
-      return signInWithEmailAndPassword(auth, email.trim(), password);
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // Accounts created in Firebase Console do not receive an automatic
+      // verification link. Request one on the first sign-in so privileged
+      // server routes can continue to require a verified identity.
+      if (!credential.user.emailVerified) {
+        await sendEmailVerification(credential.user);
+      }
+      return credential;
     },
     signUp: async (email, password) => {
       if (!auth) throw new Error("Player accounts are not configured yet.");
