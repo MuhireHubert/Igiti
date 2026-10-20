@@ -1,8 +1,8 @@
 import { useState } from "react";
 import "./PlayerAccount.css";
 import { CheckCircle2, LogIn, LogOut, UserRound, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
-import RoleWorkspace from "./RoleWorkspace.jsx";
 
 function authErrorMessage(error) {
   if (error?.code === "auth/invalid-credential") return "The email or password is incorrect.";
@@ -15,6 +15,7 @@ function authErrorMessage(error) {
 
 export default function PlayerAccount() {
   const { user, ready, signIn, signUp, signOut } = usePlayerAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
@@ -36,7 +37,8 @@ export default function PlayerAccount() {
         setMessage("Your account is ready. Check your email for a verification message.");
       } else {
         await signIn(email, password);
-        setMessage("Signed in. Your cloud progress can now sync on supported puzzles.");
+        setOpen(false);
+        navigate("/workspace");
       }
       setPassword("");
     } catch (err) {
@@ -57,8 +59,8 @@ export default function PlayerAccount() {
 
   return (
     <>
-      <button className="account-button" onClick={() => { setOpen(true); setError(""); }} aria-haspopup="dialog">
-        <UserRound size={15} /> {user ? "My account" : "Sign in"}
+      <button className="account-button" onClick={() => { if (user) navigate("/workspace"); else { setOpen(true); setError(""); } }} aria-haspopup={user ? undefined : "dialog"}>
+        <UserRound size={15} /> {user ? "My portal" : "Sign in"}
       </button>
       {open && <div className="account-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
         <section className="account-dialog" role="dialog" aria-modal="true" aria-labelledby="account-title">
@@ -72,7 +74,7 @@ export default function PlayerAccount() {
             {message && <p className="account-message" role="status">{message}</p>}
             {error && <p className="account-error" role="alert">{error}</p>}
             <button className="button button-dark account-wide" onClick={handleSignOut}><LogOut size={16} /> Sign out</button>
-            <RoleWorkspace user={user} onOpenAdmin={() => { window.location.assign("/admin"); }} />
+            <button className="button button-primary account-wide" onClick={() => navigate("/workspace")}>Open my role portal</button>
             <p className="account-copy account-small">Your browser save remains available even when you sign out.</p>
           </> : <>
             <p className="account-copy">{mode === "signup" ? "Create an account to begin using account-based progress where available." : "Sign in to access account-based progress where available."}</p>

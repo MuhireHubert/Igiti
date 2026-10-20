@@ -26,6 +26,7 @@ const bootstrapRoles = (() => {
   }
 })();
 const allowedBootstrapRoles = new Set(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]);
+const studentEmails = new Set((process.env.STUDENT_EMAILS || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
 
 if (!admin.apps.length) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -127,7 +128,7 @@ async function requirePlayer(req, res, next) {
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     const email = String(decoded.email || "").trim().toLowerCase();
-    const bootstrapRole = allowedBootstrapRoles.has(bootstrapRoles[email]) ? bootstrapRoles[email] : "PLAYER";
+    const bootstrapRole = studentEmails.has(email) ? "STUDENT" : (allowedBootstrapRoles.has(bootstrapRoles[email]) ? bootstrapRoles[email] : "PLAYER");
     const player = await prisma.playerProfile.upsert({
       where: { firebaseUid: decoded.uid },
       update: { displayName: decoded.name || undefined, avatarUrl: decoded.picture || undefined },
