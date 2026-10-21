@@ -35,7 +35,7 @@ const managedRoleEmails = {
   TEACHER: emailsFrom(process.env.TEACHER_EMAILS),
   STUDENT: emailsFrom(process.env.STUDENT_EMAILS),
 };
-const ownerEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS]
+const ownerEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS, process.env.ROOT_OWNER_EMAILS]
   .flatMap((value) => (value || "").split(","))
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean));
