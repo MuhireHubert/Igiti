@@ -32,14 +32,19 @@ async function requireAdmin(req, res, next) {
     const decoded = await admin.auth().verifyIdToken(token);
     const email = String(decoded.email || "").trim().toLowerCase();
     if (!email || decoded.email_verified !== true) {
-      return res.status(403).json({ error: "This verified account is not authorised to administer Igiti Play." });
+      return res.status(403).json({ error: "Verify this account's email address, then sign in again to open the Igiti Play admin portal." });
     }
-    // ADMIN_EMAILS only establishes the very first owner profile. Subsequent
-    // access is controlled by the database role, which an OWNER can change.
+    // Allowlisted emails are recovery/bootstrap owners.  This also repairs an
+    // account that first entered the platform as a PLAYER before it was added
+    // to ADMIN_EMAILS or OWNER_EMAILS.
     const bootstrapOwner = adminEmails.has(email);
     const profile = await prisma.playerProfile.upsert({
       where: { firebaseUid: decoded.uid },
-      update: { displayName: decoded.name || undefined, avatarUrl: decoded.picture || undefined },
+      update: {
+        displayName: decoded.name || undefined,
+        avatarUrl: decoded.picture || undefined,
+        ...(bootstrapOwner ? { role: "OWNER" } : {}),
+      },
       create: {
         firebaseUid: decoded.uid,
         displayName: decoded.name || null,
@@ -47,8 +52,11 @@ async function requireAdmin(req, res, next) {
         role: bootstrapOwner ? "OWNER" : "PLAYER",
       },
     });
-    if (profile.isDisabled || (roleRank[profile.role] ?? 0) < roleRank.CONTENT_MANAGER) {
-      return res.status(403).json({ error: "This verified account is not authorised to administer Igiti Play." });
+    if (profile.isDisabled) {
+      return res.status(403).json({ error: "This account has been disabled. Ask the platform owner to restore access." });
+    }
+    if ((roleRank[profile.role] ?? 0) < roleRank.CONTENT_MANAGER) {
+      return res.status(403).json({ error: "This account is signed in, but it does not have an administrator role. A platform owner can grant one in Players." });
     }
     req.adminUser = { id: profile.id, uid: decoded.uid, email, role: profile.role };
     next();

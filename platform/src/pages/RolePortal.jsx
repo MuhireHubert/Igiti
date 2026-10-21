@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, BookOpenCheck, GraduationCap, School, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpenCheck, CheckCircle2, GraduationCap, School, Sparkles, Target, UserRound } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import { getApiBaseUrl } from "../lib/api.js";
@@ -46,9 +46,10 @@ export default function RolePortal() {
 
   const meta = copy[workspace.role] || copy.PLAYER;
   const Icon = meta.icon;
+  const assignedCount = workspace.assignments?.length || 0;
   return <main className="role-portal">
-    <header className="role-portal-header"><Link to="/" className="role-portal-back"><ArrowLeft size={16} /> Igiti Play</Link><span>{workspace.role}</span></header>
-    <section className="role-portal-hero"><div className="role-portal-icon"><Icon size={26} /></div><div><span className="portal-kicker"><Sparkles size={14} /> YOUR IGITI SPACE</span><h1>{meta.label}</h1><p>{meta.detail}</p></div></section>
+    <header className="role-portal-header"><Link to="/" className="role-portal-back"><ArrowLeft size={16} /> Igiti Play</Link><div className="role-portal-profile"><span className="role-portal-live"><i /> LIVE</span><span>{workspace.role}</span></div></header>
+    <section className="role-portal-hero"><div className="role-portal-icon"><Icon size={26} /></div><div><span className="portal-kicker"><Sparkles size={14} /> YOUR IGITI SPACE</span><h1>{meta.label}</h1><p>{meta.detail}</p><div className="portal-signal-row"><span><CheckCircle2 size={15} /> Verified account</span><span><Target size={15} /> {workspace.role === "STUDENT" ? `${assignedCount} assigned game${assignedCount === 1 ? "" : "s"}` : "Role-based access"}</span></div></div><div className="role-portal-orbit" aria-hidden="true"><span>IGITI</span><i /><b /></div></section>
 
     {workspace.role === "PLAYER" && <section className="role-portal-card"><div><span className="portal-kicker">PERSONAL PLAY</span><h2>Choose your next challenge.</h2><p>Browse the game library, return to saved progress, and unlock access when new paid games are published.</p></div><Link className="portal-primary" to="/games">Browse games <ArrowRight size={16} /></Link></section>}
 

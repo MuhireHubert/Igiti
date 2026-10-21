@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { ArrowLeft, BarChart3, BookOpen, CheckCircle2, CircleAlert, CreditCard, FileText, Gamepad2, LogOut, Plus, RefreshCw, Save, Settings, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { auth, firebaseReady } from "../lib/firebase.js";
@@ -77,6 +77,10 @@ export default function AdminPortal() {
 
   async function loadWorkspace(silent = false) {
     if (!user) return;
+    if (!user.emailVerified) {
+      setWorkspaceError("Verify your email address to open the Igiti Play admin portal. A verification link has been sent to this account.");
+      return;
+    }
     if (!silent) setLoading(true);
     setWorkspaceError("");
     try {
@@ -122,8 +126,12 @@ export default function AdminPortal() {
     event.preventDefault();
     setLoginError("");
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       setPassword("");
+      if (!credential.user.emailVerified) {
+        await sendEmailVerification(credential.user);
+        setLoginError("We sent a verification link to this email. Verify it, then sign in again to open the admin portal.");
+      }
     } catch (error) {
       setLoginError(error.code === "auth/invalid-credential"
         ? "The email or password is incorrect."
