@@ -33,9 +33,15 @@ if (!admin.apps.length) {
   if (serviceAccountJson) {
     // Invalid JSON should fail clearly during boot instead of silently disabling auth.
     const serviceAccount = JSON.parse(serviceAccountJson);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || undefined,
+    });
   } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    admin.initializeApp({ credential: admin.credential.applicationDefault() });
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || undefined,
+    });
   } else {
     console.warn("Firebase Admin credentials are not configured; authenticated routes will return 503.");
   }

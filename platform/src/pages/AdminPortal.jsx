@@ -32,6 +32,17 @@ function StatCard({ label, value, icon: Icon }) {
   return <article className="admin-stat"><span className="admin-stat-icon"><Icon size={18} /></span><span className="admin-stat-label">{label}</span><strong>{value ?? "—"}</strong></article>;
 }
 
+function ImageUploadField({ label, value, onUpload, uploading, help = "JPG, PNG, or WebP · 10 MB maximum" }) {
+  const inputId = `image-upload-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  return <div className="admin-image-upload">
+    <span className="admin-image-upload-label">{label}</span>
+    {value ? <img src={value} alt="Selected upload" className="admin-image-upload-preview" /> : <div className="admin-image-upload-placeholder"><Gamepad2 size={20} /><span>Your image will appear here</span></div>}
+    <label htmlFor={inputId} className="admin-button admin-button-light admin-image-upload-button"><Plus size={15} /> {uploading ? "Uploading…" : value ? "Replace image" : "Choose image file"}</label>
+    <input id={inputId} className="admin-image-upload-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const [file] = event.target.files || []; if (file) onUpload(file); event.target.value = ""; }} disabled={uploading} />
+    <small>{help}</small>
+  </div>;
+}
+
 export default function AdminPortal() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(Boolean(auth));
@@ -150,6 +161,26 @@ export default function AdminPortal() {
       await action(token);
       setNotice(successMessage);
       await loadWorkspace(true);
+    } catch (error) {
+      setWorkspaceError(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadImage(file, update) {
+    setSaving(true);
+    setWorkspaceError("");
+    setNotice("");
+    try {
+      const token = await user.getIdToken();
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch(`${API_BASE}/v1/admin/media/images`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Image upload failed.");
+      update(payload.data.url);
+      setNotice("Image uploaded. Save the form to attach it to this game or country card.");
     } catch (error) {
       setWorkspaceError(error.message);
     } finally {
@@ -374,7 +405,7 @@ export default function AdminPortal() {
               <label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => setGameForm({ ...gameForm, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Lowercase words separated by hyphens.</small></label>
               <label className="admin-field">Description<textarea value={gameForm.description} onChange={(e) => setGameForm({ ...gameForm, description: e.target.value })} required rows={3} /></label>
               <label className="admin-field">Category<input value={gameForm.category} onChange={(e) => setGameForm({ ...gameForm, category: e.target.value })} required /></label>
-              <label className="admin-field">Cover image URL<input type="url" value={gameForm.coverImage} onChange={(e) => setGameForm({ ...gameForm, coverImage: e.target.value })} required /></label>
+              <ImageUploadField label="Game cover image" value={gameForm.coverImage} uploading={saving} onUpload={(file) => uploadImage(file, (coverImage) => setGameForm((current) => ({ ...current, coverImage })))} />
               <label className="admin-field">Publishing state<select value={gameForm.status} onChange={(e) => setGameForm({ ...gameForm, status: e.target.value })}><option value="DRAFT">Draft — hidden from players</option><option value="PUBLISHED">Published — visible to players</option><option value="ARCHIVED">Archived — hidden from players</option></select></label>
               <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : "Create game"}</button>
             </form>
@@ -390,7 +421,7 @@ export default function AdminPortal() {
                 {activeGameId === game.id && <form className="admin-form admin-puzzle-form" onSubmit={savePuzzle}><div className="admin-panel-heading"><h3>{editingPuzzleId ? "Edit puzzle" : "New puzzle"}</h3>{editingPuzzleId && <button type="button" className="admin-icon-button" onClick={() => { setEditingPuzzleId(null); setPuzzleForm(blankPuzzle); }}><X size={15} /></button>}</div>
                   <label className="admin-field">Puzzle title<input value={puzzleForm.title} onChange={(e) => setPuzzleForm({ ...puzzleForm, title: e.target.value })} required /></label>
                   <label className="admin-field">Slug<input value={puzzleForm.slug} onChange={(e) => setPuzzleForm({ ...puzzleForm, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></label>
-                  <label className="admin-field">Puzzle image URL<input type="url" value={puzzleForm.imageUrl} onChange={(e) => setPuzzleForm({ ...puzzleForm, imageUrl: e.target.value })} required /></label>
+                  <ImageUploadField label="Puzzle image" value={puzzleForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setPuzzleForm((current) => ({ ...current, imageUrl })))} />
                   <div className="admin-form-two"><label className="admin-field">Pieces<input type="number" min="2" max="1000" value={puzzleForm.pieceCount} onChange={(e) => setPuzzleForm({ ...puzzleForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Difficulty<select value={puzzleForm.difficulty} onChange={(e) => setPuzzleForm({ ...puzzleForm, difficulty: e.target.value })}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div>
                   <div className="admin-form-two"><label className="admin-field">Sort order<input type="number" min="0" value={puzzleForm.sortOrder} onChange={(e) => setPuzzleForm({ ...puzzleForm, sortOrder: e.target.value })} /></label><label className="admin-checkbox"><input type="checkbox" checked={puzzleForm.isActive} onChange={(e) => setPuzzleForm({ ...puzzleForm, isActive: e.target.checked })} /> Available to players</label></div>
                   <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving}><Save size={15} /> {editingPuzzleId ? "Save puzzle" : "Add puzzle"}</button>
@@ -407,8 +438,8 @@ export default function AdminPortal() {
         </section></div>}
 
         {tab === "countries" && adminSession?.role === "OWNER" && <div className="admin-content admin-game-layout">
-          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingCountryAssetId ? "Update country image" : "Add country image"}</h2><p>Use an approved Firebase Storage or Sanity asset URL. Every change is audited.</p></div>{editingCountryAssetId && <button className="admin-icon-button" onClick={() => { setEditingCountryAssetId(null); setCountryAssetForm(blankCountryAsset); }}><X size={16} /></button>}</div>
-            <form className="admin-form" onSubmit={saveCountryAsset}><label className="admin-field">Country<input value={countryAssetForm.country} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, country: e.target.value })} required /></label><label className="admin-field">Image URL<input type="url" value={countryAssetForm.imageUrl} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, imageUrl: e.target.value })} required /></label><label className="admin-field">Caption <small>(optional)</small><input value={countryAssetForm.caption} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, caption: e.target.value })} maxLength={280} /></label><button className="admin-button admin-button-primary admin-button-wide" disabled={saving}><Save size={15} /> {editingCountryAssetId ? "Save image" : "Add country image"}</button></form>
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingCountryAssetId ? "Update country card" : "Add country card"}</h2><p>Choose the card image from your computer. Igiti stores it in Firebase Storage and audits every change.</p></div>{editingCountryAssetId && <button className="admin-icon-button" onClick={() => { setEditingCountryAssetId(null); setCountryAssetForm(blankCountryAsset); }}><X size={16} /></button>}</div>
+            <form className="admin-form" onSubmit={saveCountryAsset}><label className="admin-field">Country<input value={countryAssetForm.country} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, country: e.target.value })} required /></label><ImageUploadField label="Country card image" value={countryAssetForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setCountryAssetForm((current) => ({ ...current, imageUrl })))} /><label className="admin-field">Caption <small>(optional)</small><input value={countryAssetForm.caption} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, caption: e.target.value })} maxLength={280} /></label><button className="admin-button admin-button-primary admin-button-wide" disabled={saving || !countryAssetForm.imageUrl}><Save size={15} /> {editingCountryAssetId ? "Save country card" : "Add country card"}</button></form>
           </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Country image catalogue</h2><p>{countryAssets.length} country image(s) available to game content.</p></div></div>{countryAssets.map((asset) => <article className="admin-list-row" key={asset.id}><img src={asset.imageUrl} alt="" /><div className="admin-list-copy"><strong>{asset.country}</strong><span>{asset.caption || "No caption"}</span></div><button className="admin-row-action" onClick={() => editCountryAsset(asset)}>Update</button></article>)}{!countryAssets.length && <p className="admin-empty">No country images have been added yet.</p>}</section>
         </div>}

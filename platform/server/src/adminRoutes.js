@@ -1,5 +1,7 @@
 import express from "express";
 import admin from "firebase-admin";
+import multer from "multer";
+import { randomUUID } from "node:crypto";
 import prisma from "./db.js";
 import { z } from "zod";
 
@@ -9,6 +11,24 @@ const adminEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS]
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean));
 const roleRank = { PLAYER: 0, STUDENT: 0, TEACHER: 1, SCHOOL: 2, MODERATOR: 3, CONTENT_MANAGER: 4, ADMIN: 5, OWNER: 6 };
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    callback(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype));
+  },
+});
+
+function hasValidImageSignature(buffer, mimeType) {
+  if (!buffer || buffer.length < 12) return false;
+  if (mimeType === "image/jpeg") return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === "image/png") return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  return mimeType === "image/webp" && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+}
+
+function extensionFor(mimeType) {
+  return mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+}
 
 function requireRole(minimumRole) {
   return (req, res, next) => {
@@ -65,6 +85,40 @@ async function requireAdmin(req, res, next) {
   }
 }
 router.use(requireAdmin);
+
+// Owner-only, authenticated media intake. Files are kept in Firebase Storage,
+// not on Render's ephemeral filesystem, so country-card artwork survives deploys.
+router.post("/media/images", requireRole("OWNER"), (req, res, next) => {
+  imageUpload.single("file")(req, res, (error) => {
+    if (error) return res.status(400).json({ error: error.code === "LIMIT_FILE_SIZE" ? "Image must be 10 MB or smaller." : "Upload one JPG, PNG, or WebP image." });
+    return next();
+  });
+}, async (req, res, next) => {
+  if (!process.env.FIREBASE_STORAGE_BUCKET) return res.status(503).json({ error: "Image uploads are not configured yet. Set FIREBASE_STORAGE_BUCKET on the API service." });
+  if (!req.file || !hasValidImageSignature(req.file.buffer, req.file.mimetype)) {
+    return res.status(400).json({ error: "Upload a valid JPG, PNG, or WebP image." });
+  }
+  try {
+    const bucket = admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET);
+    const token = randomUUID();
+    const objectName = `igiti-play/country-cards/${Date.now()}-${randomUUID()}.${extensionFor(req.file.mimetype)}`;
+    const object = bucket.file(objectName);
+    await object.save(req.file.buffer, {
+      resumable: false,
+      contentType: req.file.mimetype,
+      metadata: {
+        cacheControl: "public,max-age=31536000,immutable",
+        metadata: { firebaseStorageDownloadTokens: token },
+      },
+    });
+    const encodedName = encodeURIComponent(objectName);
+    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedName}?alt=media&token=${token}`;
+    await recordAudit(req.adminUser.id, "media.image_uploaded", "FirebaseStorage", objectName, { mimeType: req.file.mimetype, bytes: req.file.size });
+    return res.status(201).json({ data: { url, path: objectName, contentType: req.file.mimetype, size: req.file.size } });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 const gameSelect = {
   id: true, slug: true, title: true, description: true, category: true,
