@@ -26,7 +26,31 @@ const bootstrapRoles = (() => {
   }
 })();
 const allowedBootstrapRoles = new Set(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]);
-const studentEmails = new Set((process.env.STUDENT_EMAILS || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+function emailsFrom(value) {
+  return new Set((value || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+}
+const managedRoleEmails = {
+  PLAYER: emailsFrom(process.env.PLAYER_EMAILS),
+  SCHOOL: emailsFrom(process.env.SCHOOL_EMAILS),
+  TEACHER: emailsFrom(process.env.TEACHER_EMAILS),
+  STUDENT: emailsFrom(process.env.STUDENT_EMAILS),
+};
+const ownerEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS]
+  .flatMap((value) => (value || "").split(","))
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean));
+
+// These entries are deliberate account-role assignments, not client-side
+// labels. Reapplying them on sign-in repairs profiles created before the role
+// map was configured, while the owner controls all other accounts in Players.
+function configuredRoleForEmail(email) {
+  if (ownerEmails.has(email)) return "OWNER";
+  for (const [role, emails] of Object.entries(managedRoleEmails)) {
+    if (emails.has(email)) return role;
+  }
+  const configuredRole = bootstrapRoles[email];
+  return allowedBootstrapRoles.has(configuredRole) ? configuredRole : null;
+}
 
 if (!admin.apps.length) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -134,11 +158,15 @@ async function requirePlayer(req, res, next) {
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     const email = String(decoded.email || "").trim().toLowerCase();
-    const bootstrapRole = studentEmails.has(email) ? "STUDENT" : (allowedBootstrapRoles.has(bootstrapRoles[email]) ? bootstrapRoles[email] : "PLAYER");
+    const configuredRole = configuredRoleForEmail(email);
     const player = await prisma.playerProfile.upsert({
       where: { firebaseUid: decoded.uid },
-      update: { displayName: decoded.name || undefined, avatarUrl: decoded.picture || undefined },
-      create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null, role: bootstrapRole },
+      update: {
+        displayName: decoded.name || undefined,
+        avatarUrl: decoded.picture || undefined,
+        ...(configuredRole ? { role: configuredRole } : {}),
+      },
+      create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null, role: configuredRole || "PLAYER" },
     });
     if (player.isDisabled) return res.status(403).json({ error: "This player account is unavailable." });
     req.player = { ...player, email };

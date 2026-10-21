@@ -369,6 +369,22 @@ export default function AdminPortal() {
     </main>
   );
 
+  // The control room is not a player-facing destination. A signed-in player,
+  // student, teacher, or school should be sent to the role portal rather than
+  // being left with an alarming authorization message.
+  if (workspaceError.includes("does not have an administrator role")) return (
+    <main className="admin-screen">
+      <section className="admin-login-card admin-role-redirect">
+        <div className="admin-brand"><span><Gamepad2 size={22} /></span><div><strong>Igiti Play</strong><small>Role workspace</small></div></div>
+        <p className="admin-eyebrow">YOU'RE SIGNED IN</p>
+        <h1>This account has its own portal.</h1>
+        <p>The Igiti Play control room is reserved for platform owners and administrators. Your account can still play, learn, or assign games according to its role.</p>
+        <Link className="admin-button admin-button-primary admin-button-wide" to="/workspace">Open my role portal <ArrowLeft size={16} className="admin-flip-icon" /></Link>
+        <button className="admin-back-link admin-link-button" onClick={() => signOut(auth)}>Sign out and use another account</button>
+      </section>
+    </main>
+  );
+
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
