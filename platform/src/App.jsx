@@ -190,7 +190,7 @@ function App() {
 
       <footer className="footer">
         <div className="footer-main"><Brand /><p>Bringing Africa to life.<br />Adults can learn too.</p><a className="footer-cta" href="https://igiti.africa" target="_blank" rel="noreferrer">Visit igiti.africa <ArrowRight size={15} /></a></div>
-        <div className="footer-bottom"><span>© {new Date().getFullYear()} Igiti. Made with care.</span><div><a href="https://igiti.africa" target="_blank" rel="noreferrer">About Igiti</a><a href="https://igiti.africa" target="_blank" rel="noreferrer">Contact</a><a href="/admin">Admin</a><span>Learn. Play. Discover.</span></div></div>
+        <div className="footer-bottom"><span>© {new Date().getFullYear()} Igiti. Made with care.</span><div><a href="https://igiti.africa" target="_blank" rel="noreferrer">About Igiti</a><a href="https://igiti.africa" target="_blank" rel="noreferrer">Contact</a><span>Learn. Play. Discover.</span></div></div>
       </footer>
     </div>
   );

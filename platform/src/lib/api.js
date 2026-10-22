@@ -77,6 +77,9 @@ export async function getGames({ signal } = {}) {
       gameId: game.id,
       gameSlug: game.slug,
       puzzleSlug: puzzle.slug,
+      funFact: typeof puzzle.metadata?.funFact === "string" ? puzzle.metadata.funFact : "",
+      allowedDifficulties: Array.isArray(puzzle.metadata?.allowedDifficulties) ? puzzle.metadata.allowedDifficulties : [puzzle.difficulty],
+      price: puzzle.metadata?.pricing || null,
     }));
   });
   return { data: games, source: "api" };

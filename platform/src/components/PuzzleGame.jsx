@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Eye, RotateCcw, Shuffle, Timer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Eye, Lightbulb, RotateCcw, Shuffle, Timer } from "lucide-react";
 import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import "./PuzzleGame.css";
@@ -50,12 +50,15 @@ export default function PuzzleGame({ game, onBack }) {
   const [selected, setSelected] = useState(null);
   const [moves, setMoves] = useState(() => Number.isFinite(initialProgress?.moves) ? initialProgress.moves : 0);
   const [seconds, setSeconds] = useState(() => Number.isFinite(initialProgress?.seconds) ? initialProgress.seconds : 0);
+  const [hintsUsed, setHintsUsed] = useState(() => Number.isFinite(initialProgress?.hintsUsed) ? initialProgress.hintsUsed : 0);
   const [showReference, setShowReference] = useState(false);
+  const [showFunFact, setShowFunFact] = useState(false);
   const [dragging, setDragging] = useState(null);
   const [cloudReady, setCloudReady] = useState(!cloudEligible);
   const [cloudStatus, setCloudStatus] = useState("local");
   const solvedCount = pieces.reduce((count, piece, slot) => count + (piece === slot ? 1 : 0), 0);
   const complete = solvedCount === pieceCount;
+  const hintLimit = Math.max(1, Math.floor(pieceCount * 0.1));
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const boardStyle = useMemo(() => ({
     "--puzzle-columns": columns,
@@ -66,11 +69,11 @@ export default function PuzzleGame({ game, onBack }) {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(saveKey, JSON.stringify({ pieces, moves, seconds }));
+      window.localStorage.setItem(saveKey, JSON.stringify({ pieces, moves, seconds, hintsUsed }));
     } catch {
       // The puzzle remains playable if browser storage is disabled or full.
     }
-  }, [saveKey, pieces, moves, seconds]);
+  }, [saveKey, pieces, moves, seconds, hintsUsed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +103,7 @@ export default function PuzzleGame({ game, onBack }) {
           setPieces(state.pieces);
           setMoves(Number.isFinite(state.moves) ? state.moves : 0);
           setSeconds(Number.isFinite(saved.elapsedSeconds) ? saved.elapsedSeconds : (Number.isFinite(state.seconds) ? state.seconds : 0));
+          setHintsUsed(Number.isFinite(state.hintsUsed) ? state.hintsUsed : 0);
         }
         setCloudStatus("saved");
       } catch {
@@ -126,7 +130,7 @@ export default function PuzzleGame({ game, onBack }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            state: { pieces, moves, seconds },
+            state: { pieces, moves, seconds, hintsUsed },
             elapsedSeconds: seconds,
             completed: complete,
           }),
@@ -138,13 +142,17 @@ export default function PuzzleGame({ game, onBack }) {
       }
     }, 900);
     return () => window.clearTimeout(timeout);
-  }, [cloudEligible, cloudReady, user, apiBase, game.id, pieces, moves, seconds, complete]);
+  }, [cloudEligible, cloudReady, user, apiBase, game.id, pieces, moves, seconds, hintsUsed, complete]);
 
   useEffect(() => {
     if (complete) return undefined;
     const interval = window.setInterval(() => setSeconds((current) => current + 1), 1000);
     return () => window.clearInterval(interval);
   }, [complete]);
+
+  useEffect(() => {
+    if (complete && game.funFact) setShowFunFact(true);
+  }, [complete, game.funFact]);
 
   function resetPuzzle() {
     try {
@@ -157,7 +165,9 @@ export default function PuzzleGame({ game, onBack }) {
     setDragging(null);
     setMoves(0);
     setSeconds(0);
+    setHintsUsed(0);
     setShowReference(false);
+    setShowFunFact(false);
   }
 
   function swapPieces(fromSlot, toSlot) {
@@ -184,6 +194,22 @@ export default function PuzzleGame({ game, onBack }) {
     swapPieces(selected, slot);
   }
 
+  function useHint() {
+    if (complete || hintsUsed >= hintLimit) return;
+    setPieces((current) => {
+      const targetSlot = current.findIndex((piece, slot) => piece !== slot);
+      if (targetSlot < 0) return current;
+      const sourceSlot = current.indexOf(targetSlot);
+      const next = [...current];
+      [next[targetSlot], next[sourceSlot]] = [next[sourceSlot], next[targetSlot]];
+      return next;
+    });
+    setHintsUsed((current) => current + 1);
+    setMoves((current) => current + 1);
+    setSelected(null);
+    setDragging(null);
+  }
+
   return (
     <section className="puzzle-game" aria-label={`Play ${game.title}`}>
       <div className="puzzle-game-top">
@@ -196,7 +222,7 @@ export default function PuzzleGame({ game, onBack }) {
           <h2>{game.title}</h2>
           <p>Choose one piece, then choose another to swap them. You can also drag pieces on desktop.</p>
         </div>
-        <button className="puzzle-reset" onClick={resetPuzzle}><RotateCcw size={15} /> Restart</button>
+        <div className="puzzle-heading-actions"><button className="puzzle-secondary" onClick={useHint} disabled={complete || hintsUsed >= hintLimit}><Lightbulb size={15} /> Hint {hintsUsed}/{hintLimit}</button><button className="puzzle-reset" onClick={resetPuzzle}><RotateCcw size={15} /> Restart</button></div>
       </div>
       <div className="puzzle-stats">
         <div><span><Timer size={15} /> TIME</span><strong>{formatTime(seconds)}</strong></div>
@@ -249,6 +275,7 @@ export default function PuzzleGame({ game, onBack }) {
       </div>
       {showReference && <div className="puzzle-reference"><img src={game.image} alt={`Reference image for ${game.title}`} /><p>Use this picture as your guide while you arrange the pieces.</p></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
+      {showFunFact && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">YOU UNLOCKED A FACT</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{game.funFact}</p><button className="button button-primary" onClick={() => setShowFunFact(false)}>Keep playing</button></section></div>}
       <p className="puzzle-footnote">{cloudEligible ? (cloudStatus === "syncing" ? "Syncing your arrangement to your account…" : cloudStatus === "saved" ? "Your arrangement, moves and timer are syncing to your account, so you can return on another device." : "Cloud sync is temporarily unavailable. Your progress is still saved on this browser.") : user ? "This preview puzzle saves on this browser. Sign-in and cloud saves will be available for published puzzles." : "Progress saves automatically on this browser, including your arrangement, moves, and timer. Sign in to use account-based saves on published puzzles."}</p>
     </section>
   );

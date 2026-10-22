@@ -31,9 +31,17 @@ export function PlayerAuthProvider({ children }) {
       }
       return credential;
     },
-    signUp: async (email, password) => {
+    signUp: async (email, password, role) => {
       if (!auth) throw new Error("Player accounts are not configured yet.");
       const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const token = await credential.user.getIdToken();
+      const response = await fetch(`${(import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "")}/v1/me/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ role }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Your account was created, but its role could not be saved.");
       await sendEmailVerification(credential.user);
       return credential;
     },

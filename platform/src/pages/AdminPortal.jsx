@@ -7,9 +7,13 @@ import "./AdminPortal.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
-const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", sortOrder: 0, isActive: false };
+const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFact: "", price: "", currency: "USD", sortOrder: 0, isActive: false };
 const blankCountryAsset = { country: "", imageUrl: "", caption: "" };
 const blankOffer = { key: "", title: "", description: "", kind: "GAME", resource: "", amountMinor: "", currency: "USD", interval: "ONE_TIME", isActive: false };
+const a54Modes = [
+  ["quick-facts", "Quick Facts Showdown"], ["matching", "Country Matching"], ["card-war", "Igiti Card War"], ["guess-country", "Guess the Country"],
+  ["who-am-i", "Who am I?"], ["regional", "Regional Challenges"], ["thematic", "Thematic Discovery"], ["roleplay", "Country Roleplay Day"],
+];
 const platformRoles = ["PLAYER", "SCHOOL", "TEACHER", "STUDENT", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
 const administratorRoles = new Set(["ADMIN", "OWNER"]);
 
@@ -239,6 +243,10 @@ export default function AdminPortal() {
     setPuzzleForm({
       slug: puzzle.slug, title: puzzle.title, imageUrl: puzzle.imageUrl,
       pieceCount: puzzle.pieceCount, difficulty: puzzle.difficulty,
+      allowedDifficulties: Array.isArray(puzzle.metadata?.allowedDifficulties) ? puzzle.metadata.allowedDifficulties : [puzzle.difficulty],
+      funFact: puzzle.metadata?.funFact || "",
+      price: puzzle.metadata?.pricing?.amountMinor ? String(puzzle.metadata.pricing.amountMinor / 100) : "",
+      currency: puzzle.metadata?.pricing?.currency || "USD",
       sortOrder: puzzle.sortOrder, isActive: puzzle.isActive,
     });
   }
@@ -246,7 +254,8 @@ export default function AdminPortal() {
   async function savePuzzle(event) {
     event.preventDefault();
     if (!activeGameId) return;
-    const payload = { ...puzzleForm, pieceCount: Number(puzzleForm.pieceCount), sortOrder: Number(puzzleForm.sortOrder) };
+    const price = puzzleForm.price === "" ? null : Math.round(Number(puzzleForm.price) * 100);
+    const payload = { slug: puzzleForm.slug, title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFact: puzzleForm.funFact || undefined, pricing: price == null ? null : { amountMinor: price, currency: puzzleForm.currency } } };
     await withAdminRequest(async (token) => {
       const path = editingPuzzleId ? `/puzzles/${editingPuzzleId}` : `/games/${activeGameId}/puzzles`;
       await adminRequest(path, token, { method: editingPuzzleId ? "PATCH" : "POST", body: JSON.stringify(payload) });
@@ -327,6 +336,12 @@ export default function AdminPortal() {
   function editOffer(offer) {
     setEditingOfferId(offer.id);
     setOfferForm({ ...offer, description: offer.description || "", amountMinor: String(offer.amountMinor) });
+    setTab("commerce");
+  }
+
+  function startA54ModeOffer(mode, title) {
+    setEditingOfferId(null);
+    setOfferForm({ key: `a54.${mode}`, title: `A-54: ${title}`, description: `Unlock the ${title} A-54 card-game mode.`, kind: "GAME", resource: `card-mode:${mode}`, amountMinor: "", currency: "USD", interval: "ONE_TIME", isActive: false });
     setTab("commerce");
   }
 
@@ -439,6 +454,9 @@ export default function AdminPortal() {
                   <label className="admin-field">Slug<input value={puzzleForm.slug} onChange={(e) => setPuzzleForm({ ...puzzleForm, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></label>
                   <ImageUploadField label="Puzzle image" value={puzzleForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setPuzzleForm((current) => ({ ...current, imageUrl })))} />
                   <div className="admin-form-two"><label className="admin-field">Pieces<input type="number" min="2" max="1000" value={puzzleForm.pieceCount} onChange={(e) => setPuzzleForm({ ...puzzleForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Difficulty<select value={puzzleForm.difficulty} onChange={(e) => setPuzzleForm({ ...puzzleForm, difficulty: e.target.value })}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div>
+                  <fieldset className="admin-difficulty-options"><legend>Levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={puzzleForm.allowedDifficulties.includes(level)} onChange={(event) => setPuzzleForm({ ...puzzleForm, allowedDifficulties: event.target.checked ? [...puzzleForm.allowedDifficulties, level] : puzzleForm.allowedDifficulties.filter((item) => item !== level) })} disabled={puzzleForm.allowedDifficulties.length === 1 && puzzleForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset>
+                  <label className="admin-field">Completion fun fact <small>Displayed in a celebratory pop-up when this puzzle is solved.</small><textarea value={puzzleForm.funFact} onChange={(e) => setPuzzleForm({ ...puzzleForm, funFact: e.target.value })} maxLength={500} rows={2} /></label>
+                  <div className="admin-form-two"><label className="admin-field">Puzzle price <small>Leave blank for free play.</small><input type="number" min="0" step="0.01" value={puzzleForm.price} onChange={(e) => setPuzzleForm({ ...puzzleForm, price: e.target.value })} placeholder="0.00" /></label><label className="admin-field">Currency<select value={puzzleForm.currency} onChange={(e) => setPuzzleForm({ ...puzzleForm, currency: e.target.value })}><option value="USD">USD</option><option value="RWF">RWF</option><option value="KES">KES</option><option value="UGX">UGX</option></select></label></div>
                   <div className="admin-form-two"><label className="admin-field">Sort order<input type="number" min="0" value={puzzleForm.sortOrder} onChange={(e) => setPuzzleForm({ ...puzzleForm, sortOrder: e.target.value })} /></label><label className="admin-checkbox"><input type="checkbox" checked={puzzleForm.isActive} onChange={(e) => setPuzzleForm({ ...puzzleForm, isActive: e.target.checked })} /> Available to players</label></div>
                   <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving}><Save size={15} /> {editingPuzzleId ? "Save puzzle" : "Add puzzle"}</button>
                 </form>}
@@ -454,7 +472,7 @@ export default function AdminPortal() {
         </section></div>}
 
         {tab === "countries" && adminSession?.role === "OWNER" && <div className="admin-content admin-game-layout">
-          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingCountryAssetId ? "Update country card" : "Add country card"}</h2><p>Choose the card image from your computer. Igiti stores it in Firebase Storage and audits every change.</p></div>{editingCountryAssetId && <button className="admin-icon-button" onClick={() => { setEditingCountryAssetId(null); setCountryAssetForm(blankCountryAsset); }}><X size={16} /></button>}</div>
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingCountryAssetId ? "Update country card" : "Add country card"}</h2><p>Choose one visual per country. It will be used across that country’s two A-54 cards, stays in Firebase Storage, and is audited.</p></div>{editingCountryAssetId && <button className="admin-icon-button" onClick={() => { setEditingCountryAssetId(null); setCountryAssetForm(blankCountryAsset); }}><X size={16} /></button>}</div>
             <form className="admin-form" onSubmit={saveCountryAsset}><label className="admin-field">Country<input value={countryAssetForm.country} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, country: e.target.value })} required /></label><ImageUploadField label="Country card image" value={countryAssetForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setCountryAssetForm((current) => ({ ...current, imageUrl })))} /><label className="admin-field">Caption <small>(optional)</small><input value={countryAssetForm.caption} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, caption: e.target.value })} maxLength={280} /></label><button className="admin-button admin-button-primary admin-button-wide" disabled={saving || !countryAssetForm.imageUrl}><Save size={15} /> {editingCountryAssetId ? "Save country card" : "Add country card"}</button></form>
           </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Country image catalogue</h2><p>{countryAssets.length} country image(s) available to game content.</p></div></div>{countryAssets.map((asset) => <article className="admin-list-row" key={asset.id}><img src={asset.imageUrl} alt="" /><div className="admin-list-copy"><strong>{asset.country}</strong><span>{asset.caption || "No caption"}</span></div><button className="admin-row-action" onClick={() => editCountryAsset(asset)}>Update</button></article>)}{!countryAssets.length && <p className="admin-empty">No country images have been added yet.</p>}</section>
@@ -462,6 +480,7 @@ export default function AdminPortal() {
 
         {tab === "commerce" && <div className="admin-content admin-game-layout">
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingOfferId ? "Update offer" : "Game and account prices"}</h2><p>Only the owner can activate an offer. Checkout will always use this server-side price.</p></div>{editingOfferId && <button className="admin-icon-button" onClick={() => { setEditingOfferId(null); setOfferForm(blankOffer); }}><X size={16} /></button>}</div>
+            {adminSession?.role === "OWNER" && <div className="admin-mode-pricing"><strong>A-54 card-game mode prices</strong><small>Select a mode to create its server-owned price and checkout entitlement.</small><div>{a54Modes.map(([mode, title]) => <button type="button" className="admin-button admin-button-light" key={mode} onClick={() => startA54ModeOffer(mode, title)}>{title}</button>)}</div></div>}
             {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveOffer}><label className="admin-field">Offer key<input value={offerForm.key} onChange={(e) => setOfferForm({ ...offerForm, key: e.target.value.toLowerCase().replace(/\s+/g, "-") })} placeholder="game.a54" required /></label><label className="admin-field">Title<input value={offerForm.title} onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })} required /></label><label className="admin-field">Description<input value={offerForm.description} onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })} maxLength={500} /></label><div className="admin-form-two"><label className="admin-field">For<select value={offerForm.kind} onChange={(e) => setOfferForm({ ...offerForm, kind: e.target.value })}><option value="GAME">Specific game</option><option value="ACCOUNT">Account plan</option></select></label><label className="admin-field">Access resource<input value={offerForm.resource} onChange={(e) => setOfferForm({ ...offerForm, resource: e.target.value.toLowerCase() })} placeholder="game:a54" required /></label></div><div className="admin-form-two"><label className="admin-field">Price in minor units<input type="number" min="0" value={offerForm.amountMinor} onChange={(e) => setOfferForm({ ...offerForm, amountMinor: e.target.value })} required /></label><label className="admin-field">Currency<input value={offerForm.currency} onChange={(e) => setOfferForm({ ...offerForm, currency: e.target.value.toUpperCase() })} maxLength={3} required /></label></div><div className="admin-form-two"><label className="admin-field">Billing<select value={offerForm.interval} onChange={(e) => setOfferForm({ ...offerForm, interval: e.target.value })}><option value="ONE_TIME">One-time</option><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select></label><label className="admin-checkbox"><input type="checkbox" checked={offerForm.isActive} onChange={(e) => setOfferForm({ ...offerForm, isActive: e.target.checked })} /> Visible for checkout</label></div><button className="admin-button admin-button-primary admin-button-wide" disabled={saving}><Save size={15} /> {editingOfferId ? "Save price" : "Create price offer"}</button></form>}
             {offers.map((offer) => <article className="admin-list-row" key={offer.id}><div className="admin-list-copy"><strong>{offer.title} · {offer.amountMinor} {offer.currency}</strong><span>{offer.kind} · {offer.interval.replace("_", " ")} · {offer.resource}</span></div><span className={`admin-status status-${offer.isActive ? "published" : "draft"}`}>{offer.isActive ? "ACTIVE" : "DRAFT"}</span>{adminSession?.role === "OWNER" && <button className="admin-row-action" onClick={() => editOffer(offer)}>Edit</button>}</article>)}
             {!offers.length && <p className="admin-empty">No paid game or account offers have been configured.</p>}

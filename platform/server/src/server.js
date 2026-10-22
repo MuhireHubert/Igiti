@@ -26,6 +26,7 @@ const bootstrapRoles = (() => {
   }
 })();
 const allowedBootstrapRoles = new Set(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]);
+const selfSelectableRoles = new Set(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]);
 function emailsFrom(value) {
   return new Set((value || "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
 }
@@ -119,6 +120,17 @@ app.get("/v1/offers", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get("/v1/country-assets", async (_req, res, next) => {
+  try {
+    const assets = await prisma.countryAsset.findMany({
+      orderBy: { country: "asc" },
+      select: { country: true, imageUrl: true, caption: true, updatedAt: true },
+    });
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.json({ data: assets });
+  } catch (error) { next(error); }
+});
+
 // This is intentionally safe to expose: it contains no provider credentials,
 // only whether checkout can be started and the selected non-secret environment.
 app.get("/v1/checkout/status", (_req, res) => res.json({ data: pesapalConfiguration() }));
@@ -134,7 +146,7 @@ app.get("/v1/games", async (_req, res, next) => {
         puzzles: {
           where: { isActive: true },
           orderBy: { sortOrder: "asc" },
-          select: { id: true, slug: true, title: true, imageUrl: true, pieceCount: true, difficulty: true },
+          select: { id: true, slug: true, title: true, imageUrl: true, pieceCount: true, difficulty: true, metadata: true },
         },
       },
     });
@@ -175,6 +187,27 @@ async function requirePlayer(req, res, next) {
     return res.status(401).json({ error: "The session could not be verified." });
   }
 }
+
+// A public signup may choose only a player-facing role.  Privileged roles are
+// never self-service, and accounts explicitly managed by the owner cannot
+// overwrite their assigned role here.
+const selfRoleSchema = z.object({ role: z.enum(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]) });
+app.put("/v1/me/role", requirePlayer, async (req, res, next) => {
+  const parsed = selfRoleSchema.safeParse(req.body);
+  if (!parsed.success || !selfSelectableRoles.has(parsed.data?.role)) {
+    return res.status(400).json({ error: "Choose a valid account role." });
+  }
+  if (configuredRoleForEmail(req.player.email)) {
+    return res.status(403).json({ error: "This account's role is managed by the platform owner." });
+  }
+  try {
+    const player = await prisma.playerProfile.update({
+      where: { id: req.player.id }, data: { role: parsed.data.role },
+      select: { id: true, role: true },
+    });
+    res.json({ data: player });
+  } catch (error) { next(error); }
+});
 
 const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120) });
 
