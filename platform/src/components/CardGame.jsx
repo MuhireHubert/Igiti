@@ -8,6 +8,10 @@ function pickOptions(answer) {
   return [...alternatives, answer].sort(() => Math.random() - 0.5);
 }
 
+function countryKey(country) {
+  return String(country || "").trim().toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
 export default function CardGame({ onBack }) {
   const [mode, setMode] = useState(cardModes[0]);
   const [round, setRound] = useState(0);
@@ -18,12 +22,12 @@ export default function CardGame({ onBack }) {
     const controller = new AbortController();
     fetch(`${getApiBaseUrl()}/v1/country-assets`, { headers: { Accept: "application/json" }, signal: controller.signal })
       .then((response) => response.ok ? response.json() : { data: [] })
-      .then((payload) => setCountryArtwork(Object.fromEntries((payload.data || []).map((asset) => [asset.country, asset]))))
+      .then((payload) => setCountryArtwork(Object.fromEntries((payload.data || []).map((asset) => [countryKey(asset.country), asset]))))
       .catch((error) => { if (error.name !== "AbortError") setCountryArtwork({}); });
     return () => controller.abort();
   }, []);
   const card = africaDeck[round % africaDeck.length];
-  const artwork = countryArtwork[card.country];
+  const artwork = countryArtwork[countryKey(card.country)];
   const options = useMemo(() => pickOptions(card.capital), [card.id]);
   const question = mode.id === "matching" ? `Which country has ${card.capital} as its capital?` : mode.id === "guess-country" ? `I am in ${card.region} Africa and my capital is ${card.capital}. Who am I?` : `What is the capital of ${card.country}?`;
   const correctAnswer = mode.id === "matching" || mode.id === "guess-country" ? card.country : card.capital;

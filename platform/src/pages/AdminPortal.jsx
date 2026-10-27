@@ -7,7 +7,7 @@ import "./AdminPortal.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
-const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFact: "", price: "", currency: "USD", sortOrder: 0, isActive: false };
+const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFactsText: "", price: "", currency: "USD", sortOrder: 0, isActive: false };
 const blankCountryAsset = { country: "", imageUrl: "", caption: "" };
 const blankOffer = { key: "", title: "", description: "", kind: "GAME", resource: "", amountMinor: "", currency: "USD", interval: "ONE_TIME", isActive: false };
 const a54Modes = [
@@ -244,7 +244,7 @@ export default function AdminPortal() {
       slug: puzzle.slug, title: puzzle.title, imageUrl: puzzle.imageUrl,
       pieceCount: puzzle.pieceCount, difficulty: puzzle.difficulty,
       allowedDifficulties: Array.isArray(puzzle.metadata?.allowedDifficulties) ? puzzle.metadata.allowedDifficulties : [puzzle.difficulty],
-      funFact: puzzle.metadata?.funFact || "",
+      funFactsText: (Array.isArray(puzzle.metadata?.funFacts) ? puzzle.metadata.funFacts : (puzzle.metadata?.funFact ? [puzzle.metadata.funFact] : [])).join("\n"),
       price: puzzle.metadata?.pricing?.amountMinor ? String(puzzle.metadata.pricing.amountMinor / 100) : "",
       currency: puzzle.metadata?.pricing?.currency || "USD",
       sortOrder: puzzle.sortOrder, isActive: puzzle.isActive,
@@ -255,7 +255,8 @@ export default function AdminPortal() {
     event.preventDefault();
     if (!activeGameId) return;
     const price = puzzleForm.price === "" ? null : Math.round(Number(puzzleForm.price) * 100);
-    const payload = { slug: puzzleForm.slug, title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFact: puzzleForm.funFact || undefined, pricing: price == null ? null : { amountMinor: price, currency: puzzleForm.currency } } };
+    const funFacts = puzzleForm.funFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
+    const payload = { slug: puzzleForm.slug, title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFacts, pricing: price == null ? null : { amountMinor: price, currency: puzzleForm.currency } } };
     await withAdminRequest(async (token) => {
       const path = editingPuzzleId ? `/puzzles/${editingPuzzleId}` : `/games/${activeGameId}/puzzles`;
       await adminRequest(path, token, { method: editingPuzzleId ? "PATCH" : "POST", body: JSON.stringify(payload) });
@@ -455,7 +456,7 @@ export default function AdminPortal() {
                   <ImageUploadField label="Puzzle image" value={puzzleForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setPuzzleForm((current) => ({ ...current, imageUrl })))} />
                   <div className="admin-form-two"><label className="admin-field">Pieces<input type="number" min="2" max="1000" value={puzzleForm.pieceCount} onChange={(e) => setPuzzleForm({ ...puzzleForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Difficulty<select value={puzzleForm.difficulty} onChange={(e) => setPuzzleForm({ ...puzzleForm, difficulty: e.target.value })}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div>
                   <fieldset className="admin-difficulty-options"><legend>Levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={puzzleForm.allowedDifficulties.includes(level)} onChange={(event) => setPuzzleForm({ ...puzzleForm, allowedDifficulties: event.target.checked ? [...puzzleForm.allowedDifficulties, level] : puzzleForm.allowedDifficulties.filter((item) => item !== level) })} disabled={puzzleForm.allowedDifficulties.length === 1 && puzzleForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset>
-                  <label className="admin-field">Completion fun fact <small>Displayed in a celebratory pop-up when this puzzle is solved.</small><textarea value={puzzleForm.funFact} onChange={(e) => setPuzzleForm({ ...puzzleForm, funFact: e.target.value })} maxLength={500} rows={2} /></label>
+                  <label className="admin-field">Fun facts for correct pieces <small>One fact per line. A fact appears when a player places a piece correctly; facts rotate if there are fewer facts than pieces.</small><textarea value={puzzleForm.funFactsText} onChange={(e) => setPuzzleForm({ ...puzzleForm, funFactsText: e.target.value })} maxLength={12000} rows={5} placeholder={'Rwanda is known as the land of a thousand hills.\nLake Victoria is Africa’s largest lake.'} /></label>
                   <div className="admin-form-two"><label className="admin-field">Puzzle price <small>Leave blank for free play.</small><input type="number" min="0" step="0.01" value={puzzleForm.price} onChange={(e) => setPuzzleForm({ ...puzzleForm, price: e.target.value })} placeholder="0.00" /></label><label className="admin-field">Currency<select value={puzzleForm.currency} onChange={(e) => setPuzzleForm({ ...puzzleForm, currency: e.target.value })}><option value="USD">USD</option><option value="RWF">RWF</option><option value="KES">KES</option><option value="UGX">UGX</option></select></label></div>
                   <div className="admin-form-two"><label className="admin-field">Sort order<input type="number" min="0" value={puzzleForm.sortOrder} onChange={(e) => setPuzzleForm({ ...puzzleForm, sortOrder: e.target.value })} /></label><label className="admin-checkbox"><input type="checkbox" checked={puzzleForm.isActive} onChange={(e) => setPuzzleForm({ ...puzzleForm, isActive: e.target.checked })} /> Available to players</label></div>
                   <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving}><Save size={15} /> {editingPuzzleId ? "Save puzzle" : "Add puzzle"}</button>

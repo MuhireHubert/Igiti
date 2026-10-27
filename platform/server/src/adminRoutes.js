@@ -285,6 +285,12 @@ function normalizePuzzleMetadata(metadata) {
     if (typeof value.funFact !== "string" || value.funFact.trim().length > 500) throw new Error("Fun fact must be 500 characters or fewer.");
     value.funFact = value.funFact.trim();
   }
+  if (value.funFacts != null) {
+    if (!Array.isArray(value.funFacts) || value.funFacts.length > 120 || value.funFacts.some((item) => typeof item !== "string" || item.trim().length < 2 || item.trim().length > 500)) {
+      throw new Error("Add up to 120 fun facts, each between 2 and 500 characters.");
+    }
+    value.funFacts = value.funFacts.map((item) => item.trim()).filter(Boolean);
+  }
   if (value.allowedDifficulties != null) {
     const allowed = new Set(["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"]);
     if (!Array.isArray(value.allowedDifficulties) || value.allowedDifficulties.length < 1 || value.allowedDifficulties.some((item) => !allowed.has(item))) {
@@ -370,7 +376,7 @@ router.post("/games/:gameId/puzzles", async (req, res, next) => {
     await recordAudit(req.adminUser.id, "puzzle.created", "Puzzle", puzzle.id, { gameId: req.params.gameId, slug: puzzle.slug, isActive: puzzle.isActive });
     res.status(201).json({ data: puzzle });
   } catch (error) {
-    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
+    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
     if (error?.code === "P2002") return res.status(409).json({ error: "That puzzle slug is already used in this game." });
     if (error?.code === "P2003") return res.status(404).json({ error: "Game not found." });
     next(error);
@@ -390,7 +396,7 @@ router.patch("/puzzles/:puzzleId", async (req, res, next) => {
     await recordAudit(req.adminUser.id, "puzzle.updated", "Puzzle", puzzle.id, { fields: Object.keys(parsed.data), isActive: puzzle.isActive });
     res.json({ data: puzzle });
   } catch (error) {
-    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
+    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
     if (error?.code === "P2025") return res.status(404).json({ error: "Puzzle not found." });
     if (error?.code === "P2002") return res.status(409).json({ error: "That puzzle slug is already used in this game." });
     next(error);
