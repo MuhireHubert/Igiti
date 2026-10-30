@@ -281,6 +281,7 @@ const puzzleCreate = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 const puzzleUpdate = puzzleCreate.partial();
+const gameWithPuzzleCreate = z.object({ game: gameCreate, puzzle: puzzleCreate });
 
 function normalizePuzzleMetadata(metadata) {
   const value = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? { ...metadata } : {};
@@ -337,6 +338,36 @@ router.post("/games", async (req, res, next) => {
     res.status(201).json({ data: game });
   } catch (error) {
     if (error?.code === "P2002") return res.status(409).json({ error: "That game slug is already in use." });
+    next(error);
+  }
+});
+
+// The primary content workflow creates a game and its first playable puzzle
+// together. This prevents a published game appearing as "coming soon" because
+// it has no active puzzle attached to it.
+router.post("/games/with-puzzle", async (req, res, next) => {
+  const parsed = gameWithPuzzleCreate.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Check the game and puzzle fields and try again.", details: parsed.error.flatten() });
+  try {
+    const { game: gameInput, puzzle: puzzleInput } = parsed.data;
+    const metadata = normalizePuzzleMetadata(puzzleInput.metadata);
+    const created = await prisma.$transaction(async (tx) => {
+      const game = await tx.game.create({
+        data: { ...gameInput, publishedAt: gameInput.status === "PUBLISHED" ? new Date() : null },
+        select: { id: true, slug: true, title: true, status: true, publishedAt: true },
+      });
+      const puzzle = await tx.puzzle.create({
+        data: { ...puzzleInput, metadata, gameId: game.id },
+        select: { id: true, slug: true, title: true, pieceCount: true, isActive: true, metadata: true },
+      });
+      return { game, puzzle };
+    });
+    await syncPuzzleOffer(created.puzzle);
+    await recordAudit(req.adminUser.id, "game.created_with_puzzle", "Game", created.game.id, { slug: created.game.slug, puzzleId: created.puzzle.id, pieceCount: created.puzzle.pieceCount, difficulty: puzzleInput.difficulty });
+    res.status(201).json({ data: created });
+  } catch (error) {
+    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
+    if (error?.code === "P2002") return res.status(409).json({ error: "That game or puzzle slug is already in use." });
     next(error);
   }
 });

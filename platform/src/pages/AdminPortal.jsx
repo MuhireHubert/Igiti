@@ -6,7 +6,7 @@ import { auth, firebaseReady } from "../lib/firebase.js";
 import "./AdminPortal.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
-const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "DRAFT" };
+const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "PUBLISHED", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], price: "", currency: "USD" };
 const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFactsText: "", price: "", currency: "USD", sortOrder: 0, isActive: false };
 const blankCountryAsset = { country: "", imageUrl: "", caption: "" };
 const blankOffer = { key: "", title: "", description: "", kind: "GAME", resource: "", amountMinor: "", currency: "USD", interval: "ONE_TIME", isActive: false };
@@ -26,6 +26,14 @@ function toSlug(value) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 90);
+}
+
+function formatMoney(amountMinor, currency) {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "USD" }).format(Number(amountMinor || 0) / 100);
+  } catch {
+    return `${Number(amountMinor || 0) / 100} ${currency || "USD"}`;
+  }
 }
 
 async function adminRequest(path, token, options = {}) {
@@ -223,17 +231,31 @@ export default function AdminPortal() {
   async function saveGame(event) {
     event.preventDefault();
     await withAdminRequest(async (token) => {
-      const path = editingGameId ? `/games/${editingGameId}` : "/games";
-      const method = editingGameId ? "PATCH" : "POST";
-      await adminRequest(path, token, { method, body: JSON.stringify({ ...gameForm, slug: toSlug(gameForm.slug || gameForm.title) }) });
+      const game = { slug: toSlug(gameForm.slug || gameForm.title), title: gameForm.title, description: gameForm.description, category: gameForm.category, coverImage: gameForm.coverImage, status: gameForm.status };
+      if (editingGameId) {
+        await adminRequest(`/games/${editingGameId}`, token, { method: "PATCH", body: JSON.stringify(game) });
+      } else {
+        const price = gameForm.price === "" ? null : Math.round(Number(gameForm.price) * 100);
+        const puzzle = {
+          slug: toSlug(`${game.slug}-puzzle`), title: game.title, imageUrl: game.coverImage,
+          pieceCount: Number(gameForm.pieceCount), difficulty: gameForm.difficulty, sortOrder: 0,
+          isActive: game.status === "PUBLISHED",
+          metadata: { allowedDifficulties: gameForm.allowedDifficulties, pricing: price == null ? null : { amountMinor: price, currency: gameForm.currency } },
+        };
+        await adminRequest("/games/with-puzzle", token, { method: "POST", body: JSON.stringify({ game, puzzle }) });
+      }
       setGameForm(blankGame);
       setEditingGameId(null);
       setGameSlugEdited(false);
-    }, editingGameId ? "Game updated." : "Game created as configured.");
+    }, editingGameId ? "Game updated." : "Game created with its playable puzzle.");
   }
 
   async function changeGameStatus(game, status) {
     if (status === "ARCHIVED" && !window.confirm(`Archive “${game.title}”?`)) return;
+    if (status === "PUBLISHED" && !game.puzzles.some((puzzle) => puzzle.isActive)) {
+      setWorkspaceError("Add and activate a puzzle before publishing this game. A game without an active puzzle cannot be available to players.");
+      return;
+    }
     await withAdminRequest(async (token) => {
       await adminRequest(`/games/${game.id}`, token, { method: "PATCH", body: JSON.stringify({ status }) });
     }, status === "PUBLISHED" ? "Game published." : status === "ARCHIVED" ? "Game archived." : "Game returned to draft.");
@@ -355,7 +377,7 @@ export default function AdminPortal() {
 
   function editOffer(offer) {
     setEditingOfferId(offer.id);
-    setOfferForm({ ...offer, description: offer.description || "", amountMinor: String(offer.amountMinor) });
+    setOfferForm({ ...offer, description: offer.description || "", amountMinor: String(offer.amountMinor / 100) });
     setTab("commerce");
   }
 
@@ -369,7 +391,7 @@ export default function AdminPortal() {
     event.preventDefault();
     await withAdminRequest(async (token) => {
       const path = editingOfferId ? `/offers/${editingOfferId}` : "/offers";
-      await adminRequest(path, token, { method: editingOfferId ? "PATCH" : "POST", body: JSON.stringify({ ...offerForm, amountMinor: Number(offerForm.amountMinor), description: offerForm.description || null }) });
+      await adminRequest(path, token, { method: editingOfferId ? "PATCH" : "POST", body: JSON.stringify({ ...offerForm, amountMinor: Math.round(Number(offerForm.amountMinor) * 100), description: offerForm.description || null }) });
       setOfferForm(blankOffer); setEditingOfferId(null);
     }, editingOfferId ? "Price offer updated." : "Price offer created.");
   }
@@ -450,15 +472,16 @@ export default function AdminPortal() {
 
         {tab === "games" && <div className="admin-content admin-game-layout">
           <section className="admin-panel">
-            <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Create a game"}</h2><p>Control the public title, story, cover and publishing state.</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); setGameSlugEdited(false); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
+            <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Upload a playable game"}</h2><p>{editingGameId ? "Control the public title, story, cover and publishing state." : "Choose the image, number of pieces, difficulty and access price in one step."}</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); setGameSlugEdited(false); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
             <form className="admin-form" onSubmit={saveGame}>
               <label className="admin-field">Title<input value={gameForm.title} onChange={(e) => setGameForm((current) => ({ ...current, title: e.target.value, slug: gameSlugEdited ? current.slug : toSlug(e.target.value) }))} required minLength={2} maxLength={140} /></label>
               <label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => { setGameSlugEdited(true); setGameForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. You can change it; punctuation is cleaned for you.</small></label>
               <label className="admin-field">Description<textarea value={gameForm.description} onChange={(e) => setGameForm({ ...gameForm, description: e.target.value })} required rows={3} /></label>
               <label className="admin-field">Category<input value={gameForm.category} onChange={(e) => setGameForm({ ...gameForm, category: e.target.value })} required /></label>
               <ImageUploadField label="Game cover image" value={gameForm.coverImage} uploading={saving} onUpload={(file) => uploadImage(file, (coverImage) => setGameForm((current) => ({ ...current, coverImage })))} />
+              {!editingGameId && <><div className="admin-form-section"><strong>Playable puzzle settings</strong><small>Igiti will split this image into the selected number of movable puzzle pieces.</small></div><div className="admin-form-two"><label className="admin-field">Number of pieces<input type="number" min="2" max="1000" value={gameForm.pieceCount} onChange={(e) => setGameForm({ ...gameForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Starting difficulty<select value={gameForm.difficulty} onChange={(e) => setGameForm((current) => ({ ...current, difficulty: e.target.value, allowedDifficulties: current.allowedDifficulties.includes(e.target.value) ? current.allowedDifficulties : [...current.allowedDifficulties, e.target.value] }))}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div><fieldset className="admin-difficulty-options"><legend>Difficulty levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={gameForm.allowedDifficulties.includes(level)} onChange={(event) => setGameForm((current) => ({ ...current, allowedDifficulties: event.target.checked ? [...current.allowedDifficulties, level] : current.allowedDifficulties.filter((item) => item !== level) }))} disabled={gameForm.allowedDifficulties.length === 1 && gameForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset><div className="admin-form-two"><label className="admin-field">Puzzle price <small>Leave blank for free play.</small><input type="number" min="0" step="0.01" value={gameForm.price} onChange={(e) => setGameForm({ ...gameForm, price: e.target.value })} placeholder="0.00" /></label><label className="admin-field">Currency<select value={gameForm.currency} onChange={(e) => setGameForm({ ...gameForm, currency: e.target.value })}><option value="USD">USD</option><option value="RWF">RWF</option><option value="KES">KES</option><option value="UGX">UGX</option></select></label></div></>}
               <label className="admin-field">Publishing state<select value={gameForm.status} onChange={(e) => setGameForm({ ...gameForm, status: e.target.value })}><option value="DRAFT">Draft — hidden from players</option><option value="PUBLISHED">Published — visible to players</option><option value="ARCHIVED">Archived — hidden from players</option></select></label>
-              <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving || !gameForm.coverImage}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : "Create game"}</button>
+              <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving || !gameForm.coverImage}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : gameForm.status === "PUBLISHED" ? "Create & publish game" : "Create game draft"}</button>
             </form>
           </section>
           <section className="admin-panel">
@@ -501,8 +524,8 @@ export default function AdminPortal() {
         {tab === "commerce" && <div className="admin-content admin-game-layout">
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingOfferId ? "Update offer" : "Game and account prices"}</h2><p>Only the owner can activate an offer. Checkout will always use this server-side price.</p></div>{editingOfferId && <button className="admin-icon-button" onClick={() => { setEditingOfferId(null); setOfferForm(blankOffer); }}><X size={16} /></button>}</div>
             {adminSession?.role === "OWNER" && <div className="admin-mode-pricing"><strong>A-54 card-game mode prices</strong><small>Select a mode to create its server-owned price and checkout entitlement.</small><div>{a54Modes.map(([mode, title]) => <button type="button" className="admin-button admin-button-light" key={mode} onClick={() => startA54ModeOffer(mode, title)}>{title}</button>)}</div></div>}
-            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveOffer}><label className="admin-field">Offer key<input value={offerForm.key} onChange={(e) => setOfferForm({ ...offerForm, key: e.target.value.toLowerCase().replace(/\s+/g, "-") })} placeholder="game.a54" required /></label><label className="admin-field">Title<input value={offerForm.title} onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })} required /></label><label className="admin-field">Description<input value={offerForm.description} onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })} maxLength={500} /></label><div className="admin-form-two"><label className="admin-field">For<select value={offerForm.kind} onChange={(e) => setOfferForm({ ...offerForm, kind: e.target.value })}><option value="GAME">Specific game</option><option value="ACCOUNT">Account plan</option></select></label><label className="admin-field">Access resource<input value={offerForm.resource} onChange={(e) => setOfferForm({ ...offerForm, resource: e.target.value.toLowerCase() })} placeholder="game:a54" required /></label></div><div className="admin-form-two"><label className="admin-field">Price in minor units<input type="number" min="0" value={offerForm.amountMinor} onChange={(e) => setOfferForm({ ...offerForm, amountMinor: e.target.value })} required /></label><label className="admin-field">Currency<input value={offerForm.currency} onChange={(e) => setOfferForm({ ...offerForm, currency: e.target.value.toUpperCase() })} maxLength={3} required /></label></div><div className="admin-form-two"><label className="admin-field">Billing<select value={offerForm.interval} onChange={(e) => setOfferForm({ ...offerForm, interval: e.target.value })}><option value="ONE_TIME">One-time</option><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select></label><label className="admin-checkbox"><input type="checkbox" checked={offerForm.isActive} onChange={(e) => setOfferForm({ ...offerForm, isActive: e.target.checked })} /> Visible for checkout</label></div><button className="admin-button admin-button-primary admin-button-wide" disabled={saving}><Save size={15} /> {editingOfferId ? "Save price" : "Create price offer"}</button></form>}
-            {offers.map((offer) => <article className="admin-list-row" key={offer.id}><div className="admin-list-copy"><strong>{offer.title} · {offer.amountMinor} {offer.currency}</strong><span>{offer.kind} · {offer.interval.replace("_", " ")} · {offer.resource}</span></div><span className={`admin-status status-${offer.isActive ? "published" : "draft"}`}>{offer.isActive ? "ACTIVE" : "DRAFT"}</span>{adminSession?.role === "OWNER" && <button className="admin-row-action" onClick={() => editOffer(offer)}>Edit</button>}</article>)}
+            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveOffer}><label className="admin-field">Offer key<input value={offerForm.key} onChange={(e) => setOfferForm({ ...offerForm, key: toSlug(e.target.value) })} placeholder="game-a54" required /></label><label className="admin-field">Title<input value={offerForm.title} onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })} required /></label><label className="admin-field">Description<input value={offerForm.description} onChange={(e) => setOfferForm({ ...offerForm, description: e.target.value })} maxLength={500} /></label><div className="admin-form-two"><label className="admin-field">For<select value={offerForm.kind} onChange={(e) => setOfferForm({ ...offerForm, kind: e.target.value })}><option value="GAME">Specific game</option><option value="ACCOUNT">Account plan</option></select></label><label className="admin-field">Access resource<input value={offerForm.resource} onChange={(e) => setOfferForm({ ...offerForm, resource: e.target.value.toLowerCase() })} placeholder="puzzle:your-puzzle-id" required /><small>Choose a puzzle below to fill this automatically.</small></label></div>{offerForm.kind === "GAME" && <div className="admin-resource-choices">{games.flatMap((game) => game.puzzles.map((puzzle) => <button type="button" className="admin-button admin-button-light" key={puzzle.id} onClick={() => setOfferForm((current) => ({ ...current, key: current.key || `puzzle-${puzzle.slug}`, title: current.title || puzzle.title, resource: `puzzle:${puzzle.id}` }))}>{game.title} · {puzzle.title}</button>))}</div>}<div className="admin-form-two"><label className="admin-field">Price <small>Enter 25 for $25.00.</small><input type="number" min="0" step="0.01" value={offerForm.amountMinor} onChange={(e) => setOfferForm({ ...offerForm, amountMinor: e.target.value })} required /></label><label className="admin-field">Currency<input value={offerForm.currency} onChange={(e) => setOfferForm({ ...offerForm, currency: e.target.value.toUpperCase() })} maxLength={3} required /></label></div><div className="admin-form-two"><label className="admin-field">Billing<select value={offerForm.interval} onChange={(e) => setOfferForm({ ...offerForm, interval: e.target.value })}><option value="ONE_TIME">One-time</option><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select></label><label className="admin-checkbox"><input type="checkbox" checked={offerForm.isActive} onChange={(e) => setOfferForm({ ...offerForm, isActive: e.target.checked })} /> Visible for checkout</label></div><button className="admin-button admin-button-primary admin-button-wide" disabled={saving}><Save size={15} /> {editingOfferId ? "Save price" : "Create price offer"}</button></form>}
+            {offers.map((offer) => <article className="admin-list-row" key={offer.id}><div className="admin-list-copy"><strong>{offer.title} · {formatMoney(offer.amountMinor, offer.currency)}</strong><span>{offer.kind} · {offer.interval.replace("_", " ")} · {offer.resource}</span></div><span className={`admin-status status-${offer.isActive ? "published" : "draft"}`}>{offer.isActive ? "ACTIVE" : "DRAFT"}</span>{adminSession?.role === "OWNER" && <button className="admin-row-action" onClick={() => editOffer(offer)}>Edit</button>}</article>)}
             {!offers.length && <p className="admin-empty">No paid game or account offers have been configured.</p>}
           </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Verified payment orders</h2><p>Payment redirects never grant play access. Only a server-verified provider callback can mark an order paid.</p></div></div>
@@ -510,7 +533,7 @@ export default function AdminPortal() {
             {!paymentOrders.length && <p className="admin-empty">No game payment orders have been recorded yet.</p>}
           </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Access entitlements</h2><p>Owners can grant or revoke access for support cases. All changes are logged.</p></div></div>
-            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={grantEntitlement}><label className="admin-field">Player ID<input value={entitlementForm.playerId} onChange={(e) => setEntitlementForm({ ...entitlementForm, playerId: e.target.value })} required /></label><label className="admin-field">Resource key<input placeholder="game:premium" value={entitlementForm.resource} onChange={(e) => setEntitlementForm({ ...entitlementForm, resource: e.target.value.toLowerCase() })} required /></label><label className="admin-field">Expiry (optional)<input type="datetime-local" value={entitlementForm.expiresAt} onChange={(e) => setEntitlementForm({ ...entitlementForm, expiresAt: e.target.value })} /></label><button className="admin-button admin-button-primary" type="submit" disabled={saving}><Plus size={15} /> Grant access</button></form>}
+            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={grantEntitlement}><label className="admin-field">Player<select value={entitlementForm.playerId} onChange={(e) => setEntitlementForm({ ...entitlementForm, playerId: e.target.value })} required><option value="">Choose a player</option>{players.map((player) => <option key={player.id} value={player.id}>{player.displayName || "Unnamed player"} · {player.role}</option>)}</select></label><label className="admin-field">Access to<select value={entitlementForm.resource} onChange={(e) => setEntitlementForm({ ...entitlementForm, resource: e.target.value })} required><option value="">Choose a paid game or access plan</option>{offers.map((offer) => <option key={offer.id} value={offer.resource}>{offer.title} · {formatMoney(offer.amountMinor, offer.currency)}</option>)}</select></label><label className="admin-field">Expiry (optional)<input type="datetime-local" value={entitlementForm.expiresAt} onChange={(e) => setEntitlementForm({ ...entitlementForm, expiresAt: e.target.value })} /></label><button className="admin-button admin-button-primary" type="submit" disabled={saving || !entitlementForm.playerId || !entitlementForm.resource}><Plus size={15} /> Grant access</button></form>}
             {entitlements.map((entitlement) => <article className="admin-list-row" key={entitlement.id}><div className="admin-list-copy"><strong>{entitlement.resource} · {entitlement.player.displayName || "Player"}</strong><span>{entitlement.expiresAt ? `Expires ${new Date(entitlement.expiresAt).toLocaleString()}` : "No expiry"}{entitlement.order ? ` · ${entitlement.order.provider} order` : " · Manual grant"}</span></div><span className={`admin-status status-${entitlement.status === "ACTIVE" ? "published" : "archived"}`}>{entitlement.status}</span>{adminSession?.role === "OWNER" && entitlement.status === "ACTIVE" && <button className="admin-row-action danger-text" onClick={() => revokeEntitlement(entitlement)}>Revoke</button>}</article>)}
           </section>
         </div>}
