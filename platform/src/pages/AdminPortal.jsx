@@ -47,7 +47,7 @@ function StatCard({ label, value, icon: Icon }) {
   return <article className="admin-stat"><span className="admin-stat-icon"><Icon size={18} /></span><span className="admin-stat-label">{label}</span><strong>{value ?? "—"}</strong></article>;
 }
 
-function ImageUploadField({ label, value, onUpload, uploading, help = "JPG, PNG, or WebP · 10 MB maximum" }) {
+function ImageUploadField({ label, value, onUpload, uploading, help = "JPG, PNG, or WebP · 35 MB maximum" }) {
   const inputId = `image-upload-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return <div className="admin-image-upload">
     <span className="admin-image-upload-label">{label}</span>
