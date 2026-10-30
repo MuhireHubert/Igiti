@@ -290,8 +290,8 @@ function normalizePuzzleMetadata(metadata) {
     value.funFact = value.funFact.trim();
   }
   if (value.funFacts != null) {
-    if (!Array.isArray(value.funFacts) || value.funFacts.length > 120 || value.funFacts.some((item) => typeof item !== "string" || item.trim().length < 2 || item.trim().length > 500)) {
-      throw new Error("Add up to 120 fun facts, each between 2 and 500 characters.");
+    if (!Array.isArray(value.funFacts) || value.funFacts.length > 1000 || value.funFacts.some((item) => typeof item !== "string" || item.trim().length < 2 || item.trim().length > 500)) {
+      throw new Error("Add up to 1,000 fun facts, each between 2 and 500 characters.");
     }
     value.funFacts = value.funFacts.map((item) => item.trim()).filter(Boolean);
   }
@@ -312,6 +312,12 @@ function normalizePuzzleMetadata(metadata) {
     value.pricing = { amountMinor, currency };
   }
   return value;
+}
+
+function requireOneFunFactPerPiece(metadata, pieceCount) {
+  if (!Array.isArray(metadata?.funFacts) || metadata.funFacts.length !== pieceCount) {
+    throw new Error(`Add exactly ${pieceCount} fun facts — one for each puzzle piece.`);
+  }
 }
 
 async function syncPuzzleOffer(puzzle) {
@@ -351,6 +357,7 @@ router.post("/games/with-puzzle", async (req, res, next) => {
   try {
     const { game: gameInput, puzzle: puzzleInput } = parsed.data;
     const metadata = normalizePuzzleMetadata(puzzleInput.metadata);
+    requireOneFunFactPerPiece(metadata, puzzleInput.pieceCount);
     const created = await prisma.$transaction(async (tx) => {
       const game = await tx.game.create({
         data: { ...gameInput, publishedAt: gameInput.status === "PUBLISHED" ? new Date() : null },
@@ -366,7 +373,7 @@ router.post("/games/with-puzzle", async (req, res, next) => {
     await recordAudit(req.adminUser.id, "game.created_with_puzzle", "Game", created.game.id, { slug: created.game.slug, puzzleId: created.puzzle.id, pieceCount: created.puzzle.pieceCount, difficulty: puzzleInput.difficulty });
     res.status(201).json({ data: created });
   } catch (error) {
-    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
+    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Add exactly") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
     if (error?.code === "P2002") return res.status(409).json({ error: "That game or puzzle slug is already in use." });
     next(error);
   }
@@ -405,12 +412,13 @@ router.post("/games/:gameId/puzzles", async (req, res, next) => {
   if (!parsed.success) return res.status(400).json({ error: "Check the puzzle fields and try again.", details: parsed.error.flatten() });
   try {
     const metadata = normalizePuzzleMetadata(parsed.data.metadata);
+    requireOneFunFactPerPiece(metadata, parsed.data.pieceCount);
     const puzzle = await prisma.puzzle.create({ data: { ...parsed.data, metadata, gameId: req.params.gameId }, select: { id: true, slug: true, title: true, pieceCount: true, isActive: true, metadata: true } });
     await syncPuzzleOffer(puzzle);
     await recordAudit(req.adminUser.id, "puzzle.created", "Puzzle", puzzle.id, { gameId: req.params.gameId, slug: puzzle.slug, isActive: puzzle.isActive });
     res.status(201).json({ data: puzzle });
   } catch (error) {
-    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
+    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Add exactly") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
     if (error?.code === "P2002") return res.status(409).json({ error: "That puzzle slug is already used in this game." });
     if (error?.code === "P2003") return res.status(404).json({ error: "Game not found." });
     next(error);
@@ -421,16 +429,19 @@ router.patch("/puzzles/:puzzleId", async (req, res, next) => {
   const parsed = puzzleUpdate.safeParse(req.body);
   if (!parsed.success || Object.keys(parsed.data || {}).length === 0) return res.status(400).json({ error: "Provide valid puzzle fields to update.", details: parsed.success ? undefined : parsed.error.flatten() });
   try {
-    const existing = await prisma.puzzle.findUnique({ where: { id: req.params.puzzleId }, select: { metadata: true } });
+    const existing = await prisma.puzzle.findUnique({ where: { id: req.params.puzzleId }, select: { metadata: true, pieceCount: true } });
     if (!existing) return res.status(404).json({ error: "Puzzle not found." });
     const data = { ...parsed.data };
-    if (Object.hasOwn(parsed.data, "metadata")) data.metadata = normalizePuzzleMetadata({ ...(existing.metadata || {}), ...(parsed.data.metadata || {}) });
+    if (Object.hasOwn(parsed.data, "metadata")) {
+      data.metadata = normalizePuzzleMetadata({ ...(existing.metadata || {}), ...(parsed.data.metadata || {}) });
+      requireOneFunFactPerPiece(data.metadata, data.pieceCount ?? existing.pieceCount);
+    }
     const puzzle = await prisma.puzzle.update({ where: { id: req.params.puzzleId }, data, select: { id: true, slug: true, title: true, pieceCount: true, isActive: true, metadata: true } });
     await syncPuzzleOffer(puzzle);
     await recordAudit(req.adminUser.id, "puzzle.updated", "Puzzle", puzzle.id, { fields: Object.keys(parsed.data), isActive: puzzle.isActive });
     res.json({ data: puzzle });
   } catch (error) {
-    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
+    if (error?.message?.startsWith("Fun fact") || error?.message?.startsWith("Add up to") || error?.message?.startsWith("Add exactly") || error?.message?.startsWith("Choose at least") || error?.message?.startsWith("Puzzle pricing")) return res.status(400).json({ error: error.message });
     if (error?.code === "P2025") return res.status(404).json({ error: "Puzzle not found." });
     if (error?.code === "P2002") return res.status(409).json({ error: "That puzzle slug is already used in this game." });
     next(error);
