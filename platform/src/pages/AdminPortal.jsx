@@ -17,6 +17,17 @@ const a54Modes = [
 const platformRoles = ["PLAYER", "SCHOOL", "TEACHER", "STUDENT", "MODERATOR", "CONTENT_MANAGER", "ADMIN", "OWNER"];
 const administratorRoles = new Set(["ADMIN", "OWNER"]);
 
+function toSlug(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
+
 async function adminRequest(path, token, options = {}) {
   const response = await fetch(`${API_BASE}/v1/admin${path}`, {
     ...options,
@@ -40,7 +51,7 @@ function ImageUploadField({ label, value, onUpload, uploading, help = "JPG, PNG,
   const inputId = `image-upload-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return <div className="admin-image-upload">
     <span className="admin-image-upload-label">{label}</span>
-    {value ? <img src={value} alt="Selected upload" className="admin-image-upload-preview" /> : <div className="admin-image-upload-placeholder"><Gamepad2 size={20} /><span>Your image will appear here</span></div>}
+    {value ? <><img src={value} alt="Selected upload" className="admin-image-upload-preview" /><span className="admin-image-upload-ready"><CheckCircle2 size={14} /> Image uploaded — save this form to attach it.</span></> : <div className="admin-image-upload-placeholder"><Gamepad2 size={20} /><span>Your image will appear here</span></div>}
     <label htmlFor={inputId} className="admin-button admin-button-light admin-image-upload-button"><Plus size={15} /> {uploading ? "Uploading…" : value ? "Replace image" : "Choose image file"}</label>
     <input id={inputId} className="admin-image-upload-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const [file] = event.target.files || []; if (file) onUpload(file); event.target.value = ""; }} disabled={uploading} />
     <small>{help}</small>
@@ -71,9 +82,11 @@ export default function AdminPortal() {
   const [entitlementForm, setEntitlementForm] = useState({ playerId: "", resource: "", expiresAt: "" });
   const [gameForm, setGameForm] = useState(blankGame);
   const [editingGameId, setEditingGameId] = useState(null);
+  const [gameSlugEdited, setGameSlugEdited] = useState(false);
   const [activeGameId, setActiveGameId] = useState(null);
   const [puzzleForm, setPuzzleForm] = useState(blankPuzzle);
   const [editingPuzzleId, setEditingPuzzleId] = useState(null);
+  const [puzzleSlugEdited, setPuzzleSlugEdited] = useState(false);
   const [countryAssetForm, setCountryAssetForm] = useState(blankCountryAsset);
   const [editingCountryAssetId, setEditingCountryAssetId] = useState(null);
   const [offerForm, setOfferForm] = useState(blankOffer);
@@ -195,12 +208,14 @@ export default function AdminPortal() {
   function startNewGame() {
     setEditingGameId(null);
     setGameForm(blankGame);
+    setGameSlugEdited(false);
     setTab("games");
   }
 
   function startEditGame(game) {
     setEditingGameId(game.id);
     setGameForm({ slug: game.slug, title: game.title, description: game.description, category: game.category, coverImage: game.coverImage, status: game.status });
+    setGameSlugEdited(true);
     setActiveGameId(game.id);
     setTab("games");
   }
@@ -210,9 +225,10 @@ export default function AdminPortal() {
     await withAdminRequest(async (token) => {
       const path = editingGameId ? `/games/${editingGameId}` : "/games";
       const method = editingGameId ? "PATCH" : "POST";
-      await adminRequest(path, token, { method, body: JSON.stringify(gameForm) });
+      await adminRequest(path, token, { method, body: JSON.stringify({ ...gameForm, slug: toSlug(gameForm.slug || gameForm.title) }) });
       setGameForm(blankGame);
       setEditingGameId(null);
+      setGameSlugEdited(false);
     }, editingGameId ? "Game updated." : "Game created as configured.");
   }
 
@@ -235,11 +251,13 @@ export default function AdminPortal() {
     setActiveGameId(gameId);
     setEditingPuzzleId(null);
     setPuzzleForm(blankPuzzle);
+    setPuzzleSlugEdited(false);
   }
 
   function startEditPuzzle(gameId, puzzle) {
     setActiveGameId(gameId);
     setEditingPuzzleId(puzzle.id);
+    setPuzzleSlugEdited(true);
     setPuzzleForm({
       slug: puzzle.slug, title: puzzle.title, imageUrl: puzzle.imageUrl,
       pieceCount: puzzle.pieceCount, difficulty: puzzle.difficulty,
@@ -256,12 +274,13 @@ export default function AdminPortal() {
     if (!activeGameId) return;
     const price = puzzleForm.price === "" ? null : Math.round(Number(puzzleForm.price) * 100);
     const funFacts = puzzleForm.funFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
-    const payload = { slug: puzzleForm.slug, title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFacts, pricing: price == null ? null : { amountMinor: price, currency: puzzleForm.currency } } };
+    const payload = { slug: toSlug(puzzleForm.slug || puzzleForm.title), title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFacts, pricing: price == null ? null : { amountMinor: price, currency: puzzleForm.currency } } };
     await withAdminRequest(async (token) => {
       const path = editingPuzzleId ? `/puzzles/${editingPuzzleId}` : `/games/${activeGameId}/puzzles`;
       await adminRequest(path, token, { method: editingPuzzleId ? "PATCH" : "POST", body: JSON.stringify(payload) });
       setPuzzleForm(blankPuzzle);
       setEditingPuzzleId(null);
+      setPuzzleSlugEdited(false);
     }, editingPuzzleId ? "Puzzle updated." : "Puzzle added.");
   }
 
@@ -431,15 +450,15 @@ export default function AdminPortal() {
 
         {tab === "games" && <div className="admin-content admin-game-layout">
           <section className="admin-panel">
-            <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Create a game"}</h2><p>Control the public title, story, cover and publishing state.</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
+            <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Create a game"}</h2><p>Control the public title, story, cover and publishing state.</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); setGameSlugEdited(false); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
             <form className="admin-form" onSubmit={saveGame}>
-              <label className="admin-field">Title<input value={gameForm.title} onChange={(e) => setGameForm({ ...gameForm, title: e.target.value })} required minLength={2} maxLength={140} /></label>
-              <label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => setGameForm({ ...gameForm, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Lowercase words separated by hyphens.</small></label>
+              <label className="admin-field">Title<input value={gameForm.title} onChange={(e) => setGameForm((current) => ({ ...current, title: e.target.value, slug: gameSlugEdited ? current.slug : toSlug(e.target.value) }))} required minLength={2} maxLength={140} /></label>
+              <label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => { setGameSlugEdited(true); setGameForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. You can change it; punctuation is cleaned for you.</small></label>
               <label className="admin-field">Description<textarea value={gameForm.description} onChange={(e) => setGameForm({ ...gameForm, description: e.target.value })} required rows={3} /></label>
               <label className="admin-field">Category<input value={gameForm.category} onChange={(e) => setGameForm({ ...gameForm, category: e.target.value })} required /></label>
               <ImageUploadField label="Game cover image" value={gameForm.coverImage} uploading={saving} onUpload={(file) => uploadImage(file, (coverImage) => setGameForm((current) => ({ ...current, coverImage })))} />
               <label className="admin-field">Publishing state<select value={gameForm.status} onChange={(e) => setGameForm({ ...gameForm, status: e.target.value })}><option value="DRAFT">Draft — hidden from players</option><option value="PUBLISHED">Published — visible to players</option><option value="ARCHIVED">Archived — hidden from players</option></select></label>
-              <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : "Create game"}</button>
+              <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving || !gameForm.coverImage}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : "Create game"}</button>
             </form>
           </section>
           <section className="admin-panel">
@@ -450,9 +469,9 @@ export default function AdminPortal() {
               {activeGameId === game.id && <div className="admin-puzzles"><div className="admin-puzzle-heading"><strong>Puzzles for {game.title}</strong><button className="admin-button admin-button-primary" onClick={() => startNewPuzzle(game.id)}><Plus size={14} /> Add puzzle</button></div>
                 {game.puzzles.map((puzzle) => <div className="admin-puzzle-row" key={puzzle.id}><div><strong>{puzzle.title}</strong><span>{puzzle.pieceCount} pieces · {puzzle.difficulty} · {puzzle.isActive ? "Active" : "Inactive"}</span></div><button className="admin-row-action" onClick={() => startEditPuzzle(game.id, puzzle)}>Edit</button><button className="admin-row-action" onClick={() => togglePuzzle(game.id, puzzle)}>{puzzle.isActive ? "Deactivate" : "Activate"}</button><button className="admin-row-action danger-text" onClick={() => deletePuzzle(puzzle)}>Delete</button></div>)}
                 {(!game.puzzles || game.puzzles.length === 0) && <p className="admin-empty">No puzzles yet. Add one to make this game playable.</p>}
-                {activeGameId === game.id && <form className="admin-form admin-puzzle-form" onSubmit={savePuzzle}><div className="admin-panel-heading"><h3>{editingPuzzleId ? "Edit puzzle" : "New puzzle"}</h3>{editingPuzzleId && <button type="button" className="admin-icon-button" onClick={() => { setEditingPuzzleId(null); setPuzzleForm(blankPuzzle); }}><X size={15} /></button>}</div>
-                  <label className="admin-field">Puzzle title<input value={puzzleForm.title} onChange={(e) => setPuzzleForm({ ...puzzleForm, title: e.target.value })} required /></label>
-                  <label className="admin-field">Slug<input value={puzzleForm.slug} onChange={(e) => setPuzzleForm({ ...puzzleForm, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /></label>
+                {activeGameId === game.id && <form className="admin-form admin-puzzle-form" onSubmit={savePuzzle}><div className="admin-panel-heading"><h3>{editingPuzzleId ? "Edit puzzle" : "New puzzle"}</h3>{editingPuzzleId && <button type="button" className="admin-icon-button" onClick={() => { setEditingPuzzleId(null); setPuzzleForm(blankPuzzle); setPuzzleSlugEdited(false); }}><X size={15} /></button>}</div>
+                  <label className="admin-field">Puzzle title<input value={puzzleForm.title} onChange={(e) => setPuzzleForm((current) => ({ ...current, title: e.target.value, slug: puzzleSlugEdited ? current.slug : toSlug(e.target.value) }))} required /></label>
+                  <label className="admin-field">Slug<input value={puzzleForm.slug} onChange={(e) => { setPuzzleSlugEdited(true); setPuzzleForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. Punctuation is cleaned for you.</small></label>
                   <ImageUploadField label="Puzzle image" value={puzzleForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setPuzzleForm((current) => ({ ...current, imageUrl })))} />
                   <div className="admin-form-two"><label className="admin-field">Pieces<input type="number" min="2" max="1000" value={puzzleForm.pieceCount} onChange={(e) => setPuzzleForm({ ...puzzleForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Difficulty<select value={puzzleForm.difficulty} onChange={(e) => setPuzzleForm({ ...puzzleForm, difficulty: e.target.value })}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div>
                   <fieldset className="admin-difficulty-options"><legend>Levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={puzzleForm.allowedDifficulties.includes(level)} onChange={(event) => setPuzzleForm({ ...puzzleForm, allowedDifficulties: event.target.checked ? [...puzzleForm.allowedDifficulties, level] : puzzleForm.allowedDifficulties.filter((item) => item !== level) })} disabled={puzzleForm.allowedDifficulties.length === 1 && puzzleForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset>
