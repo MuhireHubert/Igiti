@@ -16,7 +16,7 @@ const imageUpload = multer({
   // Artwork supplied for the A-54 deck and puzzles can be high resolution.
   // Keep one-file, in-memory uploads bounded while allowing the 30 MB originals
   // that content editors work with.
-  limits: { fileSize: 35 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, callback) => {
     callback(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype));
   },
@@ -93,7 +93,7 @@ router.use(requireAdmin);
 // not on Render's ephemeral filesystem, so country-card artwork survives deploys.
 router.post("/media/images", requireRole("OWNER"), (req, res, next) => {
   imageUpload.single("file")(req, res, (error) => {
-    if (error) return res.status(400).json({ error: error.code === "LIMIT_FILE_SIZE" ? "Image must be 35 MB or smaller." : "Upload one JPG, PNG, or WebP image." });
+    if (error) return res.status(400).json({ error: error.code === "LIMIT_FILE_SIZE" ? "Image must be 50 MB or smaller." : "Upload one JPG, PNG, or WebP image." });
     return next();
   });
 }, async (req, res, next) => {
