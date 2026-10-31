@@ -209,6 +209,8 @@ async function requirePlayer(req, res, next) {
 // never self-service, and accounts explicitly managed by the owner cannot
 // overwrite their assigned role here.
 const selfRoleSchema = z.object({ role: z.enum(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]) });
+const schoolNameSchema = z.object({ name: z.string().trim().min(2).max(160) });
+const schoolMembershipSchema = z.object({ schoolId: z.string().trim().min(1).max(64) });
 app.put("/v1/me/role", requirePlayer, async (req, res, next) => {
   const parsed = selfRoleSchema.safeParse(req.body);
   if (!parsed.success || !selfSelectableRoles.has(parsed.data?.role)) {
@@ -223,6 +225,35 @@ app.put("/v1/me/role", requirePlayer, async (req, res, next) => {
       select: { id: true, role: true },
     });
     res.json({ data: player });
+  } catch (error) { next(error); }
+});
+
+app.get("/v1/schools", async (_req, res, next) => {
+  try {
+    const schools = await prisma.school.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+    res.json({ data: schools });
+  } catch (error) { next(error); }
+});
+
+app.put("/v1/me/school", requirePlayer, async (req, res, next) => {
+  const parsed = schoolNameSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a school name." });
+  if (req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only school accounts can create a school workspace." });
+  try {
+    const school = await prisma.school.upsert({ where: { ownerId: req.player.id }, update: { name: parsed.data.name }, create: { name: parsed.data.name, ownerId: req.player.id }, select: { id: true, name: true } });
+    res.json({ data: school });
+  } catch (error) { if (error?.code === "P2002") return res.status(409).json({ error: "That school name is already in use." }); next(error); }
+});
+
+app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
+  const parsed = schoolMembershipSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose a valid school." });
+  if (!["TEACHER", "STUDENT"].includes(req.player.role)) return res.status(403).json({ error: "Only teacher and student accounts can choose a school." });
+  try {
+    const school = await prisma.school.findUnique({ where: { id: parsed.data.schoolId }, select: { id: true, name: true } });
+    if (!school) return res.status(404).json({ error: "School not found." });
+    const membership = await prisma.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } }, update: { role: req.player.role }, create: { schoolId: school.id, playerId: req.player.id, role: req.player.role }, select: { id: true, schoolId: true, role: true } });
+    res.json({ data: { ...membership, school } });
   } catch (error) { next(error); }
 });
 
@@ -410,11 +441,12 @@ app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
       });
       return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: membership?.school.memberships.map((member) => member.player) || [] } });
     }
+    const membership = player.role === "STUDENT" ? await prisma.schoolMembership.findFirst({ where: { playerId: player.id, role: "STUDENT" }, select: { school: { select: { id: true, name: true } } } }) : null;
     const assignments = await prisma.gameAssignment.findMany({
       where: { recipientId: player.id }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
       select: { id: true, dueAt: true, createdAt: true, game: { select: { id: true, title: true, slug: true, coverImage: true } }, assignedBy: { select: { displayName: true, role: true } }, school: { select: { name: true } } },
     });
-    return res.json({ data: { ...base, workspace: player.role === "STUDENT" ? "STUDENT" : "PLAYER", assignments } });
+    return res.json({ data: { ...base, workspace: player.role === "STUDENT" ? "STUDENT" : "PLAYER", school: membership?.school || null, assignments } });
   } catch (error) { next(error); }
 });
 

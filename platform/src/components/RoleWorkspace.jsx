@@ -50,6 +50,9 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
   const [recipientId, setRecipientId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [offers, setOffers] = useState([]);
+  const [schools, setSchools] = useState([]);
+  const [schoolName, setSchoolName] = useState("");
+  const [selectedSchoolId, setSelectedSchoolId] = useState("");
   const [entitlements, setEntitlements] = useState([]);
   const [checkout, setCheckout] = useState({ configured: false, environment: "sandbox" });
   const [purchasing, setPurchasing] = useState("");
@@ -59,15 +62,17 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
     setState({ loading: true, error: "", message: "" });
     try {
       const token = await user.getIdToken();
-      const [data, collection, offerResponse, checkoutResponse, accessList] = await Promise.all([
+      const [data, collection, offerResponse, checkoutResponse, accessList, schoolList] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
         fetch(`${getApiBaseUrl()}/v1/offers`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/entitlements", token),
+        fetch(`${getApiBaseUrl()}/v1/schools`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
       ]);
       setWorkspace(data);
       setOffers(offerResponse.data || []);
       setEntitlements(accessList || []);
+      setSchools(schoolList.data || []);
       setCheckout(checkoutResponse.data || { configured: false, environment: "sandbox" });
       // Assignments reference the server Game id, not the built-in preview
       // card game (which intentionally has no database record yet).
@@ -106,6 +111,16 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
     }
   }
 
+  async function saveSchool(event) {
+    event.preventDefault();
+    try { const token = await user.getIdToken(); await playerRequest("/school", token, { method: "PUT", body: JSON.stringify({ name: schoolName }) }); setState((current) => ({ ...current, message: "School workspace saved." })); await refresh(); } catch (error) { setState((current) => ({ ...current, error: error.message })); }
+  }
+
+  async function chooseSchool(event) {
+    event.preventDefault();
+    try { const token = await user.getIdToken(); await playerRequest("/school-membership", token, { method: "PUT", body: JSON.stringify({ schoolId: selectedSchoolId }) }); setState((current) => ({ ...current, message: "School membership saved." })); await refresh(); } catch (error) { setState((current) => ({ ...current, error: error.message })); }
+  }
+
   if (state.loading) return <p className="role-workspace-loading">Loading your workspace…</p>;
   if (state.error) return <p className="account-error">{state.error}</p>;
   const meta = roleMeta[workspace?.role] || roleMeta.PLAYER;
@@ -122,6 +137,8 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
   return <section className="role-workspace" aria-label={`${meta.label} workspace`}>
     <div className="role-workspace-head"><span><Icon size={16} /></span><div><strong>{meta.label} workspace</strong><small>{meta.copy}</small></div></div>
     {isAdmin && <button className="button button-dark account-wide" onClick={onOpenAdmin}><Crown size={15} /> Open control room</button>}
+    {workspace?.role === "SCHOOL" && !workspace.school && <form className="role-assignment-form" onSubmit={saveSchool}><strong>Create your school workspace</strong><small>Teachers and students will select this school before you can assign learning games.</small><label className="account-field">School name<input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} required minLength={2} /></label><button className="button button-primary account-wide">Create school</button></form>}
+    {["TEACHER", "STUDENT"].includes(workspace?.role) && <form className="role-assignment-form" onSubmit={chooseSchool}><strong>{workspace.school ? `School: ${workspace.school.name}` : "Choose your school"}</strong><small>Select the school you belong to. Its school account can then connect your teaching or learning assignments.</small><label className="account-field">School<select value={selectedSchoolId} onChange={(event) => setSelectedSchoolId(event.target.value)} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><button className="button button-primary account-wide" disabled={!selectedSchoolId}>Save school</button></form>}
     {canAssign && <form className="role-assignment-form" onSubmit={assign}>
       <strong>{workspace.role === "SCHOOL" ? "Assign a game to a teacher" : "Assign a game to a student"}</strong>
       <small>{workspace.school ? `${workspace.school.name} · ${workspace.recipients.length} eligible recipient(s)` : "Ask the owner to add your school membership first."}</small>
