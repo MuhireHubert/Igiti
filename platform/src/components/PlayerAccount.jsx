@@ -40,7 +40,7 @@ export default function PlayerAccount() {
       } else {
         await signIn(email, password);
         setOpen(false);
-        navigate("/workspace");
+        navigate("/settings");
       }
       setPassword("");
     } catch (err) {
@@ -77,7 +77,7 @@ export default function PlayerAccount() {
             {user.emailVerified ? <p className="account-status"><CheckCircle2 size={16} /> Email verified</p> : <p className="account-status">Check your inbox for an email verification message.</p>}
             {message && <p className="account-message" role="status">{message}</p>}
             {error && <p className="account-error" role="alert">{error}</p>}
-            <button className="button button-primary account-wide" onClick={() => navigate("/workspace")}>Open my role portal</button>
+            <button className="button button-primary account-wide" onClick={() => { setOpen(false); navigate("/settings"); }}>Account settings & plans</button>
             {confirmingSignOut ? <div className="account-signout-confirm"><p>Sign out of Igiti Play on this device?</p><div><button className="button button-dark" onClick={handleSignOut}><LogOut size={16} /> Yes, sign out</button><button className="button button-outline" onClick={() => setConfirmingSignOut(false)}>Stay signed in</button></div></div> : <button className="account-signout-link" onClick={() => setConfirmingSignOut(true)}><LogOut size={15} /> Sign out securely</button>}
             <p className="account-copy account-small">Your browser save remains available even when you sign out.</p>
           </> : <>

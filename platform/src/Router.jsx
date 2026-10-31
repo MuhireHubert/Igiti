@@ -16,6 +16,7 @@ export default function Router() {
         <Route path="/how-to-play" element={<HowToPlayPage />} />
         <Route path="/admin" element={<AdminPortal />} />
         <Route path="/workspace" element={<RolePortal />} />
+        <Route path="/settings" element={<RolePortal />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
