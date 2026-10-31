@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, BookOpenCheck, CalendarDays, Crown, GraduationCap, LifeBuoy, School, ShoppingBag, UserRound } from "lucide-react";
 import { getApiBaseUrl, getGames } from "../lib/api.js";
+import { cardModes } from "../lib/africaDeck.js";
 
 const roleMeta = {
   PLAYER: { label: "Player", icon: UserRound, copy: "Play games, keep your cloud saves, and manage your own progress." },
@@ -49,7 +50,7 @@ async function checkoutRequest(path, token, options = {}) {
 export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [workspace, setWorkspace] = useState(null);
   const [games, setGames] = useState([]);
-  const [gameId, setGameId] = useState("");
+  const [assignmentTarget, setAssignmentTarget] = useState("");
   const [recipientId, setRecipientId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [offers, setOffers] = useState([]);
@@ -94,8 +95,13 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState((current) => ({ ...current, error: "", message: "" }));
     try {
       const token = await user.getIdToken();
-      await playerRequest("/assignments", token, { method: "POST", body: JSON.stringify({ gameId, recipientId, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined }) });
-      setGameId(""); setRecipientId(""); setDueAt("");
+      const due = dueAt ? new Date(dueAt).toISOString() : undefined;
+      if (assignmentTarget.startsWith("card:")) {
+        await playerRequest("/resource-assignments", token, { method: "POST", body: JSON.stringify({ resource: `card-mode:${assignmentTarget.slice("card:".length)}`, recipientId, dueAt: due }) });
+      } else {
+        await playerRequest("/assignments", token, { method: "POST", body: JSON.stringify({ gameId: assignmentTarget.slice("game:".length), recipientId, dueAt: due }) });
+      }
+      setAssignmentTarget(""); setRecipientId(""); setDueAt("");
       await refresh();
       setState({ loading: false, error: "", message: "Game assigned." });
     } catch (error) { setState({ loading: false, error: error.message, message: "" }); }
@@ -148,7 +154,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
       <strong>{workspace.role === "SCHOOL" ? "Assign a game to a teacher" : "Assign a game to a student"}</strong>
       <small>{workspace.school ? `${workspace.school.name} · ${workspace.recipients.length} eligible recipient(s)` : "Ask the owner to add your school membership first."}</small>
       <label className="account-field">Recipient<select value={recipientId} onChange={(event) => setRecipientId(event.target.value)} required><option value="">Choose a recipient</option>{workspace.recipients.map((recipient) => <option key={recipient.id} value={recipient.id}>{recipient.displayName || "Unnamed account"}</option>)}</select></label>
-      <label className="account-field">Published game<select value={gameId} onChange={(event) => setGameId(event.target.value)} required><option value="">Choose a game</option>{games.map((game) => <option key={game.id} value={game.gameId || game.id}>{game.title}</option>)}</select></label>
+      <label className="account-field">Learning content<select value={assignmentTarget} onChange={(event) => setAssignmentTarget(event.target.value)} required><option value="">Choose a puzzle game or A-54 card mode</option><optgroup label="Published puzzle games">{games.map((game) => <option key={game.id} value={`game:${game.gameId || game.id}`}>{game.title}</option>)}</optgroup><optgroup label="A-54 card modes">{cardModes.map((mode) => <option key={mode.id} value={`card:${mode.id}`}>A-54 · {mode.title}</option>)}</optgroup></select></label>
       <label className="account-field">Due date <small>(optional)</small><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label>
       <button className="button button-primary account-wide" disabled={!workspace.recipients.length}><BookOpenCheck size={15} /> Assign game</button>
     </form>}

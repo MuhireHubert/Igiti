@@ -75,6 +75,8 @@ model PlayerProfile {
   schoolMemberships SchoolMembership[]
   assignmentsSent GameAssignment[] @relation("AssignmentSender")
   assignmentsReceived GameAssignment[] @relation("AssignmentRecipient")
+  resourceAssignmentsSent ResourceAssignment[] @relation("ResourceAssignmentSender")
+  resourceAssignmentsReceived ResourceAssignment[] @relation("ResourceAssignmentRecipient")
 }
 
 model School {
@@ -86,6 +88,7 @@ model School {
   owner       PlayerProfile @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   memberships SchoolMembership[]
   assignments GameAssignment[]
+  resourceAssignments ResourceAssignment[]
 }
 
 model SchoolMembership {
@@ -115,6 +118,26 @@ model GameAssignment {
   school       School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
 
   @@unique([gameId, recipientId])
+  @@index([assignedById, createdAt])
+  @@index([recipientId, dueAt])
+}
+
+// A learning assignment is separate from a purchase entitlement. It is issued
+// only by a licensed school/teacher to a member in the same school, and gives
+// that recipient access to one A-54 mode without exposing their payment data.
+model ResourceAssignment {
+  id           String        @id @default(cuid())
+  resource     String        @db.VarChar(191)
+  assignedById String
+  recipientId  String
+  schoolId     String?
+  dueAt        DateTime?
+  createdAt    DateTime      @default(now())
+  assignedBy   PlayerProfile @relation("ResourceAssignmentSender", fields: [assignedById], references: [id], onDelete: Restrict)
+  recipient    PlayerProfile @relation("ResourceAssignmentRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  school       School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+
+  @@unique([resource, recipientId])
   @@index([assignedById, createdAt])
   @@index([recipientId, dueAt])
 }

@@ -23,7 +23,12 @@ const copy = {
 
 function AssignmentList({ assignments = [] }) {
   if (!assignments.length) return <p className="portal-empty">Nothing has been assigned yet. Your teacher will add games here.</p>;
-  return <div className="portal-assignment-list">{assignments.map((assignment) => <article key={assignment.id}><img src={assignment.game.coverImage} alt="" /><div><strong>{assignment.game.title}</strong><small>From {assignment.assignedBy.displayName || assignment.assignedBy.role}{assignment.dueAt ? ` · due ${new Date(assignment.dueAt).toLocaleDateString()}` : ""}</small></div><Link to={`/games/${assignment.game.id}`} aria-label={`Open ${assignment.game.title}`}><ArrowRight size={17} /></Link></article>)}</div>;
+  return <div className="portal-assignment-list">{assignments.map((assignment) => {
+    const isCardMode = Boolean(assignment.resource);
+    const title = assignment.game?.title || assignment.label || "A-54 card mode";
+    const destination = isCardMode ? "/" : `/games/${assignment.game.id}`;
+    return <article key={`${isCardMode ? assignment.resource : assignment.game?.id}-${assignment.id}`}>{assignment.game?.coverImage ? <img src={assignment.game.coverImage} alt="" /> : <span className="portal-card-assignment" aria-hidden="true">A-54</span>}<div><strong>{title}</strong><small>From {assignment.assignedBy.displayName || assignment.assignedBy.role}{assignment.dueAt ? ` · due ${new Date(assignment.dueAt).toLocaleDateString()}` : ""}</small></div><Link to={destination} aria-label={`Open ${title}`}><ArrowRight size={17} /></Link></article>;
+  })}</div>;
 }
 
 export default function RolePortal() {

@@ -259,6 +259,9 @@ app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
 
 const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120) });
 const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
+const CARD_MODE_IDS = new Set(["quick-facts", "matching", "card-war", "guess-country", "who-am-i", "regional", "thematic", "roleplay"]);
+const CARD_MODE_LABELS = { "quick-facts": "Quick Facts Showdown", matching: "Country Matching", "card-war": "Igiti Card War", "guess-country": "Guess the Country", "who-am-i": "Who am I?", regional: "Regional Challenges", thematic: "Thematic Discovery", roleplay: "Country Roleplay Day" };
+function cardModeLabel(resource) { return `A-54 · ${CARD_MODE_LABELS[String(resource).slice("card-mode:".length)] || "Card mode"}`; }
 
 function expiryFor(interval, now = new Date()) {
   if (interval === "ONE_TIME") return null;
@@ -270,7 +273,7 @@ function expiryFor(interval, now = new Date()) {
 
 async function resourceAccessForPlayer(player, resource, { requirePurchase = false } = {}) {
   const eligibleOfferResources = resource.startsWith("card-mode:") ? [resource, "card:all"] : [resource];
-  const [offer, allAccessOffers] = await Promise.all([
+  const [offer, allAccessOffers, assignment] = await Promise.all([
     prisma.accessOffer.findFirst({
       where: { resource: { in: eligibleOfferResources }, isActive: true, amountMinor: { gt: 0 } },
       orderBy: { amountMinor: "asc" },
@@ -280,6 +283,10 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
       where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 } },
       select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
     }),
+    prisma.resourceAssignment.findFirst({
+      where: { recipientId: player.id, resource: { in: eligibleOfferResources } },
+      select: { id: true, dueAt: true, schoolId: true },
+    }),
   ]);
   // A plan makes the full catalogue paid, while a direct offer locks only its
   // own resource. This permits individual purchases alongside monthly access.
@@ -287,6 +294,7 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
   // Platform operators need access to test and administer paid content.
   const purchaseOffer = offer || allAccessOffers.find((item) => item.resource === (player.role === "SCHOOL" ? "plan:school:all" : "plan:user:all")) || allAccessOffers[0];
   if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer: purchaseOffer, operator: true };
+  if (assignment) return { permitted: true, paid: true, offer: purchaseOffer, assignment };
   const now = new Date();
   const activeAccess = { status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
   const entitlement = await prisma.accessEntitlement.findFirst({
@@ -313,6 +321,8 @@ async function puzzleAccessForPlayer(player, puzzleId) {
   });
   if (!puzzle) return { found: false, permitted: false, paid: false, offer: null };
   if (puzzle.game.slug === "africa-landmarks") return { found: true, permitted: true, paid: false, offer: null, freePreview: true };
+  const assignment = await prisma.gameAssignment.findFirst({ where: { recipientId: player.id, game: { puzzles: { some: { id: puzzleId } } } }, select: { id: true, dueAt: true, schoolId: true } });
+  if (assignment) return { found: true, permitted: true, paid: true, offer: null, assignment };
   return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`, { requirePurchase: true })) };
 }
 
@@ -422,6 +432,10 @@ const assignmentSchema = z.object({
   gameId: z.string().min(1).max(64), recipientId: z.string().min(1).max(64), schoolId: z.string().min(1).max(64).optional(),
   dueAt: z.string().datetime().optional(),
 });
+const resourceAssignmentSchema = z.object({
+  resource: z.string().regex(/^card-mode:[a-z0-9-]{2,80}$/), recipientId: z.string().min(1).max(64), schoolId: z.string().min(1).max(64).optional(),
+  dueAt: z.string().datetime().optional(),
+});
 
 app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
   try {
@@ -442,20 +456,34 @@ app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
       return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: membership?.school.memberships.map((member) => member.player) || [] } });
     }
     const membership = player.role === "STUDENT" ? await prisma.schoolMembership.findFirst({ where: { playerId: player.id, role: "STUDENT" }, select: { school: { select: { id: true, name: true } } } }) : null;
-    const assignments = await prisma.gameAssignment.findMany({
+    const [gameAssignments, resourceAssignments] = await Promise.all([
+      prisma.gameAssignment.findMany({
       where: { recipientId: player.id }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
       select: { id: true, dueAt: true, createdAt: true, game: { select: { id: true, title: true, slug: true, coverImage: true } }, assignedBy: { select: { displayName: true, role: true } }, school: { select: { name: true } } },
-    });
+      }),
+      prisma.resourceAssignment.findMany({
+        where: { recipientId: player.id }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+        select: { id: true, resource: true, dueAt: true, createdAt: true, assignedBy: { select: { displayName: true, role: true } }, school: { select: { name: true } } },
+      }),
+    ]);
+    const assignments = [...gameAssignments, ...resourceAssignments.map((assignment) => ({ ...assignment, label: cardModeLabel(assignment.resource) }))].sort((left, right) => +new Date(left.dueAt || "9999-12-31") - +new Date(right.dueAt || "9999-12-31"));
     return res.json({ data: { ...base, workspace: player.role === "STUDENT" ? "STUDENT" : "PLAYER", school: membership?.school || null, assignments } });
   } catch (error) { next(error); }
 });
 
 app.get("/v1/me/assignments", requirePlayer, async (req, res, next) => {
   try {
-    const assignments = await prisma.gameAssignment.findMany({
+    const [gameAssignments, resourceAssignments] = await Promise.all([
+      prisma.gameAssignment.findMany({
       where: { recipientId: req.player.id }, orderBy: { createdAt: "desc" },
       select: { id: true, dueAt: true, createdAt: true, game: { select: { id: true, title: true, slug: true, coverImage: true } }, assignedBy: { select: { displayName: true, role: true } }, school: { select: { id: true, name: true } } },
-    });
+      }),
+      prisma.resourceAssignment.findMany({
+        where: { recipientId: req.player.id }, orderBy: { createdAt: "desc" },
+        select: { id: true, resource: true, dueAt: true, createdAt: true, assignedBy: { select: { displayName: true, role: true } }, school: { select: { id: true, name: true } } },
+      }),
+    ]);
+    const assignments = [...gameAssignments, ...resourceAssignments.map((assignment) => ({ ...assignment, label: cardModeLabel(assignment.resource) }))].sort((left, right) => +new Date(right.createdAt) - +new Date(left.createdAt));
     res.json({ data: assignments });
   } catch (error) { next(error); }
 });
@@ -483,11 +511,54 @@ app.post("/v1/me/assignments", requirePlayer, async (req, res, next) => {
       if (!membership || recipient.role !== "STUDENT" || student?.role !== "STUDENT") return res.status(403).json({ error: "A teacher may assign games only to students in their school." });
       resolvedSchoolId = membership.schoolId;
     }
+    const game = await prisma.game.findFirst({
+      where: { id: gameId, status: "PUBLISHED", publishedAt: { lte: new Date() } },
+      select: { puzzles: { where: { isActive: true }, select: { id: true }, take: 1 } },
+    });
+    if (!game?.puzzles[0]) return res.status(404).json({ error: "That published game is not available for assignment." });
+    const senderAccess = await puzzleAccessForPlayer(sender, game.puzzles[0].id);
+    if (!senderAccess.permitted) return res.status(402).json({ error: "Purchase or activate access before assigning this game." });
     const assignment = await prisma.gameAssignment.upsert({
       where: { gameId_recipientId: { gameId, recipientId } },
       update: { assignedById: sender.id, schoolId: resolvedSchoolId, dueAt: dueAt ? new Date(dueAt) : null },
       create: { gameId, recipientId, assignedById: sender.id, schoolId: resolvedSchoolId, dueAt: dueAt ? new Date(dueAt) : null },
       select: { id: true, gameId: true, recipientId: true, dueAt: true, schoolId: true },
+    });
+    res.status(201).json({ data: assignment });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/me/resource-assignments", requirePlayer, async (req, res, next) => {
+  const parsed = resourceAssignmentSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a valid A-54 card mode, recipient, and optional ISO due date." });
+  try {
+    const { resource, recipientId, schoolId, dueAt } = parsed.data;
+    const modeId = resource.slice("card-mode:".length);
+    if (!CARD_MODE_IDS.has(modeId)) return res.status(400).json({ error: "That A-54 mode does not exist." });
+    const sender = req.player;
+    if (!["SCHOOL", "TEACHER", "ADMIN", "OWNER"].includes(sender.role)) return res.status(403).json({ error: "Only schools, teachers, and administrators can assign card modes." });
+    const recipient = await prisma.playerProfile.findUnique({ where: { id: recipientId }, select: { id: true, role: true } });
+    if (!recipient) return res.status(404).json({ error: "Recipient not found." });
+    let resolvedSchoolId = schoolId || null;
+    if (sender.role === "SCHOOL") {
+      const school = await prisma.school.findUnique({ where: { ownerId: sender.id }, select: { id: true } });
+      const membership = school && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: recipientId } } });
+      if (!school || recipient.role !== "TEACHER" || membership?.role !== "TEACHER") return res.status(403).json({ error: "A school may assign card modes only to teachers in its school." });
+      resolvedSchoolId = school.id;
+    }
+    if (sender.role === "TEACHER") {
+      const membership = await prisma.schoolMembership.findFirst({ where: { playerId: sender.id, role: "TEACHER" }, select: { schoolId: true } });
+      const student = membership && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: membership.schoolId, playerId: recipientId } } });
+      if (!membership || recipient.role !== "STUDENT" || student?.role !== "STUDENT") return res.status(403).json({ error: "A teacher may assign card modes only to students in their school." });
+      resolvedSchoolId = membership.schoolId;
+    }
+    const senderAccess = await resourceAccessForPlayer(sender, resource, { requirePurchase: true });
+    if (!senderAccess.permitted) return res.status(402).json({ error: "Purchase or activate this card mode before assigning it." });
+    const assignment = await prisma.resourceAssignment.upsert({
+      where: { resource_recipientId: { resource, recipientId } },
+      update: { assignedById: sender.id, schoolId: resolvedSchoolId, dueAt: dueAt ? new Date(dueAt) : null },
+      create: { resource, recipientId, assignedById: sender.id, schoolId: resolvedSchoolId, dueAt: dueAt ? new Date(dueAt) : null },
+      select: { id: true, resource: true, recipientId: true, dueAt: true, schoolId: true },
     });
     res.status(201).json({ data: assignment });
   } catch (error) { next(error); }
