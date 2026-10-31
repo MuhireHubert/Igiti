@@ -75,9 +75,20 @@ function GamePreview({ game, onBack }) {
   const [playing, setPlaying] = useState(false);
   const [accessMessage, setAccessMessage] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(false);
+  const [cataloguePolicy, setCataloguePolicy] = useState(null);
   const paid = Number(game.price?.amountMinor || 0) > 0;
+  const requiresPurchase = paid || cataloguePolicy?.catalogueRequiresSubscription === true;
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${getApiBaseUrl()}/v1/access-policy`, { headers: { Accept: "application/json" }, signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Access is currently unavailable.")))
+      .then((payload) => setCataloguePolicy(payload.data || { catalogueRequiresSubscription: false }))
+      .catch((error) => { if (error.name !== "AbortError") setAccessMessage(error.message); });
+    return () => controller.abort();
+  }, []);
   async function startPuzzle() {
-    if (!paid) { setPlaying(true); return; }
+    if (!cataloguePolicy) { setAccessMessage("Checking access. Please try again in a moment."); return; }
+    if (!requiresPurchase) { setPlaying(true); return; }
     if (!user) { setAccessMessage("Sign in, then purchase access before playing this paid game."); return; }
     setCheckingAccess(true);
     setAccessMessage("");
@@ -104,9 +115,9 @@ function GamePreview({ game, onBack }) {
           <div className="detail-stats"><span><Puzzle size={16} /> {game.pieces} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div>
           <div className="notice"><Sparkles size={17} /><span>Beat the board, protect your streak, and return anytime—your progress saves automatically.</span></div>
           {accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}
-          {paid && <p className="game-price">Paid access · {(Number(game.price.amountMinor) / 100).toFixed(2)} {game.price.currency}</p>}
-          <button className="button button-primary" onClick={startPuzzle} disabled={checkingAccess}>{checkingAccess ? "Checking access…" : paid ? "Play or unlock" : "Play puzzle"} <ArrowRight size={17} /></button>
-          {paid && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>Go to secure checkout <ArrowRight size={16} /></button>}
+          {requiresPurchase && <p className="game-price">{paid ? `Individual access · ${(Number(game.price.amountMinor) / 100).toFixed(2)} ${game.price.currency}` : "Subscriber access required"}</p>}
+          <button className="button button-primary" onClick={startPuzzle} disabled={checkingAccess || !cataloguePolicy}>{checkingAccess || !cataloguePolicy ? "Checking access…" : requiresPurchase ? "Play or unlock" : "Play puzzle"} <ArrowRight size={17} /></button>
+          {requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>View plans and secure checkout <ArrowRight size={16} /></button>}
         </div>
       </div>
     </section>

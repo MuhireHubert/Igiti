@@ -120,6 +120,20 @@ app.get("/v1/offers", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// Public policy only: it tells the client whether the catalogue is subscriber
+// gated, without exposing credentials or treating the client as the authority.
+app.get("/v1/access-policy", async (_req, res, next) => {
+  try {
+    const plans = await prisma.accessOffer.findMany({
+      where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 } },
+      select: { key: true, title: true, description: true, resource: true, amountMinor: true, currency: true, interval: true },
+      orderBy: { amountMinor: "asc" },
+    });
+    res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+    res.json({ data: { catalogueRequiresSubscription: plans.length > 0, plans } });
+  } catch (error) { next(error); }
+});
+
 app.get("/v1/country-assets", async (_req, res, next) => {
   try {
     const assets = await prisma.countryAsset.findMany({
@@ -210,6 +224,7 @@ app.put("/v1/me/role", requirePlayer, async (req, res, next) => {
 });
 
 const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120) });
+const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
 
 function expiryFor(interval, now = new Date()) {
   if (interval === "ONE_TIME") return null;
@@ -220,20 +235,39 @@ function expiryFor(interval, now = new Date()) {
 }
 
 async function resourceAccessForPlayer(player, resource) {
-  const offer = await prisma.accessOffer.findFirst({
-    where: { resource, isActive: true, amountMinor: { gt: 0 } },
-    select: { key: true, title: true, amountMinor: true, currency: true, interval: true },
-  });
-  // No active paid offer means this resource is intentionally free.
-  if (!offer) return { permitted: true, paid: false, offer: null };
+  const [offer, allAccessOffers] = await Promise.all([
+    prisma.accessOffer.findFirst({
+      where: { resource, isActive: true, amountMinor: { gt: 0 } },
+      select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
+    }),
+    prisma.accessOffer.findMany({
+      where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 } },
+      select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
+    }),
+  ]);
+  // A plan makes the full catalogue paid, while a direct offer locks only its
+  // own resource. This permits individual purchases alongside monthly access.
+  if (!offer && !allAccessOffers.length) return { permitted: true, paid: false, offer: null };
   // Platform operators need access to test and administer paid content.
-  if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer, operator: true };
+  const purchaseOffer = offer || allAccessOffers.find((item) => item.resource === (player.role === "SCHOOL" ? "plan:school:all" : "plan:user:all")) || allAccessOffers[0];
+  if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer: purchaseOffer, operator: true };
   const now = new Date();
+  const activeAccess = { status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
   const entitlement = await prisma.accessEntitlement.findFirst({
-    where: { playerId: player.id, resource, status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+    where: { playerId: player.id, resource: { in: [resource, "plan:user:all"] }, ...activeAccess },
     select: { id: true, expiresAt: true },
   });
-  return { permitted: Boolean(entitlement), paid: true, offer, entitlement: entitlement || null };
+  if (entitlement) return { permitted: true, paid: true, offer: purchaseOffer, entitlement };
+  // A school plan is bought by its owner and covers only that school's members.
+  const schoolAccess = await prisma.school.findFirst({
+    where: {
+      OR: [{ ownerId: player.id }, { memberships: { some: { playerId: player.id } } }],
+      owner: { entitlements: { some: { resource: "plan:school:all", ...activeAccess } } },
+    },
+    select: { id: true, owner: { select: { entitlements: { where: { resource: "plan:school:all", ...activeAccess }, select: { id: true, expiresAt: true }, take: 1 } } } },
+  });
+  const schoolEntitlement = schoolAccess?.owner.entitlements[0] || null;
+  return { permitted: Boolean(schoolEntitlement), paid: true, offer: purchaseOffer, entitlement: schoolEntitlement, schoolId: schoolAccess?.id || null };
 }
 
 async function puzzleAccessForPlayer(player, puzzleId) {
