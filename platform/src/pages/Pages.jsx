@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Gamepad2, Leaf, Puzzle, ShieldCheck, Sparkles } from "lucide-react";
-import { getGameById, getGames } from "../lib/api.js";
+import { getApiBaseUrl, getGameById, getGames } from "../lib/api.js";
 import PuzzleGame from "../components/PuzzleGame.jsx";
+import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 
 function PageHeader() {
   return <header className="page-header"><Link to="/" className="brand"><span className="brand-mark"><Leaf size={21} /></span><span className="brand-name">igiti<span>play</span></span></Link><Link className="back-link" to="/"><ArrowLeft size={15} /> Home</Link></header>;
@@ -33,9 +34,14 @@ export function GamesPage() {
 
 export function GamePage() {
   const { gameId } = useParams();
+  const { user } = usePlayerAuth();
+  const navigate = useNavigate();
   const [game, setGame] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [cataloguePolicy, setCataloguePolicy] = useState(null);
+  const [accessMessage, setAccessMessage] = useState("");
+  const [checkingAccess, setCheckingAccess] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     getGameById(gameId, { signal: controller.signal })
@@ -44,10 +50,33 @@ export function GamePage() {
       .finally(() => setLoaded(true));
     return () => controller.abort();
   }, [gameId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${getApiBaseUrl()}/v1/access-policy`, { headers: { Accept: "application/json" }, signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Access is currently unavailable.")))
+      .then((payload) => setCataloguePolicy(payload.data || { catalogueRequiresSubscription: false }))
+      .catch((error) => { if (error.name !== "AbortError") setAccessMessage(error.message); });
+    return () => controller.abort();
+  }, []);
+  const requiresPurchase = Boolean(game?.requiresPurchase || Number(game?.price?.amountMinor || 0) > 0 || cataloguePolicy?.catalogueRequiresSubscription);
+  async function startPuzzle() {
+    if (!cataloguePolicy) { setAccessMessage("Checking access. Please try again in a moment."); return; }
+    if (!requiresPurchase) { setPlaying(true); return; }
+    if (!user) { setAccessMessage("Sign in, then purchase access before playing this game."); return; }
+    setCheckingAccess(true); setAccessMessage("");
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
+      if (payload.data?.permitted) { setPlaying(true); return; }
+      setAccessMessage(`This game requires purchase. ${payload.data?.offer?.title || "This product needs a checkout offer from the platform owner."}`);
+    } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
+  }
   return <PageLayout eyebrow="YOUR NEXT ADVENTURE" title={game ? game.title : "A story in the making"} subtitle={game ? game.description : "Explore the growing world of Igiti Play."}>
     {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && (playing
       ? <PuzzleGame game={game} onBack={() => setPlaying(false)} />
-      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div><button className="button button-primary" onClick={() => setPlaying(true)}>Start puzzle <ArrowRight size={16} /></button></div></div>)}
+      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div>{accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}{requiresPurchase && <p className="game-price">Paid access required</p>}<button className="button button-primary" onClick={startPuzzle} disabled={!cataloguePolicy || checkingAccess}>{!cataloguePolicy || checkingAccess ? "Checking access…" : requiresPurchase ? "Play or unlock" : "Start puzzle"} <ArrowRight size={16} /></button>{requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>View plans and secure checkout <ArrowRight size={16} /></button>}</div></div>)}
   </PageLayout>;
 }
 
