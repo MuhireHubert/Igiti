@@ -4,10 +4,12 @@ import {
   Crown, Flame, Gamepad2, Globe2, Heart, Leaf, Menu, Puzzle, Search,
   ShieldCheck, Sparkles, Trophy, X,
 } from "lucide-react";
-import { getGames } from "./lib/api.js";
+import { getApiBaseUrl, getGames } from "./lib/api.js";
 import PuzzleGame from "./components/PuzzleGame.jsx";
 import CardGame from "./components/CardGame.jsx";
 import PlayerAccount from "./components/PlayerAccount.jsx";
+import { usePlayerAuth } from "./lib/PlayerAuthContext.jsx";
+import { useNavigate } from "react-router-dom";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
@@ -68,7 +70,26 @@ function GameCard({ game, onSelect }) {
 }
 
 function GamePreview({ game, onBack }) {
+  const { user } = usePlayerAuth();
+  const navigate = useNavigate();
   const [playing, setPlaying] = useState(false);
+  const [accessMessage, setAccessMessage] = useState("");
+  const [checkingAccess, setCheckingAccess] = useState(false);
+  const paid = Number(game.price?.amountMinor || 0) > 0;
+  async function startPuzzle() {
+    if (!paid) { setPlaying(true); return; }
+    if (!user) { setAccessMessage("Sign in, then purchase access before playing this paid game."); return; }
+    setCheckingAccess(true);
+    setAccessMessage("");
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
+      if (payload.data?.permitted) { setPlaying(true); return; }
+      setAccessMessage(`This game requires purchase. ${payload.data?.offer?.title || "Open your workspace to complete secure Pesapal checkout."}`);
+    } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
+  }
   if (game.kind === "card") return <CardGame onBack={onBack} />;
   if (playing) return <PuzzleGame game={game} onBack={() => setPlaying(false)} />;
   return (
@@ -82,7 +103,10 @@ function GamePreview({ game, onBack }) {
           <p>{game.description}</p>
           <div className="detail-stats"><span><Puzzle size={16} /> {game.pieces} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div>
           <div className="notice"><Sparkles size={17} /><span>Beat the board, protect your streak, and return anytime—your progress saves automatically.</span></div>
-          <button className="button button-primary" onClick={() => setPlaying(true)}>Play puzzle <ArrowRight size={17} /></button>
+          {accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}
+          {paid && <p className="game-price">Paid access · {(Number(game.price.amountMinor) / 100).toFixed(2)} {game.price.currency}</p>}
+          <button className="button button-primary" onClick={startPuzzle} disabled={checkingAccess}>{checkingAccess ? "Checking access…" : paid ? "Play or unlock" : "Play puzzle"} <ArrowRight size={17} /></button>
+          {paid && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>Go to secure checkout <ArrowRight size={16} /></button>}
         </div>
       </div>
     </section>

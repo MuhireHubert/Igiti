@@ -38,6 +38,7 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
   const [recipientId, setRecipientId] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [offers, setOffers] = useState([]);
+  const [entitlements, setEntitlements] = useState([]);
   const [checkout, setCheckout] = useState({ configured: false, environment: "sandbox" });
   const [purchasing, setPurchasing] = useState("");
   const [state, setState] = useState({ loading: true, error: "", message: "" });
@@ -46,13 +47,15 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
     setState({ loading: true, error: "", message: "" });
     try {
       const token = await user.getIdToken();
-      const [data, collection, offerResponse, checkoutResponse] = await Promise.all([
+      const [data, collection, offerResponse, checkoutResponse, accessList] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
         fetch(`${getApiBaseUrl()}/v1/offers`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
+        playerRequest("/entitlements", token),
       ]);
       setWorkspace(data);
       setOffers(offerResponse.data || []);
+      setEntitlements(accessList || []);
       setCheckout(checkoutResponse.data || { configured: false, environment: "sandbox" });
       // Assignments reference the server Game id, not the built-in preview
       // card game (which intentionally has no database record yet).
@@ -97,6 +100,7 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
   const Icon = meta.icon;
   const canAssign = ["SCHOOL", "TEACHER"].includes(workspace?.role);
   const isAdmin = ["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(workspace?.role);
+  const unlockedResources = new Set(entitlements.map((entitlement) => entitlement.resource));
 
   return <section className="role-workspace" aria-label={`${meta.label} workspace`}>
     <div className="role-workspace-head"><span><Icon size={16} /></span><div><strong>{meta.label} workspace</strong><small>{meta.copy}</small></div></div>
@@ -111,7 +115,7 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
     </form>}
     {workspace?.assignments?.length > 0 && <div className="role-assignments"><strong>My assigned games</strong>{workspace.assignments.map((assignment) => <article key={assignment.id}><img src={assignment.game.coverImage} alt="" /><div><b>{assignment.game.title}</b><small>From {assignment.assignedBy.displayName || assignment.assignedBy.role}{assignment.dueAt ? ` · due ${new Date(assignment.dueAt).toLocaleDateString()}` : ""}</small></div><ArrowRight size={15} /></article>)}</div>}
     {workspace?.workspace === "STUDENT" && !workspace.assignments?.length && <p className="account-copy">No games have been assigned yet. Your teacher can add one when your school setup is complete.</p>}
-    {offers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> Game & account access</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is activated after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small>{offers.map((offer) => <article key={offer.key}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}</small></div><button className="button button-primary" disabled={!checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer.key)}>{purchasing === offer.key ? "Opening…" : `${offer.amountMinor / 100} ${offer.currency}`}</button></article>)}</div>}
+    {offers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> Game & account access</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is activated only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small>{offers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) || isAdmin; return <article key={offer.key}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}</small></div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer.key)}>{unlocked ? "Unlocked" : purchasing === offer.key ? "Opening…" : `${offer.amountMinor / 100} ${offer.currency}`}</button></article>; })}</div>}
     {state.message && <p className="account-message">{state.message}</p>}
   </section>;
 }

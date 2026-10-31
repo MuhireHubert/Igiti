@@ -219,6 +219,32 @@ function expiryFor(interval, now = new Date()) {
   return expiry;
 }
 
+async function resourceAccessForPlayer(player, resource) {
+  const offer = await prisma.accessOffer.findFirst({
+    where: { resource, isActive: true, amountMinor: { gt: 0 } },
+    select: { key: true, title: true, amountMinor: true, currency: true, interval: true },
+  });
+  // No active paid offer means this resource is intentionally free.
+  if (!offer) return { permitted: true, paid: false, offer: null };
+  // Platform operators need access to test and administer paid content.
+  if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer, operator: true };
+  const now = new Date();
+  const entitlement = await prisma.accessEntitlement.findFirst({
+    where: { playerId: player.id, resource, status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+    select: { id: true, expiresAt: true },
+  });
+  return { permitted: Boolean(entitlement), paid: true, offer, entitlement: entitlement || null };
+}
+
+async function puzzleAccessForPlayer(player, puzzleId) {
+  const puzzle = await prisma.puzzle.findFirst({
+    where: { id: puzzleId, isActive: true, game: { status: "PUBLISHED", publishedAt: { lte: new Date() } } },
+    select: { id: true },
+  });
+  if (!puzzle) return { found: false, permitted: false, paid: false, offer: null };
+  return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`)) };
+}
+
 function paymentStatusFromPesapal(transaction) {
   const status = String(transaction.payment_status_description || "").toUpperCase();
   if (status === "COMPLETED" || Number(transaction.status_code) === 1) return "PAID";
@@ -418,13 +444,30 @@ app.get("/v1/me/entitlements", requirePlayer, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get("/v1/me/puzzles/:puzzleId/access", requirePlayer, async (req, res, next) => {
+  try {
+    const access = await puzzleAccessForPlayer(req.player, req.params.puzzleId);
+    if (!access.found) return res.status(404).json({ error: "Puzzle not found." });
+    return res.json({ data: access });
+  } catch (error) { next(error); }
+});
+
+app.get("/v1/me/access/:resource", requirePlayer, async (req, res, next) => {
+  const resource = String(req.params.resource || "").trim();
+  if (!/^(puzzle|card-mode|account):[a-z0-9._-]{1,160}$/i.test(resource)) return res.status(400).json({ error: "Invalid access resource." });
+  try {
+    return res.json({ data: await resourceAccessForPlayer(req.player, resource.toLowerCase()) });
+  } catch (error) { next(error); }
+});
+
 app.put("/v1/me/progress/:puzzleId", requirePlayer, async (req, res, next) => {
   try {
     const parsed = progressSchema.safeParse({ ...req.body, puzzleId: req.params.puzzleId });
     if (!parsed.success) return res.status(400).json({ error: "Invalid progress payload.", details: parsed.error.flatten() });
     const { puzzleId, state, elapsedSeconds = 0, completed = false } = parsed.data;
-    const puzzle = await prisma.puzzle.findFirst({ where: { id: puzzleId, isActive: true, game: { status: "PUBLISHED" } }, select: { id: true } });
-    if (!puzzle) return res.status(404).json({ error: "Puzzle not found." });
+    const access = await puzzleAccessForPlayer(req.player, puzzleId);
+    if (!access.found) return res.status(404).json({ error: "Puzzle not found." });
+    if (!access.permitted) return res.status(402).json({ error: "Purchase this game before saving or completing its progress.", offer: access.offer });
     // Completion is monotonic: later autosaves must not turn a completed
     // puzzle back into an incomplete one merely because the UI remounted.
     const progress = await prisma.puzzleProgress.upsert({
