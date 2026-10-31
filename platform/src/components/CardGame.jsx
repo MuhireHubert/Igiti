@@ -82,7 +82,7 @@ export default function CardGame({ onBack }) {
   const offerForMode = (item) => offers.find((offer) => offer.resource === `card-mode:${item.id}` && Number(offer.amountMinor) > 0);
   const activeModeOffer = offerForMode(mode);
   const resourceForMode = (item) => `card-mode:${item.id}`;
-  const modeNeedsAccess = (item) => Boolean(offerForMode(item) || cataloguePolicy?.catalogueRequiresSubscription);
+  const modeNeedsAccess = (item) => Boolean(offerForMode(item) || cataloguePolicy?.catalogueRequiresSubscription || cataloguePolicy?.cardRequiresPayment);
   const activeModeLocked = !offersLoaded || !cataloguePolicy || (modeNeedsAccess(mode) && modeAccess[resourceForMode(mode)] !== true);
   async function chooseMode(item) {
     if (!offersLoaded || !cataloguePolicy) { setModeNotice("Checking card access. Please try again in a moment."); return; }

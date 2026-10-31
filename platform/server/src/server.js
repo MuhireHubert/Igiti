@@ -130,7 +130,7 @@ app.get("/v1/access-policy", async (_req, res, next) => {
       orderBy: { amountMinor: "asc" },
     });
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
-    res.json({ data: { catalogueRequiresSubscription: plans.length > 0, plans } });
+    res.json({ data: { catalogueRequiresSubscription: plans.length > 0, cardRequiresPayment: true, plans } });
   } catch (error) { next(error); }
 });
 
@@ -165,7 +165,10 @@ app.get("/v1/games", async (_req, res, next) => {
       },
     });
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
-    res.json({ data: games });
+    res.json({ data: games.map((game) => ({
+      ...game,
+      puzzles: game.puzzles.map((puzzle) => ({ ...puzzle, requiresPurchase: game.slug !== "africa-landmarks" })),
+    })) });
   } catch (error) { next(error); }
 });
 
@@ -234,10 +237,12 @@ function expiryFor(interval, now = new Date()) {
   return expiry;
 }
 
-async function resourceAccessForPlayer(player, resource) {
+async function resourceAccessForPlayer(player, resource, { requirePurchase = false } = {}) {
+  const eligibleOfferResources = resource.startsWith("card-mode:") ? [resource, "card:all"] : [resource];
   const [offer, allAccessOffers] = await Promise.all([
     prisma.accessOffer.findFirst({
-      where: { resource, isActive: true, amountMinor: { gt: 0 } },
+      where: { resource: { in: eligibleOfferResources }, isActive: true, amountMinor: { gt: 0 } },
+      orderBy: { amountMinor: "asc" },
       select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
     }),
     prisma.accessOffer.findMany({
@@ -247,14 +252,14 @@ async function resourceAccessForPlayer(player, resource) {
   ]);
   // A plan makes the full catalogue paid, while a direct offer locks only its
   // own resource. This permits individual purchases alongside monthly access.
-  if (!offer && !allAccessOffers.length) return { permitted: true, paid: false, offer: null };
+  if (!offer && !allAccessOffers.length && !requirePurchase) return { permitted: true, paid: false, offer: null };
   // Platform operators need access to test and administer paid content.
   const purchaseOffer = offer || allAccessOffers.find((item) => item.resource === (player.role === "SCHOOL" ? "plan:school:all" : "plan:user:all")) || allAccessOffers[0];
   if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer: purchaseOffer, operator: true };
   const now = new Date();
   const activeAccess = { status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
   const entitlement = await prisma.accessEntitlement.findFirst({
-    where: { playerId: player.id, resource: { in: [resource, "plan:user:all"] }, ...activeAccess },
+    where: { playerId: player.id, resource: { in: [...eligibleOfferResources, "plan:user:all"] }, ...activeAccess },
     select: { id: true, expiresAt: true },
   });
   if (entitlement) return { permitted: true, paid: true, offer: purchaseOffer, entitlement };
@@ -273,10 +278,11 @@ async function resourceAccessForPlayer(player, resource) {
 async function puzzleAccessForPlayer(player, puzzleId) {
   const puzzle = await prisma.puzzle.findFirst({
     where: { id: puzzleId, isActive: true, game: { status: "PUBLISHED", publishedAt: { lte: new Date() } } },
-    select: { id: true },
+    select: { id: true, game: { select: { slug: true } } },
   });
   if (!puzzle) return { found: false, permitted: false, paid: false, offer: null };
-  return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`)) };
+  if (puzzle.game.slug === "africa-landmarks") return { found: true, permitted: true, paid: false, offer: null, freePreview: true };
+  return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`, { requirePurchase: true })) };
 }
 
 function paymentStatusFromPesapal(transaction) {

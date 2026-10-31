@@ -77,7 +77,7 @@ function GamePreview({ game, onBack }) {
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [cataloguePolicy, setCataloguePolicy] = useState(null);
   const paid = Number(game.price?.amountMinor || 0) > 0;
-  const requiresPurchase = paid || cataloguePolicy?.catalogueRequiresSubscription === true;
+  const requiresPurchase = paid || game.requiresPurchase || cataloguePolicy?.catalogueRequiresSubscription === true;
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${getApiBaseUrl()}/v1/access-policy`, { headers: { Accept: "application/json" }, signal: controller.signal })

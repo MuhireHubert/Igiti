@@ -81,6 +81,7 @@ export async function getGames({ signal } = {}) {
       funFacts: Array.isArray(puzzle.metadata?.funFacts) ? puzzle.metadata.funFacts.filter((fact) => typeof fact === "string") : [],
       allowedDifficulties: Array.isArray(puzzle.metadata?.allowedDifficulties) ? puzzle.metadata.allowedDifficulties : [puzzle.difficulty],
       price: puzzle.metadata?.pricing || null,
+      requiresPurchase: Boolean(puzzle.requiresPurchase),
     }));
   });
   return { data: games, source: "api" };
