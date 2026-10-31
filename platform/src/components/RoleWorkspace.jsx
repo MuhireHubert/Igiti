@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenCheck, Crown, GraduationCap, School, ShoppingBag, UserRound } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, Crown, GraduationCap, LifeBuoy, School, ShoppingBag, UserRound } from "lucide-react";
 import { getApiBaseUrl, getGames } from "../lib/api.js";
 
 const roleMeta = {
@@ -10,6 +10,18 @@ const roleMeta = {
   ADMIN: { label: "Administrator", icon: Crown, copy: "Manage the game collection, players, and operational reports." },
   OWNER: { label: "Platform owner", icon: Crown, copy: "Full control of users, schools, games, country media, settings, and reporting." },
 };
+
+function accessLabel(resource) {
+  if (resource === "plan:user:all") return "Player all-products plan";
+  if (resource === "plan:school:all") return "School all-products plan";
+  if (resource === "card:all") return "A-54 complete card deck";
+  if (resource.startsWith("card-mode:")) return `A-54 mode: ${resource.slice("card-mode:".length).replace(/-/g, " ")}`;
+  return resource.startsWith("puzzle:") ? "Purchased puzzle" : resource;
+}
+
+function expiryLabel(expiresAt) {
+  return expiresAt ? `Expires ${new Date(expiresAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}` : "Lifetime access";
+}
 
 async function playerRequest(path, token, options = {}) {
   const response = await fetch(`${getApiBaseUrl()}/v1/me${path}`, {
@@ -121,6 +133,7 @@ export default function RoleWorkspace({ user, onOpenAdmin }) {
     {workspace?.assignments?.length > 0 && <div className="role-assignments"><strong>My assigned games</strong>{workspace.assignments.map((assignment) => <article key={assignment.id}><img src={assignment.game.coverImage} alt="" /><div><b>{assignment.game.title}</b><small>From {assignment.assignedBy.displayName || assignment.assignedBy.role}{assignment.dueAt ? ` · due ${new Date(assignment.dueAt).toLocaleDateString()}` : ""}</small></div><ArrowRight size={15} /></article>)}</div>}
     {workspace?.workspace === "STUDENT" && !workspace.assignments?.length && <p className="account-copy">No games have been assigned yet. Your teacher can add one when your school setup is complete.</p>}
     {visibleOffers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> Game & account access</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is activated only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small>{visibleOffers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) || isAdmin; return <article key={offer.key}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}</small></div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer.key)}>{unlocked ? "Unlocked" : purchasing === offer.key ? "Opening…" : `${offer.amountMinor / 100} ${offer.currency}`}</button></article>; })}</div>}
+    <section className="role-account-settings" aria-label="Account and access settings"><strong><CalendarDays size={15} /> Account & access</strong><small>Activate an available plan above, review your verified access, and check renewal dates here.</small>{entitlements.length ? <div className="role-entitlement-list">{entitlements.map((entitlement) => <article key={`${entitlement.resource}-${entitlement.orderId || "manual"}`}><div><b>{accessLabel(entitlement.resource)}</b><small>{expiryLabel(entitlement.expiresAt)}</small></div><span>Active</span></article>)}</div> : <p>No paid access is active on this account yet.</p>}<a className="role-support-link" href={`mailto:info@igiti.africa?subject=${encodeURIComponent("Igiti Play support request")}`}><LifeBuoy size={15} /> Ask Igiti support</a></section>
     {state.message && <p className="account-message">{state.message}</p>}
   </section>;
 }
