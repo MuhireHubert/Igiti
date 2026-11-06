@@ -419,6 +419,23 @@ export default function AdminPortal() {
     setTab("commerce");
   }
 
+  function startSchoolPlan(tier, title, seatLimit, amount) {
+    setEditingOfferId(null);
+    setOfferForm({
+      key: `plan.school.${tier}.yearly`,
+      title: `Igiti for Schools · ${title}`,
+      description: `Full catalogue access for the school owner, teachers, and up to ${seatLimit} registered learners.`,
+      kind: "ACCOUNT",
+      resource: "plan:school:all",
+      amountMinor: String(amount),
+      currency: "USD",
+      interval: "YEARLY",
+      seatLimit,
+      isActive: false,
+    });
+    setTab("commerce");
+  }
+
   async function saveOffer(event) {
     event.preventDefault();
     await withAdminRequest(async (token) => {
@@ -555,7 +572,7 @@ export default function AdminPortal() {
 
         {tab === "commerce" && <div className="admin-content admin-game-layout">
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingOfferId ? "Update offer" : "Game and account prices"}</h2><p>Only the owner can activate an offer. Checkout will always use this server-side price.</p></div>{editingOfferId && <button className="admin-icon-button" onClick={() => { setEditingOfferId(null); setOfferForm(blankOffer); }}><X size={16} /></button>}</div>
-            {adminSession?.role === "OWNER" && <><div className="admin-mode-pricing"><strong>Igiti Play Pass — recommended presets</strong><small>Subscriptions unlock the full paid catalogue while active. A member may opt into secure recurring Visa/Mastercard billing during Pesapal checkout; it remains cancellable in Pesapal.</small><div><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("user", "MONTHLY")}>Player monthly · $8.99</button><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("user", "YEARLY")}>Player annual · $79.99</button></div></div><div className="admin-mode-pricing"><strong>Igiti for Schools — recommended presets</strong><small>Annual school licences include the full catalogue and enforce active teacher/student seats. Review the price and activate only when ready.</small><div><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("school", "YEARLY", 25)}>Classroom · 25 seats · $149/year</button><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("school", "YEARLY", 100)}>School Starter · 100 seats · $399/year</button><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("school", "YEARLY", 300)}>School Growth · 300 seats · $899/year</button></div></div><div className="admin-mode-pricing"><strong>A-54 complete deck</strong><small>Create the premium lifetime purchase for all 108 cards and every current mode.</small><div><button type="button" className="admin-button admin-button-light" onClick={startA54DeckOffer}>A-54 deck · $34.99</button></div></div><div className="admin-mode-pricing"><strong>A-54 individual modes</strong><small>Each preset creates a $6.99 lifetime offer. Review and activate it when ready.</small><div>{a54Modes.map(([mode, title]) => <button type="button" className="admin-button admin-button-light" key={mode} onClick={() => startA54ModeOffer(mode, title)}>{title}</button>)}</div></div></>}
+            {adminSession?.role === "OWNER" && <><div className="admin-mode-pricing"><strong>Igiti Play Pass — recommended presets</strong><small>Subscriptions unlock the full paid catalogue while active. A member may opt into secure recurring Visa/Mastercard billing during Pesapal checkout; it remains cancellable in Pesapal.</small><div><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("user", "MONTHLY")}>Player monthly · $8.99</button><button type="button" className="admin-button admin-button-light" onClick={() => startAllAccessPlan("user", "YEARLY")}>Player annual · $79.99</button></div></div><div className="admin-mode-pricing"><strong>Igiti for Schools — recommended presets</strong><small>Annual school licences include the full catalogue and enforce active teacher/student seats. Review the price and activate only when ready.</small><div><button type="button" className="admin-button admin-button-light" onClick={() => startSchoolPlan("classroom", "Classroom", 25, 149)}>Classroom · 25 seats · $149/year</button><button type="button" className="admin-button admin-button-light" onClick={() => startSchoolPlan("starter", "School Starter", 100, 399)}>School Starter · 100 seats · $399/year</button><button type="button" className="admin-button admin-button-light" onClick={() => startSchoolPlan("growth", "School Growth", 300, 899)}>School Growth · 300 seats · $899/year</button></div></div><div className="admin-mode-pricing"><strong>A-54 complete deck</strong><small>Create the premium lifetime purchase for all 108 cards and every current mode.</small><div><button type="button" className="admin-button admin-button-light" onClick={startA54DeckOffer}>A-54 deck · $34.99</button></div></div><div className="admin-mode-pricing"><strong>A-54 individual modes</strong><small>Each preset creates a $6.99 lifetime offer. Review and activate it when ready.</small><div>{a54Modes.map(([mode, title]) => <button type="button" className="admin-button admin-button-light" key={mode} onClick={() => startA54ModeOffer(mode, title)}>{title}</button>)}</div></div></>}
             {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveOffer}>
               <label className="admin-field">Offer key<input value={offerForm.key} onChange={(e) => setOfferForm({ ...offerForm, key: toSlug(e.target.value) })} placeholder="igiti-play-pass-monthly" required /></label>
               <label className="admin-field">Title<input value={offerForm.title} onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })} required /></label>
