@@ -538,6 +538,7 @@ const accessOfferInput = z.object({
   amountMinor: z.number().int().min(0).max(100000000),
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
   interval: z.enum(["ONE_TIME", "MONTHLY", "YEARLY"]),
+  seatLimit: z.number().int().min(1).max(100000).optional().nullable(),
   isActive: z.boolean().default(false),
 });
 

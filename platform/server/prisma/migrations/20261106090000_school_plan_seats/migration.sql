@@ -1,0 +1,1 @@
+ALTER TABLE `AccessOffer` ADD COLUMN `seatLimit` INTEGER NULL;

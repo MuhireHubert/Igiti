@@ -60,6 +60,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [entitlements, setEntitlements] = useState([]);
   const [checkout, setCheckout] = useState({ configured: false, environment: "sandbox" });
   const [purchasing, setPurchasing] = useState("");
+  const [recurringOffers, setRecurringOffers] = useState({});
   const [state, setState] = useState({ loading: true, error: "", message: "" });
 
   async function refresh() {
@@ -107,12 +108,12 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     } catch (error) { setState({ loading: false, error: error.message, message: "" }); }
   }
 
-  async function beginCheckout(offerKey) {
-    setPurchasing(offerKey);
+  async function beginCheckout(offer) {
+    setPurchasing(offer.key);
     setState((current) => ({ ...current, error: "", message: "" }));
     try {
       const token = await user.getIdToken();
-      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey }) });
+      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]) }) });
       window.location.assign(order.redirectUrl);
     } catch (error) {
       setState((current) => ({ ...current, error: error.message, message: "" }));
@@ -160,7 +161,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     </form>}
     {showAssignments && workspace?.assignments?.length > 0 && <div className="role-assignments"><strong>My assigned games</strong>{workspace.assignments.map((assignment) => <article key={assignment.id}><img src={assignment.game.coverImage} alt="" /><div><b>{assignment.game.title}</b><small>From {assignment.assignedBy.displayName || assignment.assignedBy.role}{assignment.dueAt ? ` · due ${new Date(assignment.dueAt).toLocaleDateString()}` : ""}</small></div><ArrowRight size={15} /></article>)}</div>}
     {showAssignments && workspace?.workspace === "STUDENT" && !workspace.assignments?.length && <p className="account-copy">No games have been assigned yet. Your teacher can add one when your school setup is complete.</p>}
-    {showSettings && visibleOffers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> Game & account access</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is activated only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small>{visibleOffers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) || isAdmin; return <article key={offer.key}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}</small></div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer.key)}>{unlocked ? "Unlocked" : purchasing === offer.key ? "Opening…" : `${offer.amountMinor / 100} ${offer.currency}`}</button></article>; })}</div>}
+    {showSettings && visibleOffers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> Game & account access</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is activated only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small>{visibleOffers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) || isAdmin; const isSubscription = ["MONTHLY", "YEARLY"].includes(offer.interval); return <article key={offer.key}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}{offer.seatLimit ? ` · up to ${offer.seatLimit} school members` : ""}</small>{isSubscription && !unlocked && <label className="role-recurring-consent"><input type="checkbox" checked={Boolean(recurringOffers[offer.key])} onChange={(event) => setRecurringOffers((current) => ({ ...current, [offer.key]: event.target.checked }))} /> Allow recurring card payments. Pesapal will ask you to confirm and lets you cancel.</label>}</div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer)}>{unlocked ? "Unlocked" : purchasing === offer.key ? "Opening…" : `${offer.amountMinor / 100} ${offer.currency}`}</button></article>; })}</div>}
     {showSettings && <section className="role-account-settings" aria-label="Account and access settings"><strong><CalendarDays size={15} /> Account & access</strong><small>Activate an available plan above, review your verified access, and check renewal dates here.</small>{entitlements.length ? <div className="role-entitlement-list">{entitlements.map((entitlement) => <article key={`${entitlement.resource}-${entitlement.orderId || "manual"}`}><div><b>{accessLabel(entitlement.resource)}</b><small>{expiryLabel(entitlement.expiresAt)}</small></div><span>Active</span></article>)}</div> : <p>No paid access is active on this account yet.</p>}<a className="role-support-link" href="https://igiti.africa/contact"><LifeBuoy size={15} /> Contact Igiti support</a></section>}
     {state.message && <p className="account-message">{state.message}</p>}
   </section>;

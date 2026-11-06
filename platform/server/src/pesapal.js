@@ -59,7 +59,7 @@ async function token() {
   return { accessToken: body.token, config };
 }
 
-export async function createPesapalOrder({ merchantReference, amountMinor, currency, description, billingAddress }) {
+export async function createPesapalOrder({ merchantReference, amountMinor, currency, description, billingAddress, subscription }) {
   const { accessToken, config } = await token();
   const body = await request(`${config.baseUrl}/Transactions/SubmitOrderRequest`, {
     method: "POST",
@@ -74,6 +74,9 @@ export async function createPesapalOrder({ merchantReference, amountMinor, curre
       redirect_mode: "TOP_WINDOW",
       notification_id: process.env.PESAPAL_IPN_ID,
       billing_address: { ...billingAddress, country_code: billingAddress.country_code || "RW" },
+      // Pesapal tokenizes eligible cards and requires the customer to confirm
+      // recurring billing in its own checkout. We never receive card details.
+      ...(subscription ? { account_number: subscription.accountNumber, subscription_details: subscription.details } : {}),
     }),
   });
   if (!body.order_tracking_id || !body.redirect_url) {

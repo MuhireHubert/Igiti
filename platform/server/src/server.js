@@ -113,7 +113,7 @@ app.get("/v1/offers", async (_req, res, next) => {
   try {
     const offers = await prisma.accessOffer.findMany({
       where: { isActive: true }, orderBy: [{ kind: "asc" }, { amountMinor: "asc" }],
-      select: { key: true, title: true, description: true, kind: true, resource: true, amountMinor: true, currency: true, interval: true },
+      select: { key: true, title: true, description: true, kind: true, resource: true, amountMinor: true, currency: true, interval: true, seatLimit: true },
     });
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
     res.json({ data: offers });
@@ -245,19 +245,36 @@ app.put("/v1/me/school", requirePlayer, async (req, res, next) => {
   } catch (error) { if (error?.code === "P2002") return res.status(409).json({ error: "That school name is already in use." }); next(error); }
 });
 
+async function schoolSeatAvailability(schoolId) {
+  const school = await prisma.school.findUnique({ where: { id: schoolId }, select: { ownerId: true, _count: { select: { memberships: true } } } });
+  if (!school) return null;
+  const now = new Date();
+  const entitlement = await prisma.accessEntitlement.findFirst({
+    where: { playerId: school.ownerId, resource: "plan:school:all", status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+    orderBy: { updatedAt: "desc" }, select: { order: { select: { metadata: true } } },
+  });
+  const seatLimit = Number(entitlement?.order?.metadata?.seatLimit);
+  return { school, seatLimit: Number.isInteger(seatLimit) && seatLimit > 0 ? seatLimit : null };
+}
+
 app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   const parsed = schoolMembershipSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Choose a valid school." });
   if (!["TEACHER", "STUDENT"].includes(req.player.role)) return res.status(403).json({ error: "Only teacher and student accounts can choose a school." });
   try {
+    const availability = await schoolSeatAvailability(parsed.data.schoolId);
+    if (!availability) return res.status(404).json({ error: "School not found." });
     const school = await prisma.school.findUnique({ where: { id: parsed.data.schoolId }, select: { id: true, name: true } });
-    if (!school) return res.status(404).json({ error: "School not found." });
+    const existing = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } }, select: { id: true } });
+    if (!existing && availability.seatLimit && availability.school._count.memberships >= availability.seatLimit) {
+      return res.status(409).json({ error: `This school has reached its ${availability.seatLimit}-learner plan limit. Ask the school owner to upgrade the plan.` });
+    }
     const membership = await prisma.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } }, update: { role: req.player.role }, create: { schoolId: school.id, playerId: req.player.id, role: req.player.role }, select: { id: true, schoolId: true, role: true } });
     res.json({ data: { ...membership, school } });
   } catch (error) { next(error); }
 });
 
-const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120) });
+const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false) });
 const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
 const CARD_MODE_IDS = new Set(["quick-facts", "matching", "card-war", "guess-country", "who-am-i", "regional", "thematic", "roleplay"]);
 const CARD_MODE_LABELS = { "quick-facts": "Quick Facts Showdown", matching: "Country Matching", "card-war": "Igiti Card War", "guess-country": "Guess the Country", "who-am-i": "Who am I?", regional: "Regional Challenges", thematic: "Thematic Discovery", roleplay: "Country Roleplay Day" };
@@ -269,6 +286,18 @@ function expiryFor(interval, now = new Date()) {
   if (interval === "MONTHLY") expiry.setMonth(expiry.getMonth() + 1);
   if (interval === "YEARLY") expiry.setFullYear(expiry.getFullYear() + 1);
   return expiry;
+}
+
+function pesapalDate(date) {
+  return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+}
+
+function recurringSubscriptionFor(offer, orderId, now = new Date()) {
+  if (!["MONTHLY", "YEARLY"].includes(offer.interval)) return null;
+  const start = expiryFor(offer.interval, now);
+  const end = new Date(now);
+  end.setFullYear(end.getFullYear() + 5);
+  return { accountNumber: orderId, details: { start_date: pesapalDate(start), end_date: pesapalDate(end), frequency: offer.interval } };
 }
 
 async function resourceAccessForPlayer(player, resource, { requirePurchase = false } = {}) {
@@ -382,14 +411,15 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
       data: {
         playerId: req.player.id, provider: "PESAPAL", amountMinor: offer.amountMinor, currency: offer.currency,
         idempotencyKey: `pesapal:${crypto.randomUUID()}`,
-        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title },
+        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title, recurringConsent: Boolean(parsed.data.recurringConsent && ["MONTHLY", "YEARLY"].includes(offer.interval)), seatLimit: offer.seatLimit },
       },
     });
     try {
+      const subscription = parsed.data.recurringConsent ? recurringSubscriptionFor(offer, order.id) : null;
       const checkout = await createPesapalOrder({
         merchantReference: order.id, amountMinor: offer.amountMinor, currency: offer.currency,
         description: offer.title,
-        billingAddress: { email_address: req.player.email || "", phone_number: "", country_code: "", first_name: req.player.displayName || "Igiti", middle_name: "", last_name: "Player", line_1: "", line_2: "", city: "", state: "", postal_code: "", zip_code: "" },
+        billingAddress: { email_address: req.player.email || "", phone_number: "", country_code: "", first_name: req.player.displayName || "Igiti", middle_name: "", last_name: "Player", line_1: "", line_2: "", city: "", state: "", postal_code: "", zip_code: "" }, subscription,
       });
       await prisma.paymentOrder.update({ where: { id: order.id }, data: { providerOrderId: checkout.order_tracking_id, status: "PROCESSING" } });
       return res.status(201).json({ data: { redirectUrl: checkout.redirect_url, orderId: order.id } });
