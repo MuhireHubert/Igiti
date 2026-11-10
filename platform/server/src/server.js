@@ -257,6 +257,30 @@ async function schoolSeatAvailability(schoolId) {
   return { school, seatLimit: Number.isInteger(seatLimit) && seatLimit > 0 ? seatLimit : null };
 }
 
+function activeEntitlementFilters(now = new Date()) {
+  return {
+    status: "ACTIVE",
+    startsAt: { lte: now },
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  };
+}
+
+function activeAccessWhere(resource, now = new Date()) {
+  return { resource, ...activeEntitlementFilters(now) };
+}
+
+// Student assignments are a delivery mechanism for a school's paid plan, not
+// a permanent bypass. This keeps access in sync with a plan expiry, revocation,
+// or upgrade without trusting anything held in the browser.
+async function hasActiveSchoolPlan(schoolId) {
+  if (!schoolId) return false;
+  const school = await prisma.school.findFirst({
+    where: { id: schoolId, owner: { entitlements: { some: activeAccessWhere("plan:school:all") } } },
+    select: { id: true },
+  });
+  return Boolean(school);
+}
+
 app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   const parsed = schoolMembershipSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Choose a valid school." });
@@ -323,9 +347,9 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
   // Platform operators need access to test and administer paid content.
   const purchaseOffer = offer || allAccessOffers.find((item) => item.resource === (player.role === "SCHOOL" ? "plan:school:all" : "plan:user:all")) || allAccessOffers[0];
   if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer: purchaseOffer, operator: true };
-  if (assignment) return { permitted: true, paid: true, offer: purchaseOffer, assignment };
+  if (assignment && await hasActiveSchoolPlan(assignment.schoolId)) return { permitted: true, paid: true, offer: purchaseOffer, assignment };
   const now = new Date();
-  const activeAccess = { status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
+  const activeAccess = activeEntitlementFilters(now);
   const entitlement = await prisma.accessEntitlement.findFirst({
     where: { playerId: player.id, resource: { in: [...eligibleOfferResources, "plan:user:all"] }, ...activeAccess },
     select: { id: true, expiresAt: true },
@@ -334,7 +358,10 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
   // A school plan is bought by its owner and covers only that school's members.
   const schoolAccess = await prisma.school.findFirst({
     where: {
-      OR: [{ ownerId: player.id }, { memberships: { some: { playerId: player.id } } }],
+      // A teacher can prepare a lesson, but enrolled students receive access
+      // through a direct school assignment. This avoids opening the full paid
+      // catalogue merely because a student selected a school.
+      OR: [{ ownerId: player.id }, { memberships: { some: { playerId: player.id, role: "TEACHER" } } }],
       owner: { entitlements: { some: { resource: "plan:school:all", ...activeAccess } } },
     },
     select: { id: true, owner: { select: { entitlements: { where: { resource: "plan:school:all", ...activeAccess }, select: { id: true, expiresAt: true }, take: 1 } } } },
@@ -351,7 +378,7 @@ async function puzzleAccessForPlayer(player, puzzleId) {
   if (!puzzle) return { found: false, permitted: false, paid: false, offer: null };
   if (puzzle.game.slug === "africa-landmarks") return { found: true, permitted: true, paid: false, offer: null, freePreview: true };
   const assignment = await prisma.gameAssignment.findFirst({ where: { recipientId: player.id, game: { puzzles: { some: { id: puzzleId } } } }, select: { id: true, dueAt: true, schoolId: true } });
-  if (assignment) return { found: true, permitted: true, paid: true, offer: null, assignment };
+  if (assignment && await hasActiveSchoolPlan(assignment.schoolId)) return { found: true, permitted: true, paid: true, offer: null, assignment };
   return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`, { requirePurchase: true })) };
 }
 
@@ -474,16 +501,16 @@ app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
     if (player.role === "SCHOOL") {
       const school = await prisma.school.findUnique({
         where: { ownerId: player.id },
-        select: { id: true, name: true, memberships: { where: { role: "TEACHER" }, orderBy: { player: { displayName: "asc" } }, select: { player: { select: { id: true, displayName: true } } } } },
+        select: { id: true, name: true, memberships: { where: { role: "STUDENT" }, orderBy: { player: { displayName: "asc" } }, select: { player: { select: { id: true, displayName: true } } } } },
       });
       return res.json({ data: { ...base, workspace: "SCHOOL", school, recipients: school?.memberships.map((member) => member.player) || [] } });
     }
     if (player.role === "TEACHER") {
       const membership = await prisma.schoolMembership.findFirst({
         where: { playerId: player.id, role: "TEACHER" },
-        select: { school: { select: { id: true, name: true, memberships: { where: { role: "STUDENT" }, orderBy: { player: { displayName: "asc" } }, select: { player: { select: { id: true, displayName: true } } } } } } },
+        select: { school: { select: { id: true, name: true } } },
       });
-      return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: membership?.school.memberships.map((member) => member.player) || [] } });
+      return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: [] } });
     }
     const membership = player.role === "STUDENT" ? await prisma.schoolMembership.findFirst({ where: { playerId: player.id, role: "STUDENT" }, select: { school: { select: { id: true, name: true } } } }) : null;
     const [gameAssignments, resourceAssignments] = await Promise.all([
@@ -524,22 +551,16 @@ app.post("/v1/me/assignments", requirePlayer, async (req, res, next) => {
   try {
     const { gameId, recipientId, schoolId, dueAt } = parsed.data;
     const sender = req.player;
-    if (!["SCHOOL", "TEACHER", "ADMIN", "OWNER"].includes(sender.role)) return res.status(403).json({ error: "Only schools, teachers, and administrators can assign games." });
+    if (!["SCHOOL", "ADMIN", "OWNER"].includes(sender.role)) return res.status(403).json({ error: "Only school accounts and platform administrators can assign games." });
     const recipient = await prisma.playerProfile.findUnique({ where: { id: recipientId }, select: { id: true, role: true } });
     if (!recipient) return res.status(404).json({ error: "Recipient not found." });
     let resolvedSchoolId = schoolId || null;
     if (sender.role === "SCHOOL") {
       const school = await prisma.school.findUnique({ where: { ownerId: sender.id }, select: { id: true } });
-      if (!school || recipient.role !== "TEACHER") return res.status(403).json({ error: "A school may assign games only to its teachers." });
+      if (!school || recipient.role !== "STUDENT") return res.status(403).json({ error: "A school may assign games only to its students." });
       const membership = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: recipientId } } });
-      if (!membership || membership.role !== "TEACHER") return res.status(403).json({ error: "That teacher is not a member of your school." });
+      if (!membership || membership.role !== "STUDENT") return res.status(403).json({ error: "That student is not a member of your school." });
       resolvedSchoolId = school.id;
-    }
-    if (sender.role === "TEACHER") {
-      const membership = await prisma.schoolMembership.findFirst({ where: { playerId: sender.id, role: "TEACHER" }, select: { schoolId: true } });
-      const student = membership && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: membership.schoolId, playerId: recipientId } } });
-      if (!membership || recipient.role !== "STUDENT" || student?.role !== "STUDENT") return res.status(403).json({ error: "A teacher may assign games only to students in their school." });
-      resolvedSchoolId = membership.schoolId;
     }
     const game = await prisma.game.findFirst({
       where: { id: gameId, status: "PUBLISHED", publishedAt: { lte: new Date() } },
@@ -566,21 +587,15 @@ app.post("/v1/me/resource-assignments", requirePlayer, async (req, res, next) =>
     const modeId = resource.slice("card-mode:".length);
     if (!CARD_MODE_IDS.has(modeId)) return res.status(400).json({ error: "That A-54 mode does not exist." });
     const sender = req.player;
-    if (!["SCHOOL", "TEACHER", "ADMIN", "OWNER"].includes(sender.role)) return res.status(403).json({ error: "Only schools, teachers, and administrators can assign card modes." });
+    if (!["SCHOOL", "ADMIN", "OWNER"].includes(sender.role)) return res.status(403).json({ error: "Only school accounts and platform administrators can assign card modes." });
     const recipient = await prisma.playerProfile.findUnique({ where: { id: recipientId }, select: { id: true, role: true } });
     if (!recipient) return res.status(404).json({ error: "Recipient not found." });
     let resolvedSchoolId = schoolId || null;
     if (sender.role === "SCHOOL") {
       const school = await prisma.school.findUnique({ where: { ownerId: sender.id }, select: { id: true } });
       const membership = school && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: recipientId } } });
-      if (!school || recipient.role !== "TEACHER" || membership?.role !== "TEACHER") return res.status(403).json({ error: "A school may assign card modes only to teachers in its school." });
+      if (!school || recipient.role !== "STUDENT" || membership?.role !== "STUDENT") return res.status(403).json({ error: "A school may assign card modes only to students in its school." });
       resolvedSchoolId = school.id;
-    }
-    if (sender.role === "TEACHER") {
-      const membership = await prisma.schoolMembership.findFirst({ where: { playerId: sender.id, role: "TEACHER" }, select: { schoolId: true } });
-      const student = membership && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: membership.schoolId, playerId: recipientId } } });
-      if (!membership || recipient.role !== "STUDENT" || student?.role !== "STUDENT") return res.status(403).json({ error: "A teacher may assign card modes only to students in their school." });
-      resolvedSchoolId = membership.schoolId;
     }
     const senderAccess = await resourceAccessForPlayer(sender, resource, { requirePurchase: true });
     if (!senderAccess.permitted) return res.status(402).json({ error: "Purchase or activate this card mode before assigning it." });
