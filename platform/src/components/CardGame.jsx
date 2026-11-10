@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BookOpen, Check, Layers3, Map, RotateCcw, Sparkles, Trophy, Volume2, VolumeX } from "lucide-react";
+import { ArrowRight, Check, Layers3, Map, RotateCcw, Sparkles, Swords, Trophy, Volume2, VolumeX } from "lucide-react";
 import { africaDeck, cardModes, countries } from "../lib/africaDeck.js";
 import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
@@ -7,141 +7,45 @@ import { useNavigate } from "react-router-dom";
 import MultiplayerRoom from "./MultiplayerRoom.jsx";
 import { playGameCue, savedSoundEnabled, saveSoundEnabled } from "../lib/gameAudio.js";
 
-function pickOptions(answer) {
-  const alternatives = countries.filter((item) => item.capital !== answer).sort(() => Math.random() - 0.5).slice(0, 3).map((item) => item.capital);
-  return [...alternatives, answer].sort(() => Math.random() - 0.5);
-}
-
-function countryKey(country) {
-  return String(country || "").trim().toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function shuffledDeck(cards) {
-  const deck = [...cards];
-  for (let index = deck.length - 1; index > 0; index -= 1) {
-    const pick = Math.floor(Math.random() * (index + 1));
-    [deck[index], deck[pick]] = [deck[pick], deck[index]];
-  }
-  return deck;
-}
+const islands = new Set(["Cabo Verde", "Comoros", "Madagascar", "Mauritius", "Sao Tome and Principe", "Seychelles"]);
+const regions = ["North", "West", "Central", "East", "South", "Island Countries"];
+const themes = [
+  ["Island countries", "Collect every island country.", ["Cabo Verde", "Comoros", "Madagascar", "Mauritius", "Seychelles"]],
+  ["Great Lakes", "Collect countries connected to the African Great Lakes.", ["Burundi", "Democratic Republic of the Congo", "Rwanda", "Tanzania", "Uganda"]],
+  ["Sahel journey", "Collect countries in the Sahel belt.", ["Burkina Faso", "Chad", "Mali", "Mauritania", "Niger"]],
+  ["Horn of Africa", "Collect countries in the Horn of Africa.", ["Djibouti", "Eritrea", "Ethiopia", "Somalia"]],
+];
+const key = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const regionOf = (item) => islands.has(item.country) ? "Island Countries" : item.region === "Southern" ? "South" : item.region;
+const mix = (items, offset = 0) => [...items].sort((a, b) => (key(a).charCodeAt(0) + offset) % 9 - (key(b).charCodeAt(0) + offset) % 9);
 
 export default function CardGame({ onBack }) {
-  const { user } = usePlayerAuth();
-  const navigate = useNavigate();
-  const [mode, setMode] = useState(cardModes[0]);
-  const [round, setRound] = useState(0);
-  const [score, setScore] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [clueLevel, setClueLevel] = useState(0);
-  const [answer, setAnswer] = useState("");
-  const [countryArtwork, setCountryArtwork] = useState({});
-  const [offers, setOffers] = useState([]);
-  const [offersLoaded, setOffersLoaded] = useState(false);
-  const [cataloguePolicy, setCataloguePolicy] = useState(null);
-  const [modeAccess, setModeAccess] = useState({});
-  const [modeNotice, setModeNotice] = useState("");
-  const [mapLayer, setMapLayer] = useState("regions");
-  const [mapRegion, setMapRegion] = useState("All");
-  const [soundEnabled, setSoundEnabled] = useState(savedSoundEnabled);
-  const deck = useMemo(() => shuffledDeck(africaDeck), []);
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${getApiBaseUrl()}/v1/country-assets`, { headers: { Accept: "application/json" }, signal: controller.signal })
-      .then((response) => response.ok ? response.json() : { data: [] })
-      .then((payload) => setCountryArtwork(Object.fromEntries((payload.data || []).map((asset) => [countryKey(asset.country), asset]))))
-      .catch((error) => { if (error.name !== "AbortError") setCountryArtwork({}); });
-    return () => controller.abort();
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${getApiBaseUrl()}/v1/offers`, { headers: { Accept: "application/json" }, signal: controller.signal })
-      .then((response) => response.ok ? response.json() : { data: [] })
-      .then((payload) => { setOffers(payload.data || []); setOffersLoaded(true); })
-      .catch(() => { setOffers([]); setOffersLoaded(true); });
-    return () => controller.abort();
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${getApiBaseUrl()}/v1/access-policy`, { headers: { Accept: "application/json" }, signal: controller.signal })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Card access is currently unavailable.")))
-      .then((payload) => setCataloguePolicy(payload.data || { catalogueRequiresSubscription: false }))
-      .catch((error) => { if (error.name !== "AbortError") setModeNotice(error.message); });
-    return () => controller.abort();
-  }, []);
-  const card = deck[round % deck.length];
-  const artwork = countryArtwork[countryKey(card.country)];
-  const capitalOptions = useMemo(() => pickOptions(card.capital), [card.id]);
-  const countryOptions = useMemo(() => [...countries.filter((item) => item.country !== card.country).sort(() => Math.random() - 0.5).slice(0, 3).map((item) => item.country), card.country].sort(() => Math.random() - 0.5), [card.id]);
-  const isCountryAnswer = ["matching", "guess-country", "regional", "thematic"].includes(mode.id);
-  const correctAnswer = isCountryAnswer ? card.country : card.capital;
-  const choices = isCountryAnswer ? countryOptions : capitalOptions;
-  const question = {
-    "quick-facts": `What is the capital of ${card.country}?`,
-    matching: `Which country has ${card.capital} as its capital?`,
-    "guess-country": `I am in ${card.region} Africa and my capital is ${card.capital}. Who am I?`,
-    "card-war": `Card duel: name the capital of ${card.country} to win this draw.`,
-    regional: `Regional run: which country is in ${card.region} Africa?`,
-    thematic: `Discovery trail: which country pairs with the capital ${card.capital}?`,
-  }[mode.id] || "";
-  const whoAmIClues = [`I am in ${card.region} Africa.`, `My capital is ${card.capital}.`, `My card is a ${card.type.toLowerCase()} card.`];
-  const offerForMode = (item) => offers.find((offer) => offer.resource === `card-mode:${item.id}` && Number(offer.amountMinor) > 0);
-  const activeModeOffer = offerForMode(mode);
-  const resourceForMode = (item) => `card-mode:${item.id}`;
-  const modeNeedsAccess = (item) => Boolean(offerForMode(item) || cataloguePolicy?.catalogueRequiresSubscription || cataloguePolicy?.cardRequiresPayment);
-  const activeModeLocked = !offersLoaded || !cataloguePolicy || (modeNeedsAccess(mode) && modeAccess[resourceForMode(mode)] !== true);
-  async function chooseMode(item) {
-    if (!offersLoaded || !cataloguePolicy) { setModeNotice("Checking card access. Please try again in a moment."); return; }
-    const needsAccess = modeNeedsAccess(item);
-    if (!needsAccess) { setMode(item); setAnswer(""); setClueLevel(0); setStreak(0); setModeNotice(""); return; }
-    if (!user) { setModeNotice("Sign in and purchase this card-game mode before playing it."); return; }
-    try {
-      const token = await user.getIdToken();
-      const response = await fetch(`${getApiBaseUrl()}/v1/me/access/${encodeURIComponent(resourceForMode(item))}`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "We couldn't check access to this card mode.");
-      setModeAccess((current) => ({ ...current, [resourceForMode(item)]: Boolean(payload.data?.permitted) }));
-      if (!payload.data?.permitted) { setModeNotice(`${payload.data?.offer?.title || item.title} requires purchase. Open your workspace for secure checkout.`); return; }
-      setMode(item); setAnswer(""); setClueLevel(0); setStreak(0); setModeNotice("");
-    } catch (error) { setModeNotice(error.message); }
-  }
-  // The first mode is selected before offers arrive. Resolve its entitlement
-  // as soon as pricing loads so a paid default cannot be played unchecked.
-  useEffect(() => {
-    if (!offersLoaded || !cataloguePolicy || !modeNeedsAccess(mode) || Object.hasOwn(modeAccess, resourceForMode(mode))) return undefined;
-    if (!user) {
-      setModeAccess((current) => ({ ...current, [resourceForMode(mode)]: false }));
-      return undefined;
-    }
-    const controller = new AbortController();
-    user.getIdToken()
-      .then((token) => fetch(`${getApiBaseUrl()}/v1/me/access/${encodeURIComponent(resourceForMode(mode))}`, {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, signal: controller.signal,
-      }))
-      .then(async (response) => {
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || "We couldn't check access to this card mode.");
-        if (!controller.signal.aborted) setModeAccess((current) => ({ ...current, [resourceForMode(mode)]: Boolean(payload.data?.permitted) }));
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") setModeNotice(error.message);
-      });
-    return () => controller.abort();
-  }, [offers, offersLoaded, cataloguePolicy, mode, modeAccess, user]);
-  const next = () => { playGameCue("swap", soundEnabled); setRound((value) => value + 1); setAnswer(""); setClueLevel(0); };
-  const choose = (choice) => {
-    if (answer) return;
-    setAnswer(choice);
-    if (choice === correctAnswer) { playGameCue("correct", soundEnabled); setScore((value) => value + (mode.id === "card-war" ? 2 : 1)); setStreak((value) => value + 1); }
-    else { playGameCue("wrong", soundEnabled); setStreak(0); }
-  };
-
-  return <section className="card-game" aria-live="polite">
-    <button className="back-link" onClick={onBack}>← Back to the library</button>
-    <header className="card-game-hero"><div><span className="eyebrow"><Layers3 size={15} /> IGITI A-54 · 108 CARD DECK</span><h2>Play Africa,<br /><em>card by card.</em></h2><p>Two cards for each of Africa's 54 countries. Pick a mode, draw a card, and learn together.</p><button className="card-sound-toggle" onClick={() => { const next = !soundEnabled; setSoundEnabled(next); saveSoundEnabled(next); }}>{soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}{soundEnabled ? "Game sound on" : "Game sound off"}</button></div><div className="deck-counter"><Layers3 size={28} /><strong>108</strong><span>PLAYABLE CARDS</span></div></header>
-    <div className="mode-grid">{cardModes.map((item, index) => { const offer = offerForMode(item); const subscriptionOnly = !offer && cataloguePolicy?.catalogueRequiresSubscription; return <button key={item.id} className={mode.id === item.id ? "mode-card active" : "mode-card"} onClick={() => chooseMode(item)}><span>0{index + 1}{offer ? ` · ${offer.amountMinor / 100} ${offer.currency}` : subscriptionOnly ? " · SUBSCRIBER" : ""}</span><strong>{item.title}</strong><small>{item.prompt}</small></button>; })}</div>
-    <section className="map-layer-explorer" aria-label="Africa map layers"><div><span className="eyebrow"><Map size={14} /> INTERACTIVE MAP LAYERS</span><h3>Explore the deck by geography</h3><p>{mapLayer === "regions" ? "Filter the A-54 deck by region." : mapLayer === "capitals" ? "Reveal capital-city links before you draw." : "Browse country cards and their uploaded artwork."}</p></div><div className="map-layer-controls">{[["regions", "Regions"], ["capitals", "Capitals"], ["countries", "Country cards"]].map(([id, label]) => <button key={id} className={mapLayer === id ? "active" : ""} onClick={() => setMapLayer(id)}>{label}</button>)}</div><div className="map-region-controls">{["All", "North", "West", "Central", "East", "Southern"].map((region) => <button key={region} className={mapRegion === region ? "active" : ""} onClick={() => setMapRegion(region)}>{region}</button>)}</div><div className="map-country-list">{countries.filter((item) => mapRegion === "All" || item.region === mapRegion).map((item) => <button key={item.country} onClick={() => { const index = deck.findIndex((entry) => entry.country === item.country); if (index >= 0) { setRound(index); setAnswer(""); setClueLevel(0); } }}>{mapLayer === "capitals" ? <><strong>{item.capital}</strong><span>{item.country}</span></> : <><strong>{item.country}</strong><span>{mapLayer === "regions" ? `${item.region} Africa` : countryArtwork[countryKey(item.country)] ? "Artwork uploaded" : "Card ready"}</span></>}</button>)}</div></section>
-    {modeNotice && <p className="inline-error" role="alert">{modeNotice}</p>}
-    {activeModeLocked ? <section className="card-play-area card-mode-locked"><div><span className="eyebrow">{!offersLoaded || !cataloguePolicy ? "CHECKING ACCESS" : "PAID CARD MODE"}</span><h3>{activeModeOffer?.title || mode.title}</h3><p>{!offersLoaded || !cataloguePolicy ? "Checking whether this card mode is available to this account." : "This mode unlocks only after Pesapal confirms payment. A redirect alone never grants access."}</p>{offersLoaded && cataloguePolicy && <button className="button button-primary" onClick={() => navigate("/workspace")}>Open secure checkout <ArrowRight size={16} /></button>}</div></section> : <div className="card-play-area"><article className="country-card"><span className="card-kind">{card.type === "PROFILE" ? "COUNTRY PROFILE" : "CHALLENGE CARD"}</span><span className="card-region">{card.region} AFRICA</span>{artwork ? <figure className="country-card-visual"><img src={artwork.imageUrl} alt={`${card.country} card artwork`} /></figure> : <div className="card-map" aria-hidden="true">✦</div>}<h3>{mode.id === "who-am-i" && !answer ? "Mystery country" : card.country}</h3><p>{mode.id === "who-am-i" && !answer ? "Unlock the clues, then reveal the answer." : `Capital: ${card.capital}`}</p>{artwork?.caption && !(mode.id === "who-am-i" && !answer) && <small className="country-card-caption">{artwork.caption}</small>}<span className="card-number">{String((round % deck.length) + 1).padStart(3, "0")} / 108</span></article><div className="round-panel"><div className="round-top"><span><Trophy size={16} /> Score {score}{streak > 1 ? ` · ${streak} streak` : ""}</span><span>Round {round + 1}</span></div><span className="eyebrow"><Sparkles size={14} /> {mode.title}</span>{mode.id === "who-am-i" ? <><h3>Who am I?</h3><div className="clue-stack">{whoAmIClues.slice(0, clueLevel).map((clue, index) => <p key={clue}>{index + 1}. {clue}</p>)}</div>{answer ? <p className="round-copy">It is <strong>{card.country}</strong>, with {card.capital} as its capital.</p> : <div className="answer-grid"><button className="answer" onClick={() => setClueLevel((value) => Math.min(whoAmIClues.length, value + 1))} disabled={clueLevel === whoAmIClues.length}>Reveal clue</button><button className="answer" onClick={() => setAnswer("revealed")}>Reveal country</button></div>}<button className="text-action next-round" onClick={next}>Next mystery <ArrowRight size={16} /></button></> : mode.id === "roleplay" ? <><h3>Country roleplay day</h3><p className="round-copy">You are {card.country}. Introduce your capital, region, and one thing you want other players to discover.</p><button className="button button-primary" onClick={() => answer ? next() : setAnswer("presented")}>{answer ? <>Draw the next role <ArrowRight size={16} /></> : <>I’m ready to present <BookOpen size={16} /></>}</button></> : <><h3>{question}</h3>{mode.id === "card-war" && <p className="round-copy">Correct answers earn 2 points. Keep the streak alive to win the knowledge duel.</p>}<div className="answer-grid">{choices.map((choice) => <button key={choice} className={answer ? choice === correctAnswer ? "answer correct" : choice === answer ? "answer wrong" : "answer" : "answer"} onClick={() => choose(choice)} disabled={Boolean(answer)}>{answer && choice === correctAnswer && <Check size={16} />}{choice}</button>)}</div>{answer && <button className="text-action next-round" onClick={next}>{mode.id === "card-war" ? "Draw the next duel" : "Next card"} <ArrowRight size={16} /></button>}</>}<button className="reset-score" onClick={() => { setScore(0); setStreak(0); setRound(0); setAnswer(""); setClueLevel(0); }}><RotateCcw size={14} /> Reset session</button></div></div>}
-    <MultiplayerRoom mode={mode} locked={activeModeLocked} />
-  </section>;
+  const { user } = usePlayerAuth(); const navigate = useNavigate();
+  const [mode, setMode] = useState(cardModes[0]); const [round, setRound] = useState(0); const [score, setScore] = useState(0); const [streak, setStreak] = useState(0);
+  const [answer, setAnswer] = useState(""); const [typed, setTyped] = useState(""); const [clues, setClues] = useState(0); const [stake, setStake] = useState(1); const [selectedCapital, setSelectedCapital] = useState(""); const [found, setFound] = useState([]);
+  const [offers, setOffers] = useState([]); const [loaded, setLoaded] = useState(false); const [policy, setPolicy] = useState(null); const [access, setAccess] = useState({}); const [notice, setNotice] = useState(""); const [sound, setSound] = useState(savedSoundEnabled); const [artwork, setArtwork] = useState({});
+  const [layer, setLayer] = useState("regions"); const [mapRegion, setMapRegion] = useState("All");
+  useEffect(() => { fetch(`${getApiBaseUrl()}/v1/offers`).then((r) => r.json()).then((p) => { setOffers(p.data || []); setLoaded(true); }).catch(() => setLoaded(true)); fetch(`${getApiBaseUrl()}/v1/access-policy`).then((r) => r.json()).then((p) => setPolicy(p.data)).catch(() => setPolicy({})); }, []);
+  useEffect(() => { fetch(`${getApiBaseUrl()}/v1/country-assets`).then((r) => r.json()).then((p) => setArtwork(Object.fromEntries((p.data || []).map((item) => [key(item.country), item.imageUrl])))).catch(() => {}); }, []);
+  const card = africaDeck[round % africaDeck.length]; const resource = `card-mode:${mode.id}`; const offer = offers.find((item) => item.resource === resource && item.amountMinor > 0); const locked = !loaded || !policy || Boolean((offer || policy.catalogueRequiresSubscription || policy.cardRequiresPayment) && access[resource] !== true);
+  const choices = useMemo(() => mix([card.capital, ...countries.filter((x) => x.capital !== card.capital).slice((round * 5) % 42, (round * 5) % 42 + 3).map((x) => x.capital)], round), [card, round]);
+  const matchSet = useMemo(() => countries.slice((round * 4) % 50, (round * 4) % 50 + 4), [round]);
+  const [themeName, themePrompt, themeMembers] = themes[round % themes.length]; const themeOptions = useMemo(() => mix([...themeMembers.slice(0, 3), ...countries.filter((x) => !themeMembers.includes(x.country)).slice((round * 3) % 42, (round * 3) % 42 + 3).map((x) => x.country)], round), [round, themeMembers]);
+  const currentRegion = regions[round % regions.length]; const regionOptions = useMemo(() => mix([...countries.filter((x) => regionOf(x) === currentRegion).slice(0, 3).map((x) => x.country), ...countries.filter((x) => regionOf(x) !== currentRegion).slice((round * 3) % 42, (round * 3) % 42 + 3).map((x) => x.country)], round), [round, currentRegion]);
+  function reset() { setAnswer(""); setTyped(""); setClues(0); setStake(1); setSelectedCapital(""); setFound([]); }
+  function next() { playGameCue("swap", sound); setRound((n) => n + 1); reset(); }
+  function correct(points = 1) { playGameCue("correct", sound); setScore((n) => n + points); setStreak((n) => n + 1); }
+  function wrong() { playGameCue("wrong", sound); setStreak(0); }
+  async function selectMode(item) { const r = `card-mode:${item.id}`; const needed = offers.some((x) => x.resource === r && x.amountMinor > 0) || policy?.catalogueRequiresSubscription || policy?.cardRequiresPayment; if (!needed) { setMode(item); reset(); return; } if (!user) return setNotice("Sign in and purchase this card mode before playing it."); try { const token = await user.getIdToken(); const response = await fetch(`${getApiBaseUrl()}/v1/me/access/${r}`, { headers: { Authorization: `Bearer ${token}` } }); const payload = await response.json(); if (!response.ok || !payload.data?.permitted) return setNotice("This card mode requires verified payment. Open your workspace for secure checkout."); setAccess((v) => ({ ...v, [r]: true })); setMode(item); reset(); setNotice(""); } catch { setNotice("We could not confirm access right now."); } }
+  useEffect(() => { if (!loaded || !policy || !user || Object.hasOwn(access, resource)) return; user.getIdToken().then((token) => fetch(`${getApiBaseUrl()}/v1/me/access/${resource}`, { headers: { Authorization: `Bearer ${token}` } })).then((r) => r.json()).then((p) => setAccess((v) => ({ ...v, [resource]: Boolean(p.data?.permitted) }))).catch(() => {}); }, [loaded, policy, user, resource, access]);
+  const face = (hidden) => <article className={`country-card ${hidden ? "country-card-hidden" : ""}`}><span className="card-kind">{hidden ? "IGITI A‑54" : card.type}</span>{hidden ? <div className="card-map">?</div> : <><span className="card-region">{regionOf(card)} REGION</span>{artwork[key(card.country)] ? <figure className="country-card-visual"><img src={artwork[key(card.country)]} alt={`${card.country} card artwork`} /></figure> : <div className="card-map">✦</div>}<h3>{card.country}</h3><p>Capital: {card.capital}</p></>}<span className="card-number">CARD {String(round + 1).padStart(3, "0")} / 108</span></article>;
+  const typedGame = (title, clueList) => <div className="card-play-area"><div>{face(!answer)}<p className="mode-instruction">Reveal clues consecutively, then type your answer. You may reveal the country only when you cannot continue.</p></div><div className="round-panel"><span className="eyebrow"><Sparkles size={14} /> {title}</span><h3>Name this country</h3><div className="clue-stack">{clueList.slice(0, clues).map((x, i) => <p key={x}>{i + 1}. {x}</p>)}</div>{!answer && <button className="answer" disabled={clues === clueList.length} onClick={() => setClues((n) => n + 1)}>Reveal next clue ({clues}/{clueList.length})</button>}<form className="typed-answer" onSubmit={(e) => { e.preventDefault(); if (!typed || answer) return; const ok = key(typed) === key(card.country); setAnswer(ok ? "correct" : "wrong"); ok ? correct(2) : wrong(); }}><input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type country name" disabled={Boolean(answer)} /><button className="button button-primary">Guess</button></form>{!answer && <button className="text-action" onClick={() => { setAnswer("reveal"); wrong(); }}>Reveal country</button>}{answer && <button className="text-action next-round" onClick={next}>Next numbered card <ArrowRight size={16} /></button>}</div></div>;
+  let play = null;
+  if (mode.id === "quick-facts") play = <div className="card-play-area"><div>{face(!answer)}<p className="mode-instruction">The card turns over only after your answer.</p></div><div className="round-panel"><span className="eyebrow">QUICK FACTS SHOWDOWN</span><h3>Which capital belongs to the hidden country?</h3><p className="round-copy">Hint: {regionOf(card)} Africa.</p><div className="answer-grid">{choices.map((x) => <button key={x} className={answer ? x === card.capital ? "answer correct" : x === answer ? "answer wrong" : "answer" : "answer"} disabled={Boolean(answer)} onClick={() => { setAnswer(x); x === card.capital ? correct() : wrong(); }}>{x}</button>)}</div>{answer && <button className="text-action next-round" onClick={next}>Next numbered card <ArrowRight size={16} /></button>}</div></div>;
+  else if (mode.id === "matching") play = <section className="matching-play"><span className="eyebrow"><Layers3 size={14} /> COUNTRY MATCHING · SET {round + 1}</span><h3>Match four capitals to four countries</h3><p>Pick a capital, then its country. Clear all pairs to continue.</p><div className="matching-columns"><div>{matchSet.map((x) => <button key={x.capital} className={found.includes(x.capital) ? "answer correct" : selectedCapital === x.capital ? "answer selected" : "answer"} disabled={found.includes(x.capital)} onClick={() => setSelectedCapital(x.capital)}>{x.capital}</button>)}</div><div>{mix(matchSet, round).map((x) => <button key={x.country} className="answer" disabled={!selectedCapital || found.includes(selectedCapital)} onClick={() => { const ok = matchSet.find((m) => m.capital === selectedCapital)?.country === x.country; if (ok) { correct(); setFound((v) => [...v, selectedCapital]); } else wrong(); setSelectedCapital(""); }}>{x.country}</button>)}</div></div>{found.length === 4 && <button className="button button-primary" onClick={next}>Next match set <ArrowRight size={16} /></button>}</section>;
+  else if (mode.id === "card-war") { const rival = africaDeck[(round + 29) % 108]; play = <div className="card-play-area"><div>{face(!answer)}<p className="war-opponent"><Swords size={15} /> Rival card: {answer ? rival.country : "hidden"}</p></div><div className="round-panel"><span className="eyebrow"><Swords size={14} /> IGITI CARD WAR</span><h3>Risk points in a knowledge duel</h3><div className="stake-row">{[1,2,3].map((x) => <button key={x} className={stake === x ? "active" : ""} disabled={Boolean(answer)} onClick={() => setStake(x)}>{x} pts</button>)}</div><div className="answer-grid">{mix([card.capital, rival.capital], round).map((x) => <button key={x} className="answer" disabled={Boolean(answer)} onClick={() => { setAnswer(x); if (x === card.capital) correct(stake); else { wrong(); setScore((n) => Math.max(0, n - stake)); } }}>{x}</button>)}</div>{answer && <button className="text-action next-round" onClick={next}>Draw next duel <ArrowRight size={16} /></button>}</div></div>; }
+  else if (["who-am-i", "guess-country"].includes(mode.id)) play = typedGame(mode.title, [`I am in ${regionOf(card)} Africa.`, `My capital begins with ${card.capital[0]}.`, `My name has ${card.country.replace(/[^A-Za-z]/g, "").length} letters.`, `My capital has ${card.capital.replace(/[^A-Za-z]/g, "").length} letters.`, `My name ends with ${card.country.at(-1)}.`]);
+  else if (["thematic", "regional"].includes(mode.id)) { const isTheme = mode.id === "thematic"; const options = isTheme ? themeOptions : regionOptions; const targets = isTheme ? themeMembers.slice(0,3) : countries.filter((x) => regionOf(x) === currentRegion).slice(0,3).map((x) => x.country); play = <section className="collection-play"><span className="eyebrow"><Map size={14} /> {mode.title}</span><h3>{isTheme ? themeName : `${currentRegion} Africa`}</h3><p>{isTheme ? themePrompt : `Collect three countries in Igiti’s ${currentRegion} region.`} Wrong picks break your streak.</p><div className="collection-progress">Collected {found.length}/3</div><div className="answer-grid">{options.map((x) => <button key={x} className={found.includes(x) ? "answer correct" : "answer"} disabled={found.includes(x) || found.length === 3} onClick={() => { if (targets.includes(x)) { correct(); setFound((v) => [...v, x]); } else wrong(); }}>{found.includes(x) && <Check size={15} />}{x}</button>)}</div>{found.length === 3 && <button className="button button-primary" onClick={next}>Next collection <ArrowRight size={16} /></button>}</section>; }
+  else play = <div className="card-play-area"><div>{face(false)}</div><div className="round-panel"><span className="eyebrow"><Sparkles size={14} /> COUNTRY ROLEPLAY DAY</span><h3>Present two things about {card.country}</h3><ol className="roleplay-tasks"><li>Introduce {card.country} and state its capital: <strong>{card.capital}</strong>.</li><li>Explain one thing a visitor could discover about its {regionOf(card)} African context.</li></ol><button className="button button-primary" onClick={next}>I presented both <ArrowRight size={16} /></button></div></div>;
+  return <section className="card-game"><button className="back-link" onClick={onBack}>← Back to the library</button><header className="card-game-hero"><div><span className="eyebrow"><Layers3 size={15}/> IGITI A‑54 · 108 CARD DECK</span><h2>Play Africa,<br/><em>card by card.</em></h2><p>Cards are drawn in numbered deck order—never random jumps.</p><button className="card-sound-toggle" onClick={() => { setSound(!sound); saveSoundEnabled(!sound); }}>{sound ? <Volume2 size={15}/> : <VolumeX size={15}/>} Sound {sound ? "on" : "off"}</button></div><div className="deck-counter"><Layers3 size={28}/><strong>108</strong><span>ORDERED CARDS</span></div></header><div className="mode-grid">{cardModes.map((x,i) => <button key={x.id} className={mode.id === x.id ? "mode-card active" : "mode-card"} onClick={() => selectMode(x)}><span>0{i+1}</span><strong>{x.title}</strong><small>{x.prompt}</small></button>)}</div><section className="map-layer-explorer"><div><span className="eyebrow"><Map size={14}/> IGITI REGIONS</span><h3>North, West, Central, East, South & Island Countries</h3><p>{layer === "capitals" ? "Explore capital-city links." : "Browse the A‑54 deck through Igiti’s regional model."}</p></div><div className="map-layer-controls">{[["regions","Regions"],["capitals","Capitals"]].map(([x,label]) => <button key={x} className={layer === x ? "active" : ""} onClick={() => setLayer(x)}>{label}</button>)}</div><div className="map-region-controls">{["All",...regions].map((x) => <button key={x} className={mapRegion === x ? "active" : ""} onClick={() => setMapRegion(x)}>{x}</button>)}</div><div className="map-country-list">{countries.filter((x) => mapRegion === "All" || regionOf(x) === mapRegion).map((x) => <button key={x.country} onClick={() => { setRound(africaDeck.findIndex((c) => c.country === x.country)); reset(); }}><strong>{layer === "capitals" ? x.capital : x.country}</strong><span>{layer === "capitals" ? x.country : regionOf(x)}</span></button>)}</div></section>{notice && <p className="inline-error">{notice}</p>}{locked ? <section className="card-play-area card-mode-locked"><div><span className="eyebrow">PAID CARD MODE</span><h3>{offer?.title || mode.title}</h3><p>This mode unlocks only after Pesapal verifies payment.</p><button className="button button-primary" onClick={() => navigate("/workspace")}>Open secure checkout <ArrowRight size={16}/></button></div></section> : <><div className="round-scorebar"><span><Trophy size={16}/> Score {score}{streak>1 ? ` · ${streak} streak` : ""}</span><span>{mode.id === "matching" ? `Match set ${round+1}` : `Card ${round+1} of 108`}</span><button onClick={() => { setScore(0); setStreak(0); setRound(0); reset(); }}><RotateCcw size={14}/> Reset</button></div>{play}</>}<MultiplayerRoom mode={mode} locked={locked}/></section>;
 }
