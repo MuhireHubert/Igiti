@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BookOpen, Check, Layers3, RotateCcw, Sparkles, Trophy } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Layers3, Map, RotateCcw, Sparkles, Trophy, Volume2, VolumeX } from "lucide-react";
 import { africaDeck, cardModes, countries } from "../lib/africaDeck.js";
 import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import { useNavigate } from "react-router-dom";
+import MultiplayerRoom from "./MultiplayerRoom.jsx";
+import { playGameCue, savedSoundEnabled, saveSoundEnabled } from "../lib/gameAudio.js";
 
 function pickOptions(answer) {
   const alternatives = countries.filter((item) => item.capital !== answer).sort(() => Math.random() - 0.5).slice(0, 3).map((item) => item.capital);
@@ -38,6 +40,9 @@ export default function CardGame({ onBack }) {
   const [cataloguePolicy, setCataloguePolicy] = useState(null);
   const [modeAccess, setModeAccess] = useState({});
   const [modeNotice, setModeNotice] = useState("");
+  const [mapLayer, setMapLayer] = useState("regions");
+  const [mapRegion, setMapRegion] = useState("All");
+  const [soundEnabled, setSoundEnabled] = useState(savedSoundEnabled);
   const deck = useMemo(() => shuffledDeck(africaDeck), []);
   useEffect(() => {
     const controller = new AbortController();
@@ -122,19 +127,21 @@ export default function CardGame({ onBack }) {
       });
     return () => controller.abort();
   }, [offers, offersLoaded, cataloguePolicy, mode, modeAccess, user]);
-  const next = () => { setRound((value) => value + 1); setAnswer(""); setClueLevel(0); };
+  const next = () => { playGameCue("swap", soundEnabled); setRound((value) => value + 1); setAnswer(""); setClueLevel(0); };
   const choose = (choice) => {
     if (answer) return;
     setAnswer(choice);
-    if (choice === correctAnswer) { setScore((value) => value + (mode.id === "card-war" ? 2 : 1)); setStreak((value) => value + 1); }
-    else setStreak(0);
+    if (choice === correctAnswer) { playGameCue("correct", soundEnabled); setScore((value) => value + (mode.id === "card-war" ? 2 : 1)); setStreak((value) => value + 1); }
+    else { playGameCue("wrong", soundEnabled); setStreak(0); }
   };
 
   return <section className="card-game" aria-live="polite">
     <button className="back-link" onClick={onBack}>← Back to the library</button>
-    <header className="card-game-hero"><div><span className="eyebrow"><Layers3 size={15} /> IGITI A-54 · 108 CARD DECK</span><h2>Play Africa,<br /><em>card by card.</em></h2><p>Two cards for each of Africa's 54 countries. Pick a mode, draw a card, and learn together.</p></div><div className="deck-counter"><Layers3 size={28} /><strong>108</strong><span>PLAYABLE CARDS</span></div></header>
+    <header className="card-game-hero"><div><span className="eyebrow"><Layers3 size={15} /> IGITI A-54 · 108 CARD DECK</span><h2>Play Africa,<br /><em>card by card.</em></h2><p>Two cards for each of Africa's 54 countries. Pick a mode, draw a card, and learn together.</p><button className="card-sound-toggle" onClick={() => { const next = !soundEnabled; setSoundEnabled(next); saveSoundEnabled(next); }}>{soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}{soundEnabled ? "Game sound on" : "Game sound off"}</button></div><div className="deck-counter"><Layers3 size={28} /><strong>108</strong><span>PLAYABLE CARDS</span></div></header>
     <div className="mode-grid">{cardModes.map((item, index) => { const offer = offerForMode(item); const subscriptionOnly = !offer && cataloguePolicy?.catalogueRequiresSubscription; return <button key={item.id} className={mode.id === item.id ? "mode-card active" : "mode-card"} onClick={() => chooseMode(item)}><span>0{index + 1}{offer ? ` · ${offer.amountMinor / 100} ${offer.currency}` : subscriptionOnly ? " · SUBSCRIBER" : ""}</span><strong>{item.title}</strong><small>{item.prompt}</small></button>; })}</div>
+    <section className="map-layer-explorer" aria-label="Africa map layers"><div><span className="eyebrow"><Map size={14} /> INTERACTIVE MAP LAYERS</span><h3>Explore the deck by geography</h3><p>{mapLayer === "regions" ? "Filter the A-54 deck by region." : mapLayer === "capitals" ? "Reveal capital-city links before you draw." : "Browse country cards and their uploaded artwork."}</p></div><div className="map-layer-controls">{[["regions", "Regions"], ["capitals", "Capitals"], ["countries", "Country cards"]].map(([id, label]) => <button key={id} className={mapLayer === id ? "active" : ""} onClick={() => setMapLayer(id)}>{label}</button>)}</div><div className="map-region-controls">{["All", "North", "West", "Central", "East", "Southern"].map((region) => <button key={region} className={mapRegion === region ? "active" : ""} onClick={() => setMapRegion(region)}>{region}</button>)}</div><div className="map-country-list">{countries.filter((item) => mapRegion === "All" || item.region === mapRegion).map((item) => <button key={item.country} onClick={() => { const index = deck.findIndex((entry) => entry.country === item.country); if (index >= 0) { setRound(index); setAnswer(""); setClueLevel(0); } }}>{mapLayer === "capitals" ? <><strong>{item.capital}</strong><span>{item.country}</span></> : <><strong>{item.country}</strong><span>{mapLayer === "regions" ? `${item.region} Africa` : countryArtwork[countryKey(item.country)] ? "Artwork uploaded" : "Card ready"}</span></>}</button>)}</div></section>
     {modeNotice && <p className="inline-error" role="alert">{modeNotice}</p>}
     {activeModeLocked ? <section className="card-play-area card-mode-locked"><div><span className="eyebrow">{!offersLoaded || !cataloguePolicy ? "CHECKING ACCESS" : "PAID CARD MODE"}</span><h3>{activeModeOffer?.title || mode.title}</h3><p>{!offersLoaded || !cataloguePolicy ? "Checking whether this card mode is available to this account." : "This mode unlocks only after Pesapal confirms payment. A redirect alone never grants access."}</p>{offersLoaded && cataloguePolicy && <button className="button button-primary" onClick={() => navigate("/workspace")}>Open secure checkout <ArrowRight size={16} /></button>}</div></section> : <div className="card-play-area"><article className="country-card"><span className="card-kind">{card.type === "PROFILE" ? "COUNTRY PROFILE" : "CHALLENGE CARD"}</span><span className="card-region">{card.region} AFRICA</span>{artwork ? <figure className="country-card-visual"><img src={artwork.imageUrl} alt={`${card.country} card artwork`} /></figure> : <div className="card-map" aria-hidden="true">✦</div>}<h3>{mode.id === "who-am-i" && !answer ? "Mystery country" : card.country}</h3><p>{mode.id === "who-am-i" && !answer ? "Unlock the clues, then reveal the answer." : `Capital: ${card.capital}`}</p>{artwork?.caption && !(mode.id === "who-am-i" && !answer) && <small className="country-card-caption">{artwork.caption}</small>}<span className="card-number">{String((round % deck.length) + 1).padStart(3, "0")} / 108</span></article><div className="round-panel"><div className="round-top"><span><Trophy size={16} /> Score {score}{streak > 1 ? ` · ${streak} streak` : ""}</span><span>Round {round + 1}</span></div><span className="eyebrow"><Sparkles size={14} /> {mode.title}</span>{mode.id === "who-am-i" ? <><h3>Who am I?</h3><div className="clue-stack">{whoAmIClues.slice(0, clueLevel).map((clue, index) => <p key={clue}>{index + 1}. {clue}</p>)}</div>{answer ? <p className="round-copy">It is <strong>{card.country}</strong>, with {card.capital} as its capital.</p> : <div className="answer-grid"><button className="answer" onClick={() => setClueLevel((value) => Math.min(whoAmIClues.length, value + 1))} disabled={clueLevel === whoAmIClues.length}>Reveal clue</button><button className="answer" onClick={() => setAnswer("revealed")}>Reveal country</button></div>}<button className="text-action next-round" onClick={next}>Next mystery <ArrowRight size={16} /></button></> : mode.id === "roleplay" ? <><h3>Country roleplay day</h3><p className="round-copy">You are {card.country}. Introduce your capital, region, and one thing you want other players to discover.</p><button className="button button-primary" onClick={() => answer ? next() : setAnswer("presented")}>{answer ? <>Draw the next role <ArrowRight size={16} /></> : <>I’m ready to present <BookOpen size={16} /></>}</button></> : <><h3>{question}</h3>{mode.id === "card-war" && <p className="round-copy">Correct answers earn 2 points. Keep the streak alive to win the knowledge duel.</p>}<div className="answer-grid">{choices.map((choice) => <button key={choice} className={answer ? choice === correctAnswer ? "answer correct" : choice === answer ? "answer wrong" : "answer" : "answer"} onClick={() => choose(choice)} disabled={Boolean(answer)}>{answer && choice === correctAnswer && <Check size={16} />}{choice}</button>)}</div>{answer && <button className="text-action next-round" onClick={next}>{mode.id === "card-war" ? "Draw the next duel" : "Next card"} <ArrowRight size={16} /></button>}</>}<button className="reset-score" onClick={() => { setScore(0); setStreak(0); setRound(0); setAnswer(""); setClueLevel(0); }}><RotateCcw size={14} /> Reset session</button></div></div>}
+    <MultiplayerRoom mode={mode} locked={activeModeLocked} />
   </section>;
 }

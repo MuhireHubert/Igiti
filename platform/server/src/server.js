@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -607,6 +608,115 @@ app.post("/v1/me/resource-assignments", requirePlayer, async (req, res, next) =>
     });
     res.status(201).json({ data: assignment });
   } catch (error) { next(error); }
+});
+
+const multiplayerCreateSchema = z.object({ mode: z.enum([...CARD_MODE_IDS]), maxPlayers: z.number().int().min(2).max(6).optional().default(4) });
+const multiplayerJoinSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/) });
+const multiplayerAnswerSchema = z.object({ answer: z.string().trim().min(1).max(120) });
+const multiplayerQuestions = [
+  ["Rwanda", "Kigali", "East"], ["Nigeria", "Abuja", "West"], ["Kenya", "Nairobi", "East"], ["Ghana", "Accra", "West"],
+  ["Morocco", "Rabat", "North"], ["South Africa", "Pretoria", "Southern"], ["Tanzania", "Dodoma", "East"], ["Senegal", "Dakar", "West"],
+  ["Ethiopia", "Addis Ababa", "East"], ["Egypt", "Cairo", "North"], ["Namibia", "Windhoek", "Southern"], ["Uganda", "Kampala", "East"],
+];
+
+function matchCode() { return crypto.randomBytes(4).toString("base64url").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6); }
+function normalizedAnswer(value) { return String(value || "").trim().toLocaleLowerCase().replace(/[^a-z0-9]/g, ""); }
+function multiplayerQuestion(match, round) {
+  const [country, capital, region] = multiplayerQuestions[(round + match.code.charCodeAt(0)) % multiplayerQuestions.length];
+  const countryAnswer = ["matching", "guess-country", "regional", "thematic"].includes(match.mode);
+  const prompt = countryAnswer
+    ? (match.mode === "regional" ? `Which country is in ${region} Africa?` : `Which country has ${capital} as its capital?`)
+    : `What is the capital of ${country}?`;
+  return { prompt, answer: countryAnswer ? country : capital };
+}
+function matchPhase(match, now = new Date()) {
+  if (now >= match.expiresAt) return { state: "COMPLETE", round: 9, secondsRemaining: 0 };
+  if (now < match.startsAt) return { state: "WAITING", round: 0, secondsRemaining: Math.max(0, Math.ceil((match.startsAt - now) / 1000)) };
+  const elapsed = Math.floor((now - match.startsAt) / 1000);
+  const round = Math.min(9, Math.floor(elapsed / 30));
+  return { state: "LIVE", round, secondsRemaining: 30 - (elapsed % 30) };
+}
+function matchPayload(match, playerId) {
+  const phase = matchPhase(match);
+  const current = phase.state === "LIVE" ? multiplayerQuestion(match, phase.round) : null;
+  return {
+    code: match.code, mode: match.mode, maxPlayers: match.maxPlayers, hostId: match.hostId, startsAt: match.startsAt,
+    ...phase, question: current ? { prompt: current.prompt, round: phase.round + 1 } : null,
+    joined: match.participants.some((participant) => participant.playerId === playerId),
+    players: [...match.participants].sort((left, right) => right.score - left.score || +new Date(left.joinedAt) - +new Date(right.joinedAt)).map((participant) => ({
+      id: participant.playerId, name: participant.player.displayName || "Igiti player", score: participant.score, correct: participant.correct,
+    })),
+  };
+}
+async function findMatch(code) {
+  return prisma.multiplayerMatch.findUnique({
+    where: { code },
+    include: { participants: { include: { player: { select: { id: true, displayName: true } } } } },
+  });
+}
+async function requireMatchAccess(player, mode) {
+  const access = await resourceAccessForPlayer(player, `card-mode:${mode}`, { requirePurchase: true });
+  return access.permitted;
+}
+
+app.post("/v1/multiplayer/matches", requirePlayer, async (req, res, next) => {
+  const parsed = multiplayerCreateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose a valid A-54 mode and player limit." });
+  try {
+    if (!await requireMatchAccess(req.player, parsed.data.mode)) return res.status(402).json({ error: "Unlock this card mode before hosting a live match." });
+    const now = new Date();
+    const startsAt = new Date(now.getTime() + 12_000);
+    const expiresAt = new Date(startsAt.getTime() + 10 * 30_000);
+    let created = null;
+    for (let attempt = 0; attempt < 3 && !created; attempt += 1) {
+      try {
+        const code = matchCode();
+        created = await prisma.multiplayerMatch.create({ data: { code, resource: `card-mode:${parsed.data.mode}`, mode: parsed.data.mode, hostId: req.player.id, maxPlayers: parsed.data.maxPlayers, startsAt, expiresAt, participants: { create: { playerId: req.player.id } } } });
+      } catch (error) { if (error?.code !== "P2002") throw error; }
+    }
+    if (!created) return res.status(503).json({ error: "We couldn't reserve a room code. Please try again." });
+    const match = await findMatch(created.code);
+    res.status(201).json({ data: matchPayload(match, req.player.id) });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/multiplayer/matches/join", requirePlayer, async (req, res, next) => {
+  const parsed = multiplayerJoinSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Enter the six-character room code." });
+  try {
+    const match = await findMatch(parsed.data.code);
+    if (!match || matchPhase(match).state === "COMPLETE") return res.status(404).json({ error: "That live room is no longer available." });
+    if (!await requireMatchAccess(req.player, match.mode)) return res.status(402).json({ error: "Unlock this card mode before joining the live match." });
+    const alreadyJoined = match.participants.some((participant) => participant.playerId === req.player.id);
+    if (!alreadyJoined && match.participants.length >= match.maxPlayers) return res.status(409).json({ error: "This live room is full." });
+    if (!alreadyJoined) await prisma.multiplayerParticipant.create({ data: { matchId: match.id, playerId: req.player.id } });
+    res.json({ data: matchPayload(await findMatch(match.code), req.player.id) });
+  } catch (error) { if (error?.code === "P2002") return res.json({ data: matchPayload(await findMatch(parsed.data.code), req.player.id) }); next(error); }
+});
+
+app.get("/v1/multiplayer/matches/:code", requirePlayer, async (req, res, next) => {
+  try {
+    const match = await findMatch(String(req.params.code || "").toUpperCase());
+    if (!match || !match.participants.some((participant) => participant.playerId === req.player.id)) return res.status(404).json({ error: "Live room not found." });
+    res.json({ data: matchPayload(match, req.player.id) });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/multiplayer/matches/:code/answer", requirePlayer, async (req, res, next) => {
+  const parsed = multiplayerAnswerSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Submit a valid answer." });
+  try {
+    const match = await findMatch(String(req.params.code || "").toUpperCase());
+    if (!match || !match.participants.some((participant) => participant.playerId === req.player.id)) return res.status(404).json({ error: "Live room not found." });
+    const phase = matchPhase(match);
+    if (phase.state !== "LIVE") return res.status(409).json({ error: phase.state === "WAITING" ? "The match has not started yet." : "This match is complete." });
+    const correct = normalizedAnswer(parsed.data.answer) === normalizedAnswer(multiplayerQuestion(match, phase.round).answer);
+    await prisma.$transaction(async (tx) => {
+      await tx.multiplayerAnswer.create({ data: { matchId: match.id, playerId: req.player.id, round: phase.round, isCorrect: correct } });
+      if (correct) await tx.multiplayerParticipant.update({ where: { matchId_playerId: { matchId: match.id, playerId: req.player.id } }, data: { score: { increment: 1 }, correct: { increment: 1 } } });
+    });
+    res.json({ data: { correct, match: matchPayload(await findMatch(match.code), req.player.id) } });
+  } catch (error) { if (error?.code === "P2002") return res.status(409).json({ error: "You already answered this round." }); next(error); }
 });
 
 app.get("/v1/me/progress", requirePlayer, async (req, res, next) => {

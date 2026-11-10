@@ -77,6 +77,9 @@ model PlayerProfile {
   assignmentsReceived GameAssignment[] @relation("AssignmentRecipient")
   resourceAssignmentsSent ResourceAssignment[] @relation("ResourceAssignmentSender")
   resourceAssignmentsReceived ResourceAssignment[] @relation("ResourceAssignmentRecipient")
+  hostedMatches MultiplayerMatch[] @relation("MatchHost")
+  matchParticipants MultiplayerParticipant[]
+  matchAnswers MultiplayerAnswer[]
 }
 
 model School {
@@ -137,6 +140,55 @@ model ResourceAssignment {
   @@unique([resource, recipientId])
   @@index([assignedById, createdAt])
   @@index([recipientId, dueAt])
+}
+
+// Multiplayer rooms are short-lived, server-owned quiz sessions. Scores are
+// updated only after the API validates a submitted answer for the live round.
+model MultiplayerMatch {
+  id          String                 @id @default(cuid())
+  code        String                 @unique @db.VarChar(12)
+  resource    String                 @db.VarChar(191)
+  mode        String                 @db.VarChar(80)
+  hostId      String
+  maxPlayers  Int                    @default(4)
+  startsAt    DateTime
+  expiresAt   DateTime
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  host        PlayerProfile          @relation("MatchHost", fields: [hostId], references: [id], onDelete: Cascade)
+  participants MultiplayerParticipant[]
+  answers     MultiplayerAnswer[]
+
+  @@index([expiresAt])
+}
+
+model MultiplayerParticipant {
+  id        String            @id @default(cuid())
+  matchId   String
+  playerId  String
+  score     Int               @default(0)
+  correct   Int               @default(0)
+  joinedAt  DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  match     MultiplayerMatch  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player    PlayerProfile     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, playerId])
+  @@index([matchId, score])
+}
+
+model MultiplayerAnswer {
+  id        String            @id @default(cuid())
+  matchId   String
+  playerId  String
+  round     Int
+  isCorrect Boolean
+  createdAt DateTime          @default(now())
+  match     MultiplayerMatch  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player    PlayerProfile     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, playerId, round])
+  @@index([matchId, round])
 }
 
 // Purchases are deliberately server-owned. A browser redirect is never an
