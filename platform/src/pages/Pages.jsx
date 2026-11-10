@@ -4,6 +4,9 @@ import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Gamepad2, Leaf,
 import { getApiBaseUrl, getGameById, getGames } from "../lib/api.js";
 import PuzzleGame from "../components/PuzzleGame.jsx";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
+import CardGame from "../components/CardGame.jsx";
+
+const a54Game = { id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck with eight ways to play and learn Africa.", pieces: 108, difficulty: "All modes", image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=85" };
 
 function PageHeader() {
   return <header className="page-header"><Link to="/" className="brand"><span className="brand-mark"><Leaf size={21} /></span><span className="brand-name">igiti<span>play</span></span></Link><Link className="back-link" to="/"><ArrowLeft size={15} /> Home</Link></header>;
@@ -27,7 +30,7 @@ export function GamesPage() {
   }, []);
   return <PageLayout eyebrow="THE IGITI COLLECTION" title={<>A world of stories.<br /><em>Piece by piece.</em></>} subtitle="Browse the collection and find your next little adventure.">
     {error && <p className="inline-error">{error}</p>}
-    <div className="subpage-game-grid">{games.map((game) => <Link to={`/games/${game.id}`} className="subpage-game" key={game.id}><img src={game.image} alt="" /><div><span>{game.category} · {game.pieces || "New"} pieces</span><h2>{game.title}</h2><p>{game.description}</p><strong>View game <ArrowRight size={15} /></strong></div></Link>)}</div>
+    <div className="subpage-game-grid">{[a54Game, ...games].map((game) => <Link to={`/games/${game.id}`} className="subpage-game" key={game.id}><img src={game.image} alt="" /><div><span>{game.category} · {game.pieces || "New"} pieces</span><h2>{game.title}</h2><p>{game.description}</p><strong>View game <ArrowRight size={15} /></strong></div></Link>)}</div>
     {games.length === 0 && !error && <p className="page-empty">The collection is being prepared. Please check back soon.</p>}
   </PageLayout>;
 }
@@ -44,7 +47,7 @@ export function GamePage() {
   const [checkingAccess, setCheckingAccess] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    getGameById(gameId, { signal: controller.signal })
+    (gameId === "a54-card-game" ? Promise.resolve(a54Game) : getGameById(gameId, { signal: controller.signal }))
       .then(setGame)
       .catch(() => setGame(null))
       .finally(() => setLoaded(true));
@@ -73,6 +76,7 @@ export function GamePage() {
       setAccessMessage(`This game requires purchase. ${payload.data?.offer?.title || "This product needs a checkout offer from the platform owner."}`);
     } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
   }
+  if (game?.kind === "card") return <><PageHeader /><CardGame onBack={() => navigate("/games")} /><PageFooter /></>;
   return <PageLayout eyebrow="YOUR NEXT ADVENTURE" title={game ? game.title : "A story in the making"} subtitle={game ? game.description : "Explore the growing world of Igiti Play."}>
     {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && (playing
       ? <PuzzleGame game={game} onBack={() => setPlaying(false)} />

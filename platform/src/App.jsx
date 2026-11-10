@@ -9,29 +9,29 @@ import PuzzleGame from "./components/PuzzleGame.jsx";
 import CardGame from "./components/CardGame.jsx";
 import PlayerAccount from "./components/PlayerAccount.jsx";
 import { usePlayerAuth } from "./lib/PlayerAuthContext.jsx";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
 
 function Brand() {
   return (
-    <a className="brand" href="#home" aria-label="Igiti Play home">
+    <Link className="brand" to="/games" aria-label="Browse Igiti Play games">
       <span className="brand-mark"><Leaf size={21} strokeWidth={2.4} /></span>
       <span className="brand-name">igiti<span>play</span></span>
-    </a>
+    </Link>
   );
 }
 
-function Header({ onExplore }) {
+function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <header className="topbar">
       <div className="topbar-inner">
         <Brand />
         <nav className={menuOpen ? "nav-links is-open" : "nav-links"} aria-label="Main navigation">
-          <a href="#library" onClick={() => { onExplore(); setMenuOpen(false); }}>Game library</a>
-          <a href="#how-it-works" onClick={() => setMenuOpen(false)}>How to play</a>
+          <Link to="/games" onClick={() => setMenuOpen(false)}>Game library</Link>
+          <Link to="/how-to-play" onClick={() => setMenuOpen(false)}>How to play</Link>
           <a href="https://igiti.africa" target="_blank" rel="noreferrer">Igiti Africa ↗</a>
         </nav>
         <div className="top-actions">
@@ -40,7 +40,7 @@ function Header({ onExplore }) {
           <button className="icon-button mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X size={21} /> : <Menu size={21} />}
           </button>
-          <a className="button button-dark button-small" href="#library" onClick={onExplore}>Find a game <ArrowRight size={15} /></a>
+          <Link className="button button-dark button-small" to="/games">Find a game <ArrowRight size={15} /></Link>
         </div>
       </div>
     </header>
@@ -125,13 +125,13 @@ function GamePreview({ game, onBack }) {
 }
 
 function App() {
+  const navigate = useNavigate();
   const [games, setGames] = useState([]);
   const [source, setSource] = useState("preview");
   const [loadError, setLoadError] = useState("");
   const [category, setCategory] = useState("All stories");
   const [difficulty, setDifficulty] = useState("All levels");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState(null);
   const [mobileFilters, setMobileFilters] = useState(false);
 
   useEffect(() => {
@@ -152,12 +152,10 @@ function App() {
     return categoryMatches && difficultyMatches && (!query || `${game.title} ${game.description} ${game.category}`.toLowerCase().includes(query));
   }), [libraryGames, category, difficulty, search]);
 
-  const explore = () => document.getElementById("library")?.scrollIntoView({ behavior: "smooth" });
-
   return (
     <div id="home" className="app-shell">
-      <div className="announcement"><span><Sparkles size={13} /> NEW QUESTS · AFRICA'S STORIES, PLAYABLE</span><a href="#library">Choose a game <ArrowRight size={13} /></a></div>
-      <Header onExplore={explore} />
+      <div className="announcement"><span><Sparkles size={13} /> NEW QUESTS · AFRICA'S STORIES, PLAYABLE</span><Link to="/games">Choose a game <ArrowRight size={13} /></Link></div>
+      <Header />
       <main>
         <section className="hero">
           <div className="hero-pattern" aria-hidden="true" />
@@ -166,8 +164,8 @@ function App() {
             <h1>Africa is your<br />next <em>level.</em></h1>
             <p className="hero-lede">Pick a puzzle, race the clock, and unlock a new way to see Africa—one smart move at a time.</p>
             <div className="hero-actions">
-              <button className="button button-primary" onClick={explore}>Start playing <ArrowRight size={17} /></button>
-              <a className="button button-outline" href="#how-it-works"><span className="play-mini">▶</span> Learn the rules</a>
+              <Link className="button button-primary" to="/games">Start playing <ArrowRight size={17} /></Link>
+              <Link className="button button-outline" to="/how-to-play"><span className="play-mini">▶</span> Learn the rules</Link>
             </div>
             <div className="hero-proof"><div className="proof-avatars"><span>⚡</span><span>🧩</span><span>🏆</span></div><span>Puzzles, scores, saves, and more quests ahead</span></div>
           </div>
@@ -177,7 +175,7 @@ function App() {
             <div className="floating-note note-bottom"><span className="note-icon note-green"><Trophy size={18} /></span><span><b>Level up</b><small>Track every win</small></span></div>
             <div className="hero-stamp"><span>READY</span><strong>▶</strong><span>PLAYER ONE</span></div>
           </div>
-          <a className="scroll-cue" href="#library">SCROLL TO EXPLORE <ChevronDown size={14} /></a>
+          <Link className="scroll-cue" to="/games">BROWSE THE COLLECTION <ChevronDown size={14} /></Link>
         </section>
 
         <section className="value-strip" aria-label="Platform values">
@@ -208,18 +206,16 @@ function App() {
 
           {loadError && <p className="inline-error" role="status">{loadError} Showing the preview collection where available.</p>}
           {source === "preview" && <p className="preview-note"><span /> Preview collection · Connect the API to load published games</p>}
-          {selected ? <GamePreview game={selected} onBack={() => setSelected(null)} /> : (
-            <div className="game-grid">
-              {visibleGames.map((game) => <GameCard key={game.id} game={game} onSelect={setSelected} />)}
+          <div className="game-grid">
+              {visibleGames.map((game) => <GameCard key={game.id} game={game} onSelect={(item) => navigate(`/games/${item.id}`)} />)}
               {visibleGames.length === 0 && <div className="empty-state"><Search size={26} /><h3>No stories found</h3><p>Try another search or clear one of your filters.</p><button className="text-action" onClick={() => { setCategory("All stories"); setDifficulty("All levels"); setSearch(""); }}>Clear filters <ArrowRight size={15} /></button></div>}
             </div>
-          )}
           <div className="library-foot"><span>More stories are on their way.</span><span>Designed in Africa <span className="africa-heart">♥</span> for everyone.</span></div>
         </section>
 
         <section className="manifesto" id="how-it-works">
           <div className="manifesto-art"><div className="manifesto-ring ring-one" /><div className="manifesto-ring ring-two" /><div className="manifesto-center"><Leaf size={42} /><span>IGITI</span></div><span className="manifesto-tag tag-one">DISCOVER</span><span className="manifesto-tag tag-two">CONNECT</span><span className="manifesto-tag tag-three">REMEMBER</span></div>
-          <div className="manifesto-copy"><span className="eyebrow">HOW TO PLAY</span><h2>Choose. Solve.<br /><em>Level up.</em></h2><p>Every Igiti board turns landmarks, wildlife, maps, and stories into a playable challenge. Finish a puzzle, improve your time, and come back for the next quest.</p><div className="manifesto-points"><span><Check size={16} /> Pick a challenge from the library</span><span><Check size={16} /> Swap or drag pieces into place</span><span><Check size={16} /> Save progress and chase your best score</span></div><a className="text-action" href="#library">Choose a game <ArrowRight size={16} /></a></div>
+          <div className="manifesto-copy"><span className="eyebrow">HOW TO PLAY</span><h2>Choose. Solve.<br /><em>Level up.</em></h2><p>Every Igiti board turns landmarks, wildlife, maps, and stories into a playable challenge. Finish a puzzle, improve your time, and come back for the next quest.</p><div className="manifesto-points"><span><Check size={16} /> Pick a challenge from the library</span><span><Check size={16} /> Swap or drag pieces into place</span><span><Check size={16} /> Save progress and chase your best score</span></div><Link className="text-action" to="/games">Choose a game <ArrowRight size={16} /></Link></div>
         </section>
       </main>
 
