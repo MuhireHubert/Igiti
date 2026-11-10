@@ -141,7 +141,10 @@ app.get("/v1/country-assets", async (_req, res, next) => {
       orderBy: { country: "asc" },
       select: { country: true, imageUrl: true, caption: true, updatedAt: true },
     });
-    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    // Admin uploads must appear in card play immediately. A stale catalogue
+    // here looks exactly like a failed upload, so do not serve an old asset
+    // list through a browser or CDN cache.
+    res.set("Cache-Control", "no-store");
     res.json({ data: assets });
   } catch (error) { next(error); }
 });
