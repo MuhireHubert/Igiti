@@ -143,7 +143,7 @@ function App() {
   }, []);
 
   const libraryGames = useMemo(() => [{
-    id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck: two cards for every African country, with eight ways to play.", difficulty: "All modes", pieces: 108, image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=85", status: "available",
+    id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck: two cards for every African country, with eight ways to play.", difficulty: "All modes", pieces: 108, image: "/images/a54-card-game-thumbnail.png", status: "available",
   }, ...games], [games]);
   const visibleGames = useMemo(() => libraryGames.filter((game) => {
     const categoryMatches = category === "All stories" || game.category === category;

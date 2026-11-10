@@ -6,7 +6,7 @@ import PuzzleGame from "../components/PuzzleGame.jsx";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import CardGame from "../components/CardGame.jsx";
 
-const a54Game = { id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck with eight ways to play and learn Africa.", pieces: 108, difficulty: "All modes", image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=85" };
+const a54Game = { id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck with eight ways to play and learn Africa.", pieces: 108, difficulty: "All modes", image: "/images/a54-card-game-thumbnail.png" };
 
 function PageHeader() {
   return <header className="page-header"><Link to="/" className="brand"><span className="brand-mark"><Leaf size={21} /></span><span className="brand-name">igiti<span>play</span></span></Link><Link className="back-link" to="/"><ArrowLeft size={15} /> Home</Link></header>;
