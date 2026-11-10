@@ -54,7 +54,10 @@ export default function PuzzleGame({ game, onBack }) {
   const [timeLimit, setTimeLimit] = useState(() => Number.isFinite(initialProgress?.timeLimit) ? initialProgress.timeLimit : 0);
   const [soundEnabled, setSoundEnabled] = useState(savedSoundEnabled);
   const [hintsUsed, setHintsUsed] = useState(() => Number.isFinite(initialProgress?.hintsUsed) ? initialProgress.hintsUsed : 0);
-  const [showReference, setShowReference] = useState(false);
+  // The full picture is a learning aid, so it starts visible rather than
+  // requiring a player to discover a hidden control.
+  const [showReference, setShowReference] = useState(true);
+  const [customMinutes, setCustomMinutes] = useState(15);
   const [showFunFact, setShowFunFact] = useState(false);
   const [activeFunFact, setActiveFunFact] = useState(null);
   const [dragging, setDragging] = useState(null);
@@ -198,7 +201,7 @@ export default function PuzzleGame({ game, onBack }) {
     setSeconds(0);
     setTimeLimit(nextTimeLimit);
     setHintsUsed(0);
-    setShowReference(false);
+    setShowReference(true);
     setShowFunFact(false);
     setActiveFunFact(null);
     factSlotsRef.current = null;
@@ -261,7 +264,7 @@ export default function PuzzleGame({ game, onBack }) {
         </div>
         <div className="puzzle-heading-actions"><button className="puzzle-secondary" onClick={useHint} disabled={complete || timeExpired || hintsUsed >= hintLimit}><Lightbulb size={15} /> Hint {hintsUsed}/{hintLimit}</button><button className="puzzle-secondary" onClick={() => { const next = !soundEnabled; setSoundEnabled(next); saveSoundEnabled(next); }}>{soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}{soundEnabled ? "Sound on" : "Sound off"}</button><button className="puzzle-reset" onClick={() => resetPuzzle()}><RotateCcw size={15} /> Restart</button></div>
       </div>
-      <div className="puzzle-mode-picker" aria-label="Puzzle mode"><span><Zap size={14} /> Play mode</span><button className={!timeLimit ? "active" : ""} onClick={() => resetPuzzle(0)}>Relaxed</button><button className={timeLimit === 300 ? "active" : ""} onClick={() => resetPuzzle(300)}>Time attack · 5 min</button><button className={timeLimit === 600 ? "active" : ""} onClick={() => resetPuzzle(600)}>Time attack · 10 min</button></div>
+      <div className="puzzle-mode-picker" aria-label="Puzzle mode"><span><Zap size={14} /> Play mode</span><button className={!timeLimit ? "active" : ""} onClick={() => resetPuzzle(0)}>Relaxed</button><button className={timeLimit === 300 ? "active" : ""} onClick={() => resetPuzzle(300)}>Time attack · 5 min</button><button className={timeLimit === 600 ? "active" : ""} onClick={() => resetPuzzle(600)}>Time attack · 10 min</button><label className="puzzle-custom-time">Custom <input type="number" min="1" max="180" value={customMinutes} onChange={(event) => setCustomMinutes(Math.max(1, Math.min(180, Number(event.target.value) || 1)))} aria-label="Custom time attack minutes" /> min</label><button onClick={() => resetPuzzle(customMinutes * 60)}>Start custom attack</button></div>
       <div className="puzzle-stats">
         <div><span><Timer size={15} /> {timeLimit ? "TIME LEFT" : "TIME"}</span><strong>{formatTime(displaySeconds)}</strong></div>
         <div><span><Shuffle size={15} /> MOVES</span><strong>{moves}</strong></div>
@@ -309,9 +312,9 @@ export default function PuzzleGame({ game, onBack }) {
       </div>
       <div className="puzzle-actions">
         <button className="puzzle-secondary" onClick={() => setShowReference((shown) => !shown)}><Eye size={16} /> {showReference ? "Hide picture guide" : "Show picture guide"}</button>
-        <span>{selected === null ? "Select a piece to begin swapping." : "Now select the piece you want to swap with."}</span>
+        <span>{selected === null ? "Use the visible picture guide, then select a piece to begin swapping." : "Now select the piece you want to swap with."}</span>
       </div>
-      {showReference && <div className="puzzle-reference"><img src={game.image} alt={`Reference image for ${game.title}`} /><p>Use this picture as your guide while you arrange the pieces.</p></div>}
+      {showReference && <figure className="puzzle-reference"><img src={game.image} alt={`Reference image for ${game.title}`} /><figcaption><strong>Reference image</strong><p>Keep this image open while you arrange the puzzle pieces.</p></figcaption></figure>}
       {timeExpired && <div className="puzzle-time-expired" role="status"><Timer size={23} /><div><strong>Time attack complete.</strong><p>You placed {solvedCount} of {pieceCount} pieces. Try again to beat the clock.</p></div><button onClick={() => resetPuzzle(timeLimit)}>Try again</button></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
       {(activeFunFact || showFunFact) && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">{activeFunFact ? "CORRECT PIECE · FACT UNLOCKED" : "PUZZLE COMPLETE · FACT UNLOCKED"}</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{activeFunFact || game.funFact}</p><button className="button button-primary" onClick={() => { setActiveFunFact(null); setShowFunFact(false); }}>Keep playing</button></section></div>}

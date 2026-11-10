@@ -435,6 +435,12 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
     const offer = await prisma.accessOffer.findFirst({ where: { key: parsed.data.offerKey, isActive: true } });
     if (!offer) return res.status(404).json({ error: "That offer is no longer available." });
     if (offer.amountMinor < 1) return res.status(400).json({ error: "This offer does not have a payable price." });
+    // Keep each checkout path unambiguous. Schools buy a school licence; an
+    // individual player buys personal content or a player pass. Learners and
+    // teachers receive access through their school's assignments instead.
+    if (offer.resource === "plan:school:all" && req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only a school account can buy a school plan." });
+    if (offer.resource === "plan:user:all" && req.player.role !== "PLAYER") return res.status(403).json({ error: "The player pass is available to individual player accounts. School members receive access through their school." });
+    if (offer.kind === "GAME" && req.player.role !== "PLAYER") return res.status(403).json({ error: "Individual game purchases are for player accounts. Students and teachers receive paid game access through their school assignments." });
     const order = await prisma.paymentOrder.create({
       data: {
         playerId: req.player.id, provider: "PESAPAL", amountMinor: offer.amountMinor, currency: offer.currency,
@@ -735,10 +741,10 @@ app.get("/v1/me/entitlements", requirePlayer, async (req, res, next) => {
     const now = new Date();
     const entitlements = await prisma.accessEntitlement.findMany({
       where: { playerId: req.player.id, status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-      select: { resource: true, startsAt: true, expiresAt: true, orderId: true },
+      select: { resource: true, startsAt: true, expiresAt: true, orderId: true, order: { select: { metadata: true } } },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ data: entitlements });
+    res.json({ data: entitlements.map(({ order, ...entitlement }) => ({ ...entitlement, offerKey: String(order?.metadata?.offerKey || "") || null })) });
   } catch (error) { next(error); }
 });
 

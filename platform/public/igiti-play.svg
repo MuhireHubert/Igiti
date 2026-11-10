@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Igiti Play">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff5148"/><stop offset="1" stop-color="#ff9a3d"/></linearGradient></defs>
+  <rect width="64" height="64" rx="18" fill="url(#g)"/>
+  <path d="M25 18h14v28H25z" fill="#101225" opacity=".92"/><path d="m27 24 13 8-13 8z" fill="#65e6a8"/>
+</svg>
