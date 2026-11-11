@@ -329,8 +329,8 @@ async function syncPuzzleOffer(puzzle) {
   }
   await prisma.accessOffer.upsert({
     where: { key },
-    update: { title: puzzle.title, description: `Unlock ${puzzle.title}.`, kind: "GAME", resource: `puzzle:${puzzle.id}`, amountMinor: pricing.amountMinor, currency: pricing.currency, interval: "ONE_TIME", isActive: true },
-    create: { key, title: puzzle.title, description: `Unlock ${puzzle.title}.`, kind: "GAME", resource: `puzzle:${puzzle.id}`, amountMinor: pricing.amountMinor, currency: pricing.currency, interval: "ONE_TIME", isActive: true },
+    update: { title: `${puzzle.title} · Monthly access`, description: `Monthly access to ${puzzle.title} while the subscription is active.`, kind: "GAME", resource: `puzzle:${puzzle.id}`, amountMinor: pricing.amountMinor, currency: pricing.currency, interval: "MONTHLY", isActive: true },
+    create: { key, title: `${puzzle.title} · Monthly access`, description: `Monthly access to ${puzzle.title} while the subscription is active.`, kind: "GAME", resource: `puzzle:${puzzle.id}`, amountMinor: pricing.amountMinor, currency: pricing.currency, interval: "MONTHLY", isActive: true },
   });
 }
 
@@ -537,7 +537,7 @@ const accessOfferInput = z.object({
   resource: z.string().trim().min(2).max(191),
   amountMinor: z.number().int().min(0).max(100000000),
   currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
-  interval: z.enum(["ONE_TIME", "MONTHLY", "YEARLY"]),
+  interval: z.enum(["MONTHLY", "YEARLY"]),
   seatLimit: z.number().int().min(1).max(100000).optional().nullable(),
   isActive: z.boolean().default(false),
 });

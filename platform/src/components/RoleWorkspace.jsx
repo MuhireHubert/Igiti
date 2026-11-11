@@ -21,7 +21,7 @@ function accessLabel(resource) {
 }
 
 function expiryLabel(expiresAt) {
-  return expiresAt ? `Expires ${new Date(expiresAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}` : "Lifetime access";
+  return expiresAt ? `Expires ${new Date(expiresAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}` : "No expiry recorded";
 }
 
 function priceLabel(amountMinor, currency) {
@@ -150,6 +150,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const activeOfferKeys = new Set(entitlements.map((entitlement) => entitlement.offerKey).filter(Boolean));
   const hasCataloguePlan = unlockedResources.has(isSchool ? "plan:school:all" : "plan:user:all");
   const visibleOffers = offers.filter((offer) => {
+    if (!["MONTHLY", "YEARLY"].includes(offer.interval)) return false;
     if (isSchool) return offer.resource === "plan:school:all";
     if (isIndividual) return offer.resource !== "plan:school:all";
     return false;

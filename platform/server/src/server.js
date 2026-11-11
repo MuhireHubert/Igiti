@@ -113,7 +113,7 @@ app.use("/v1/admin", adminRoutes);
 app.get("/v1/offers", async (_req, res, next) => {
   try {
     const offers = await prisma.accessOffer.findMany({
-      where: { isActive: true }, orderBy: [{ kind: "asc" }, { amountMinor: "asc" }],
+      where: { isActive: true, interval: { in: ["MONTHLY", "YEARLY"] } }, orderBy: [{ kind: "asc" }, { amountMinor: "asc" }],
       select: { key: true, title: true, description: true, kind: true, resource: true, amountMinor: true, currency: true, interval: true, seatLimit: true },
     });
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
@@ -126,7 +126,7 @@ app.get("/v1/offers", async (_req, res, next) => {
 app.get("/v1/access-policy", async (_req, res, next) => {
   try {
     const plans = await prisma.accessOffer.findMany({
-      where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 } },
+      where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } },
       select: { key: true, title: true, description: true, resource: true, amountMinor: true, currency: true, interval: true },
       orderBy: { amountMinor: "asc" },
     });
@@ -332,12 +332,12 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
   const eligibleOfferResources = resource.startsWith("card-mode:") ? [resource, "card:all"] : [resource];
   const [offer, allAccessOffers, assignment] = await Promise.all([
     prisma.accessOffer.findFirst({
-      where: { resource: { in: eligibleOfferResources }, isActive: true, amountMinor: { gt: 0 } },
+      where: { resource: { in: eligibleOfferResources }, isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } },
       orderBy: { amountMinor: "asc" },
       select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
     }),
     prisma.accessOffer.findMany({
-      where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 } },
+      where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } },
       select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
     }),
     prisma.resourceAssignment.findFirst({
@@ -438,6 +438,7 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
     const offer = await prisma.accessOffer.findFirst({ where: { key: parsed.data.offerKey, isActive: true } });
     if (!offer) return res.status(404).json({ error: "That offer is no longer available." });
     if (offer.amountMinor < 1) return res.status(400).json({ error: "This offer does not have a payable price." });
+    if (!["MONTHLY", "YEARLY"].includes(offer.interval)) return res.status(410).json({ error: "Lifetime and one-time access offers are no longer available. Choose a subscription plan instead." });
     // Keep each checkout path unambiguous. Schools buy a school licence; an
     // individual player buys personal content or a player pass. Learners and
     // teachers receive access through their school's assignments instead.
