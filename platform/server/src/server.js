@@ -110,14 +110,40 @@ app.get("/health", async (_req, res) => {
 
 app.use("/v1/admin", adminRoutes);
 
-app.get("/v1/offers", async (_req, res, next) => {
+const AFRICAN_COUNTRY_CODES = new Set("DZ AO BJ BW BF BI CV CM CF TD KM CD CG CI DJ EG GQ ER SZ ET GA GM GH GN GW KE LS LR LY MG MW ML MR MU MA MZ NA NE NG RW ST SN SC SL SO ZA SS SD TZ TG TN UG ZM ZW".split(" "));
+const REGIONAL_PRICING_KEY = "commerce.regional-pricing";
+
+function normalizedCountry(value) {
+  const country = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(country) ? country : "";
+}
+
+function regionalAmount(offer, countryCode, value) {
+  const tier = AFRICAN_COUNTRY_CODES.has(countryCode) ? "africa" : "international";
+  const config = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const perOffer = config.offers && typeof config.offers === "object" ? config.offers[offer.key] : null;
+  const override = perOffer?.[tier] || config?.[tier] || {};
+  const amountMinor = Number.isInteger(override.amountMinor) && override.amountMinor > 0
+    ? override.amountMinor
+    : Math.max(1, Math.round(offer.amountMinor * (Number(override.multiplier) > 0 ? Number(override.multiplier) : tier === "africa" ? 0.5 : 1)));
+  const currency = /^[A-Z]{3}$/.test(String(override.currency || "")) ? String(override.currency).toUpperCase() : offer.currency;
+  return { ...offer, amountMinor, currency, pricingTier: tier, billingCountry: countryCode };
+}
+
+async function regionalOffer(offer, countryCode) {
+  const setting = await prisma.appSetting.findUnique({ where: { key: REGIONAL_PRICING_KEY }, select: { value: true } });
+  return regionalAmount(offer, countryCode, setting?.value);
+}
+
+app.get("/v1/offers", async (req, res, next) => {
   try {
     const offers = await prisma.accessOffer.findMany({
       where: { isActive: true, interval: { in: ["MONTHLY", "YEARLY"] } }, orderBy: [{ kind: "asc" }, { amountMinor: "asc" }],
       select: { key: true, title: true, description: true, kind: true, resource: true, amountMinor: true, currency: true, interval: true, seatLimit: true },
     });
+    const countryCode = normalizedCountry(req.query.country);
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
-    res.json({ data: offers });
+    res.json({ data: await Promise.all(offers.map((offer) => regionalOffer(offer, countryCode))) });
   } catch (error) { next(error); }
 });
 
@@ -302,7 +328,7 @@ app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false) });
+const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), billingCountry: z.string().trim().regex(/^[A-Za-z]{2}$/, "Choose your billing country.") });
 const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
 const CARD_MODE_IDS = new Set(["quick-facts", "matching", "card-war", "guess-country", "who-am-i", "regional", "thematic", "roleplay"]);
 const CARD_MODE_LABELS = { "quick-facts": "Quick Facts Showdown", matching: "Country Matching", "card-war": "Igiti Card War", "guess-country": "Guess the Country", "who-am-i": "Who am I?", regional: "Regional Challenges", thematic: "Thematic Discovery", roleplay: "Country Roleplay Day" };
@@ -445,19 +471,21 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
     if (offer.resource === "plan:school:all" && req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only a school account can buy a school plan." });
     if (offer.resource === "plan:user:all" && req.player.role !== "PLAYER") return res.status(403).json({ error: "The player pass is available to individual player accounts. School members receive access through their school." });
     if (offer.kind === "GAME" && req.player.role !== "PLAYER") return res.status(403).json({ error: "Individual game purchases are for player accounts. Students and teachers receive paid game access through their school assignments." });
+    const billingCountry = normalizedCountry(parsed.data.billingCountry);
+    const pricedOffer = await regionalOffer(offer, billingCountry);
     const order = await prisma.paymentOrder.create({
       data: {
-        playerId: req.player.id, provider: "PESAPAL", amountMinor: offer.amountMinor, currency: offer.currency,
+        playerId: req.player.id, provider: "PESAPAL", amountMinor: pricedOffer.amountMinor, currency: pricedOffer.currency,
         idempotencyKey: `pesapal:${crypto.randomUUID()}`,
-        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title, recurringConsent: Boolean(parsed.data.recurringConsent && ["MONTHLY", "YEARLY"].includes(offer.interval)), seatLimit: offer.seatLimit },
+        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title, recurringConsent: Boolean(parsed.data.recurringConsent && ["MONTHLY", "YEARLY"].includes(offer.interval)), seatLimit: offer.seatLimit, billingCountry, pricingTier: pricedOffer.pricingTier, baseAmountMinor: offer.amountMinor, baseCurrency: offer.currency },
       },
     });
     try {
       const subscription = parsed.data.recurringConsent ? recurringSubscriptionFor(offer, order.id) : null;
       const checkout = await createPesapalOrder({
-        merchantReference: order.id, amountMinor: offer.amountMinor, currency: offer.currency,
+        merchantReference: order.id, amountMinor: pricedOffer.amountMinor, currency: pricedOffer.currency,
         description: offer.title,
-        billingAddress: { email_address: req.player.email || "", phone_number: "", country_code: "", first_name: req.player.displayName || "Igiti", middle_name: "", last_name: "Player", line_1: "", line_2: "", city: "", state: "", postal_code: "", zip_code: "" }, subscription,
+        billingAddress: { email_address: req.player.email || "", phone_number: "", country_code: billingCountry, first_name: req.player.displayName || "Igiti", middle_name: "", last_name: "Player", line_1: "", line_2: "", city: "", state: "", postal_code: "", zip_code: "" }, subscription,
       });
       await prisma.paymentOrder.update({ where: { id: order.id }, data: { providerOrderId: checkout.order_tracking_id, status: "PROCESSING" } });
       return res.status(201).json({ data: { redirectUrl: checkout.redirect_url, orderId: order.id } });

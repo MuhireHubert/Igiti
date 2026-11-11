@@ -359,6 +359,17 @@ export default function AdminPortal() {
     }, "Platform setting saved.");
   }
 
+  function openRegionalPricing() {
+    const saved = settings.find((setting) => setting.key === "commerce.regional-pricing")?.value;
+    setSettingKey("commerce.regional-pricing");
+    setSettingValue(JSON.stringify(saved || {
+      africa: { multiplier: 0.5 },
+      international: { multiplier: 1 },
+      offers: {},
+    }, null, 2));
+    setTab("controls");
+  }
+
   async function grantEntitlement(event) {
     event.preventDefault();
     await withAdminRequest(async (token) => {
@@ -578,6 +589,7 @@ export default function AdminPortal() {
               <div className="admin-mode-pricing"><strong>A-54 complete deck subscription</strong><small>Create a monthly or annual subscription for all 108 cards and every current A-54 mode. There is no lifetime purchase.</small><div><button type="button" className="admin-button admin-button-light" onClick={startA54DeckOffer}>A-54 deck monthly · $12.99</button></div></div>
               <div className="admin-mode-pricing"><strong>A-54 individual mode subscriptions</strong><small>Each preset starts a monthly subscription. Choose yearly in the pricing form if you prefer annual billing.</small><div>{a54Modes.map(([mode, title]) => <button type="button" className="admin-button admin-button-light" key={mode} onClick={() => startA54ModeOffer(mode, title)}>{title} · $5.99/month</button>)}</div></div>
             </>}
+            {adminSession?.role === "OWNER" && <button type="button" className="admin-button admin-button-light" onClick={openRegionalPricing}>Set Africa and international price tiers</button>}
             {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveOffer}>
               <label className="admin-field">Offer key<input value={offerForm.key} onChange={(e) => setOfferForm({ ...offerForm, key: toSlug(e.target.value) })} placeholder="igiti-play-pass-monthly" required /></label>
               <label className="admin-field">Title<input value={offerForm.title} onChange={(e) => setOfferForm({ ...offerForm, title: e.target.value })} required /></label>
@@ -604,7 +616,7 @@ export default function AdminPortal() {
 
         {tab === "controls" && <div className="admin-content admin-game-layout">
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Platform settings</h2><p>Structured JSON configuration is server-owned and fully audited. Never add payment credentials here.</p></div></div>
-            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={saveSetting}><label className="admin-field">Setting key<input placeholder="game.access" value={settingKey} onChange={(e) => setSettingKey(e.target.value.toLowerCase())} required /></label><label className="admin-field">JSON value<textarea rows={5} value={settingValue} onChange={(e) => setSettingValue(e.target.value)} required /></label><button className="admin-button admin-button-primary" type="submit" disabled={saving}><Save size={15} /> Save setting</button></form>}
+            {adminSession?.role === "OWNER" && <><button type="button" className="admin-button admin-button-light" onClick={openRegionalPricing}>Edit regional price tiers</button><p className="admin-copy">Africa defaults to 50% of the international price. You can change a tier multiplier, or add a fixed per-offer amount in the <code>offers</code> object. Prices are calculated by the server before Pesapal checkout.</p><form className="admin-form" onSubmit={saveSetting}><label className="admin-field">Setting key<input placeholder="game.access" value={settingKey} onChange={(e) => setSettingKey(e.target.value.toLowerCase())} required /></label><label className="admin-field">JSON value<textarea rows={9} value={settingValue} onChange={(e) => setSettingValue(e.target.value)} required /></label><button className="admin-button admin-button-primary" type="submit" disabled={saving}><Save size={15} /> Save setting</button></form></>}
             {settings.map((setting) => <article className="admin-list-row" key={setting.key}><div className="admin-list-copy"><strong>{setting.key}</strong><span>{JSON.stringify(setting.value)} · Updated {new Date(setting.updatedAt).toLocaleString()}</span></div></article>)}
             {!settings.length && <p className="admin-empty">No runtime settings have been created.</p>}
           </section>

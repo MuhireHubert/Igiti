@@ -12,6 +12,11 @@ const roleMeta = {
   OWNER: { label: "Platform owner", icon: Crown, copy: "Full control of users, schools, games, country media, settings, and reporting." },
 };
 
+const billingCountries = [
+  ["DZ", "Algeria"], ["AO", "Angola"], ["BJ", "Benin"], ["BW", "Botswana"], ["BF", "Burkina Faso"], ["BI", "Burundi"], ["CV", "Cabo Verde"], ["CM", "Cameroon"], ["CF", "Central African Republic"], ["TD", "Chad"], ["KM", "Comoros"], ["CD", "Democratic Republic of the Congo"], ["CG", "Republic of the Congo"], ["CI", "Côte d’Ivoire"], ["DJ", "Djibouti"], ["EG", "Egypt"], ["GQ", "Equatorial Guinea"], ["ER", "Eritrea"], ["SZ", "Eswatini"], ["ET", "Ethiopia"], ["GA", "Gabon"], ["GM", "Gambia"], ["GH", "Ghana"], ["GN", "Guinea"], ["GW", "Guinea-Bissau"], ["KE", "Kenya"], ["LS", "Lesotho"], ["LR", "Liberia"], ["LY", "Libya"], ["MG", "Madagascar"], ["MW", "Malawi"], ["ML", "Mali"], ["MR", "Mauritania"], ["MU", "Mauritius"], ["MA", "Morocco"], ["MZ", "Mozambique"], ["NA", "Namibia"], ["NE", "Niger"], ["NG", "Nigeria"], ["RW", "Rwanda"], ["ST", "São Tomé and Príncipe"], ["SN", "Senegal"], ["SC", "Seychelles"], ["SL", "Sierra Leone"], ["SO", "Somalia"], ["ZA", "South Africa"], ["SS", "South Sudan"], ["SD", "Sudan"], ["TZ", "Tanzania"], ["TG", "Togo"], ["TN", "Tunisia"], ["UG", "Uganda"], ["ZM", "Zambia"], ["ZW", "Zimbabwe"],
+  ["US", "United States"], ["CA", "Canada"], ["GB", "United Kingdom"], ["FR", "France"], ["DE", "Germany"], ["BE", "Belgium"], ["NL", "Netherlands"], ["AU", "Australia"], ["AE", "United Arab Emirates"], ["SA", "Saudi Arabia"],
+];
+
 function accessLabel(resource) {
   if (resource === "plan:user:all") return "Player all-products plan";
   if (resource === "plan:school:all") return "School all-products plan";
@@ -66,6 +71,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [checkout, setCheckout] = useState({ configured: false, environment: "sandbox" });
   const [purchasing, setPurchasing] = useState("");
   const [recurringOffers, setRecurringOffers] = useState({});
+  const [billingCountry, setBillingCountry] = useState("RW");
   const [state, setState] = useState({ loading: true, error: "", message: "" });
 
   async function refresh() {
@@ -74,7 +80,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
       const token = await user.getIdToken();
       const [data, collection, offerResponse, checkoutResponse, accessList, schoolList] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
-        fetch(`${getApiBaseUrl()}/v1/offers`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
+        fetch(`${getApiBaseUrl()}/v1/offers?country=${encodeURIComponent(billingCountry)}`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/entitlements", token),
         fetch(`${getApiBaseUrl()}/v1/schools`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
@@ -94,7 +100,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState({ loading: false, error: "", message: "" });
   }
 
-  useEffect(() => { refresh(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refresh(); }, [user, billingCountry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function assign(event) {
     event.preventDefault();
@@ -118,7 +124,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState((current) => ({ ...current, error: "", message: "" }));
     try {
       const token = await user.getIdToken();
-      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]) }) });
+      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]), billingCountry }) });
       window.location.assign(order.redirectUrl);
     } catch (error) {
       setState((current) => ({ ...current, error: error.message, message: "" }));
@@ -171,7 +177,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     </form>}
     {showAssignments && workspace?.assignments?.length > 0 && <div className="role-assignments"><strong>My assigned games</strong>{workspace.assignments.map((assignment) => <article key={assignment.id}>{assignment.game ? <img src={assignment.game.coverImage} alt="" /> : <span className="role-card-assignment">A‑54</span>}<div><b>{assignment.game?.title || assignment.label || accessLabel(assignment.resource)}</b><small>From {assignment.assignedBy.displayName || assignment.assignedBy.role}{assignment.school?.name ? ` · ${assignment.school.name}` : ""}{assignment.dueAt ? ` · due ${new Date(assignment.dueAt).toLocaleDateString()}` : ""}</small></div><ArrowRight size={15} /></article>)}</div>}
     {showAssignments && workspace?.workspace === "STUDENT" && !workspace.assignments?.length && <p className="account-copy">No games have been assigned yet. Your school account can add one directly after its plan is active.</p>}
-    {showSettings && visibleOffers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> {isSchool ? "Choose a school plan" : "Choose your access"}</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is enabled only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small>{visibleOffers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) && (offer.kind !== "ACCOUNT" || activeOfferKeys.has(offer.key)) || (offer.kind === "GAME" && hasCataloguePlan) || isAdmin; const isSubscription = ["MONTHLY", "YEARLY"].includes(offer.interval); return <article key={offer.key} className={offer.kind === "ACCOUNT" ? "role-offer-plan" : ""}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}{offer.seatLimit ? ` · up to ${offer.seatLimit} teachers and students` : ""}</small>{isSubscription && !unlocked && <label className="role-recurring-consent"><input type="checkbox" checked={Boolean(recurringOffers[offer.key])} onChange={(event) => setRecurringOffers((current) => ({ ...current, [offer.key]: event.target.checked }))} /> Allow recurring payments. Pesapal confirms this during checkout; you can cancel through Pesapal.</label>}</div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer)}>{unlocked ? "Included in your active plan" : purchasing === offer.key ? "Opening secure checkout…" : `Pay securely · ${priceLabel(offer.amountMinor, offer.currency)}`}</button></article>; })}</div>}
+    {showSettings && visibleOffers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> {isSchool ? "Choose a school plan" : "Choose your access"}</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is enabled only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small><label className="account-field"><span>Billing country</span><select value={billingCountry} onChange={(event) => setBillingCountry(event.target.value)}>{billingCountries.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select><small>Africa pricing is applied when your billing country is in Africa. Pesapal receives this billing country with the order.</small></label>{visibleOffers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) && (offer.kind !== "ACCOUNT" || activeOfferKeys.has(offer.key)) || (offer.kind === "GAME" && hasCataloguePlan) || isAdmin; const isSubscription = ["MONTHLY", "YEARLY"].includes(offer.interval); return <article key={offer.key} className={offer.kind === "ACCOUNT" ? "role-offer-plan" : ""}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}{offer.seatLimit ? ` · up to ${offer.seatLimit} teachers and students` : ""}</small>{isSubscription && !unlocked && <label className="role-recurring-consent"><input type="checkbox" checked={Boolean(recurringOffers[offer.key])} onChange={(event) => setRecurringOffers((current) => ({ ...current, [offer.key]: event.target.checked }))} /> Allow recurring payments. Pesapal confirms this during checkout; you can cancel through Pesapal.</label>}</div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer)}>{unlocked ? "Included in your active plan" : purchasing === offer.key ? "Opening secure checkout…" : `Pay securely · ${priceLabel(offer.amountMinor, offer.currency)}`}</button></article>; })}</div>}
     {showSettings && ["STUDENT", "TEACHER"].includes(workspace?.role) && <p className="account-copy">Your school manages paid access and sends games directly to students. You never need to complete a school checkout or pass assignments through a teacher.</p>}
     {showSettings && <section className="role-account-settings" aria-label="Account and access settings"><strong><CalendarDays size={15} /> Account & access</strong><small>Activate an available plan above, review your verified access, and check renewal dates here.</small>{entitlements.length ? <div className="role-entitlement-list">{entitlements.map((entitlement) => <article key={`${entitlement.resource}-${entitlement.orderId || "manual"}`}><div><b>{accessLabel(entitlement.resource)}</b><small>{expiryLabel(entitlement.expiresAt)}</small></div><span>Active</span></article>)}</div> : <p>No paid access is active on this account yet.</p>}<a className="role-support-link" href="https://igiti.africa/contact"><LifeBuoy size={15} /> Contact Igiti support</a></section>}
     {state.message && <p className="account-message">{state.message}</p>}
