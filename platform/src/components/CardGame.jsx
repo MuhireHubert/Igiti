@@ -6,6 +6,7 @@ import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import MultiplayerRoom from "./MultiplayerRoom.jsx";
 import { playGameCue, savedSoundEnabled, saveSoundEnabled } from "../lib/gameAudio.js";
+import "./CardGame.css";
 
 const islands = new Set(["Cabo Verde", "Comoros", "Madagascar", "Mauritius", "Sao Tome and Principe", "Seychelles"]);
 const regions = ["North", "West", "Central", "East", "South", "Island Countries"];
