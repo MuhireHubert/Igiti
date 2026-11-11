@@ -328,7 +328,7 @@ app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), billingCountry: z.string().trim().regex(/^[A-Za-z]{2}$/, "Choose your billing country.") });
+const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), billingCountry: z.string().trim().regex(/^[A-Za-z]{2}$/, "Choose your billing country.").optional().default("RW") });
 const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
 const CARD_MODE_IDS = new Set(["quick-facts", "matching", "card-war", "guess-country", "who-am-i", "regional", "thematic", "roleplay"]);
 const CARD_MODE_LABELS = { "quick-facts": "Quick Facts Showdown", matching: "Country Matching", "card-war": "Igiti Card War", "guess-country": "Guess the Country", "who-am-i": "Who am I?", regional: "Regional Challenges", thematic: "Thematic Discovery", roleplay: "Country Roleplay Day" };
@@ -458,7 +458,7 @@ async function reconcilePesapalPayment({ orderTrackingId, merchantReference }) {
 
 app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
   const parsed = checkoutSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Choose a valid offer." });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || "Choose a valid offer." });
   if (!pesapalConfiguration().configured) return res.status(503).json({ error: "Pesapal checkout is not configured yet." });
   try {
     const offer = await prisma.accessOffer.findFirst({ where: { key: parsed.data.offerKey, isActive: true } });

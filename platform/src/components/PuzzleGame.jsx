@@ -4,6 +4,7 @@ import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import { playGameCue, savedSoundEnabled, saveSoundEnabled } from "../lib/gameAudio.js";
 import "./PuzzleGame.css";
+import "./PuzzleReference.css";
 
 function shufflePieces(count) {
   const pieces = Array.from({ length: count }, (_, index) => index);
@@ -271,8 +272,10 @@ export default function PuzzleGame({ game, onBack }) {
         <div><span>PIECES PLACED</span><strong>{solvedCount} / {pieceCount}</strong></div>
       </div>
       <div className="puzzle-progress" aria-label={`${progress}% complete`}><span style={{ width: `${progress}%` }} /></div>
-      <div className="puzzle-board-wrap">
-        <div className={`puzzle-board ${complete ? "is-complete" : ""} ${timeExpired ? "is-expired" : ""}`} style={boardStyle}>
+      <div className="puzzle-board-stage">
+        {showReference && <figure className="puzzle-side-reference puzzle-side-reference-left"><img src={game.image} alt={`Reference image for ${game.title}`} /><figcaption>Picture guide</figcaption></figure>}
+        <div className="puzzle-board-wrap">
+          <div className={`puzzle-board ${complete ? "is-complete" : ""} ${timeExpired ? "is-expired" : ""}`} style={boardStyle}>
           {pieces.map((piece, slot) => {
             const x = piece % columns;
             const y = Math.floor(piece / columns);
@@ -308,13 +311,15 @@ export default function PuzzleGame({ game, onBack }) {
               </button>
             );
           })}
+          </div>
         </div>
+        {showReference && <figure className="puzzle-side-reference puzzle-side-reference-right"><img src={game.image} alt="" /><figcaption>Picture guide</figcaption></figure>}
       </div>
       <div className="puzzle-actions">
         <button className="puzzle-secondary" onClick={() => setShowReference((shown) => !shown)}><Eye size={16} /> {showReference ? "Hide picture guide" : "Show picture guide"}</button>
         <span>{selected === null ? "Use the visible picture guide, then select a piece to begin swapping." : "Now select the piece you want to swap with."}</span>
       </div>
-      {showReference && <figure className="puzzle-reference"><img src={game.image} alt={`Reference image for ${game.title}`} /><figcaption><strong>Reference image</strong><p>Keep this image open while you arrange the puzzle pieces.</p></figcaption></figure>}
+      {showReference && <p className="puzzle-reference-note">Two picture guides stay beside the board while you build. Use the button above to hide them for a harder challenge.</p>}
       {timeExpired && <div className="puzzle-time-expired" role="status"><Timer size={23} /><div><strong>Time attack complete.</strong><p>You placed {solvedCount} of {pieceCount} pieces. Try again to beat the clock.</p></div><button onClick={() => resetPuzzle(timeLimit)}>Try again</button></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
       {(activeFunFact || showFunFact) && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">{activeFunFact ? "CORRECT PIECE · FACT UNLOCKED" : "PUZZLE COMPLETE · FACT UNLOCKED"}</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{activeFunFact || game.funFact}</p><button className="button button-primary" onClick={() => { setActiveFunFact(null); setShowFunFact(false); }}>Keep playing</button></section></div>}
