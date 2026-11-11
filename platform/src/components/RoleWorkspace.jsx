@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, BookOpenCheck, CalendarDays, Crown, GraduationCap, LifeBuoy, School, ShoppingBag, UserRound } from "lucide-react";
 import { getApiBaseUrl, getGames } from "../lib/api.js";
 import { cardModes } from "../lib/africaDeck.js";
+import "./RoleLocation.css";
 
 const roleMeta = {
   PLAYER: { label: "Player", icon: UserRound, copy: "Play games, keep your cloud saves, and manage your own progress." },
@@ -72,15 +73,19 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [purchasing, setPurchasing] = useState("");
   const [recurringOffers, setRecurringOffers] = useState({});
   const [billingCountry, setBillingCountry] = useState("RW");
+  const [geoProof, setGeoProof] = useState(null);
   const [state, setState] = useState({ loading: true, error: "", message: "" });
 
   async function refresh() {
     setState({ loading: true, error: "", message: "" });
     try {
       const token = await user.getIdToken();
+      const geoResponse = await fetch("/api/geo", { cache: "no-store" });
+      const geo = await geoResponse.json().catch(() => ({}));
+      if (!geoResponse.ok || !geo.country || !geo.signature || !geo.issuedAt) throw new Error(geo.error || "We could not securely determine your location for pricing.");
       const [data, collection, offerResponse, checkoutResponse, accessList, schoolList] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
-        fetch(`${getApiBaseUrl()}/v1/offers?country=${encodeURIComponent(billingCountry)}`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
+        fetch(`${getApiBaseUrl()}/v1/offers?country=${encodeURIComponent(geo.country)}`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/entitlements", token),
         fetch(`${getApiBaseUrl()}/v1/schools`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
@@ -90,6 +95,8 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
       setEntitlements(accessList || []);
       setSchools(schoolList.data || []);
       setCheckout(checkoutResponse.data || { configured: false, environment: "sandbox" });
+      setBillingCountry(geo.country);
+      setGeoProof(geo);
       // Assignments reference the server Game id, not the built-in preview
       // card game (which intentionally has no database record yet).
       setGames(collection.data.filter((game) => game.gameId));
@@ -100,7 +107,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState({ loading: false, error: "", message: "" });
   }
 
-  useEffect(() => { refresh(); }, [user, billingCountry]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refresh(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function assign(event) {
     event.preventDefault();
@@ -124,7 +131,8 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState((current) => ({ ...current, error: "", message: "" }));
     try {
       const token = await user.getIdToken();
-      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]), billingCountry }) });
+      if (!geoProof) throw new Error("Secure location pricing is still loading. Please try again in a moment.");
+      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]), geoCountry: geoProof.country, geoIssuedAt: geoProof.issuedAt, geoSignature: geoProof.signature }) });
       window.location.assign(order.redirectUrl);
     } catch (error) {
       setState((current) => ({ ...current, error: error.message, message: "" }));
@@ -164,6 +172,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
 
   return <section className="role-workspace" aria-label={`${meta.label} workspace`}>
     <div className="role-workspace-head"><span><Icon size={16} /></span><div><strong>{meta.label} workspace</strong><small>{meta.copy}</small></div></div>
+    {showSettings && geoProof && <p className="role-location-notice">Pricing is based on your detected network location: <strong>{billingCountry}</strong>. Location is locked at checkout.</p>}
     {showSettings && isAdmin && <button className="button button-dark account-wide" onClick={onOpenAdmin}><Crown size={15} /> Open control room</button>}
     {showSettings && workspace?.role === "SCHOOL" && !workspace.school && <form className="role-assignment-form" onSubmit={saveSchool}><strong>Create your school workspace</strong><small>Students select this school in their settings. Once your school plan is active, you can assign games directly to them.</small><label className="account-field">School name<input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} required minLength={2} /></label><button className="button button-primary account-wide">Create school</button></form>}
     {showSettings && ["TEACHER", "STUDENT"].includes(workspace?.role) && <form className="role-assignment-form" onSubmit={chooseSchool}><strong>{workspace.school ? `School: ${workspace.school.name}` : "Choose your school"}</strong><small>Choose the school you belong to. Its school account pays for the plan and assigns games directly to students.</small><label className="account-field">School<select value={selectedSchoolId} onChange={(event) => setSelectedSchoolId(event.target.value)} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><button className="button button-primary account-wide" disabled={!selectedSchoolId}>Save school</button></form>}

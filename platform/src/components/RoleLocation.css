@@ -1,0 +1,5 @@
+/* Location pricing is derived by the server-side Geo-IP endpoint. The former
+   user-selectable billing-country field remains hidden for older markup. */
+.role-offers > .account-field { display: none; }
+.role-location-notice { margin: .8rem 0 0; color: #aebfd1; font-size: .78rem; }
+.role-location-notice strong { color: #65e6a8; }

@@ -328,11 +328,22 @@ app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), billingCountry: z.string().trim().regex(/^[A-Za-z]{2}$/, "Choose your billing country.").optional().default("RW") });
+const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), geoCountry: z.string().trim().regex(/^[A-Za-z]{2}$/), geoIssuedAt: z.number().int().positive(), geoSignature: z.string().regex(/^[a-f0-9]{64}$/i) });
 const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
 const CARD_MODE_IDS = new Set(["quick-facts", "matching", "card-war", "guess-country", "who-am-i", "regional", "thematic", "roleplay"]);
 const CARD_MODE_LABELS = { "quick-facts": "Quick Facts Showdown", matching: "Country Matching", "card-war": "Igiti Card War", "guess-country": "Guess the Country", "who-am-i": "Who am I?", regional: "Regional Challenges", thematic: "Thematic Discovery", roleplay: "Country Roleplay Day" };
 function cardModeLabel(resource) { return `A-54 · ${CARD_MODE_LABELS[String(resource).slice("card-mode:".length)] || "Card mode"}`; }
+
+function verifiedGeoCountry({ geoCountry, geoIssuedAt, geoSignature }) {
+  const country = normalizedCountry(geoCountry);
+  const issuedAt = Number(geoIssuedAt);
+  const secret = process.env.GEO_LOCATION_SIGNING_SECRET;
+  if (!country || !secret || !Number.isSafeInteger(issuedAt) || Math.abs(Date.now() - issuedAt) > 5 * 60_000) return null;
+  const expected = crypto.createHmac("sha256", secret).update(`${country}.${issuedAt}`).digest("hex");
+  const received = Buffer.from(String(geoSignature), "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return received.length === expectedBuffer.length && crypto.timingSafeEqual(received, expectedBuffer) ? country : null;
+}
 
 function expiryFor(interval, now = new Date()) {
   if (interval === "ONE_TIME") return null;
@@ -471,7 +482,8 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
     if (offer.resource === "plan:school:all" && req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only a school account can buy a school plan." });
     if (offer.resource === "plan:user:all" && req.player.role !== "PLAYER") return res.status(403).json({ error: "The player pass is available to individual player accounts. School members receive access through their school." });
     if (offer.kind === "GAME" && req.player.role !== "PLAYER") return res.status(403).json({ error: "Individual game purchases are for player accounts. Students and teachers receive paid game access through their school assignments." });
-    const billingCountry = normalizedCountry(parsed.data.billingCountry);
+    const billingCountry = verifiedGeoCountry(parsed.data);
+    if (!billingCountry) return res.status(403).json({ error: "We could not securely determine your checkout location. Disable any VPN and try again." });
     const pricedOffer = await regionalOffer(offer, billingCountry);
     const order = await prisma.paymentOrder.create({
       data: {
