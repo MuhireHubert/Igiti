@@ -328,7 +328,16 @@ app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), geoCountry: z.string().trim().regex(/^[A-Za-z]{2}$/), geoIssuedAt: z.number().int().positive(), geoSignature: z.string().regex(/^[a-f0-9]{64}$/i) });
+const checkoutCustomerSchema = z.object({
+  fullName: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(254),
+  phone: z.string().trim().regex(/^\+?[0-9()\-\s]{7,24}$/, "Enter a valid phone number."),
+  addressLine1: z.string().trim().min(3).max(160),
+  city: z.string().trim().min(2).max(100),
+  state: z.string().trim().min(2).max(100),
+  postalCode: z.string().trim().min(2).max(24),
+});
+const checkoutSchema = z.object({ offerKey: z.string().trim().min(1).max(120), recurringConsent: z.boolean().optional().default(false), geoCountry: z.string().trim().regex(/^[A-Za-z]{2}$/), geoIssuedAt: z.number().int().positive(), geoSignature: z.string().regex(/^[a-f0-9]{64}$/i), customer: checkoutCustomerSchema });
 const ALL_ACCESS_RESOURCES = ["plan:user:all", "plan:school:all"];
 const CARD_MODE_IDS = new Set(["quick-facts", "matching", "card-war", "guess-country", "who-am-i", "regional", "thematic", "roleplay"]);
 const CARD_MODE_LABELS = { "quick-facts": "Quick Facts Showdown", matching: "Country Matching", "card-war": "Igiti Card War", "guess-country": "Guess the Country", "who-am-i": "Who am I?", regional: "Regional Challenges", thematic: "Thematic Discovery", roleplay: "Country Roleplay Day" };
@@ -485,11 +494,15 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
     const billingCountry = verifiedGeoCountry(parsed.data);
     if (!billingCountry) return res.status(403).json({ error: "We could not securely determine your checkout location. Disable any VPN and try again." });
     const pricedOffer = await regionalOffer(offer, billingCountry);
+    const nameParts = parsed.data.customer.fullName.trim().split(/\s+/);
+    const firstName = nameParts.shift() || "Igiti";
+    const lastName = nameParts.pop() || firstName;
+    const middleName = nameParts.join(" ");
     const order = await prisma.paymentOrder.create({
       data: {
         playerId: req.player.id, provider: "PESAPAL", amountMinor: pricedOffer.amountMinor, currency: pricedOffer.currency,
         idempotencyKey: `pesapal:${crypto.randomUUID()}`,
-        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title, recurringConsent: Boolean(parsed.data.recurringConsent && ["MONTHLY", "YEARLY"].includes(offer.interval)), seatLimit: offer.seatLimit, billingCountry, pricingTier: pricedOffer.pricingTier, baseAmountMinor: offer.amountMinor, baseCurrency: offer.currency },
+        metadata: { offerKey: offer.key, resource: offer.resource, interval: offer.interval, title: offer.title, recurringConsent: Boolean(parsed.data.recurringConsent && ["MONTHLY", "YEARLY"].includes(offer.interval)), seatLimit: offer.seatLimit, billingCountry, pricingTier: pricedOffer.pricingTier, baseAmountMinor: offer.amountMinor, baseCurrency: offer.currency, customer: parsed.data.customer },
       },
     });
     try {
@@ -497,7 +510,7 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
       const checkout = await createPesapalOrder({
         merchantReference: order.id, amountMinor: pricedOffer.amountMinor, currency: pricedOffer.currency,
         description: offer.title,
-        billingAddress: { email_address: req.player.email || "", phone_number: "", country_code: billingCountry, first_name: req.player.displayName || "Igiti", middle_name: "", last_name: "Player", line_1: "", line_2: "", city: "", state: "", postal_code: "", zip_code: "" }, subscription,
+        billingAddress: { email_address: parsed.data.customer.email, phone_number: parsed.data.customer.phone, country_code: billingCountry, first_name: firstName, middle_name: middleName, last_name: lastName, line_1: parsed.data.customer.addressLine1, line_2: "", city: parsed.data.customer.city, state: parsed.data.customer.state, postal_code: parsed.data.customer.postalCode, zip_code: parsed.data.customer.postalCode }, subscription,
       });
       await prisma.paymentOrder.update({ where: { id: order.id }, data: { providerOrderId: checkout.order_tracking_id, status: "PROCESSING" } });
       return res.status(201).json({ data: { redirectUrl: checkout.redirect_url, orderId: order.id } });

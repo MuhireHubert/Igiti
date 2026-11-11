@@ -3,6 +3,7 @@ import { ArrowRight, BookOpenCheck, CalendarDays, Crown, GraduationCap, LifeBuoy
 import { getApiBaseUrl, getGames } from "../lib/api.js";
 import { cardModes } from "../lib/africaDeck.js";
 import "./RoleLocation.css";
+import "./RoleCheckout.css";
 
 const roleMeta = {
   PLAYER: { label: "Player", icon: UserRound, copy: "Play games, keep your cloud saves, and manage your own progress." },
@@ -74,6 +75,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [recurringOffers, setRecurringOffers] = useState({});
   const [billingCountry, setBillingCountry] = useState("RW");
   const [geoProof, setGeoProof] = useState(null);
+  const [checkoutCustomer, setCheckoutCustomer] = useState({ fullName: "", email: user?.email || "", phone: "", addressLine1: "", city: "", state: "", postalCode: "" });
   const [state, setState] = useState({ loading: true, error: "", message: "" });
 
   async function refresh() {
@@ -108,6 +110,9 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   }
 
   useEffect(() => { refresh(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (user?.email) setCheckoutCustomer((current) => ({ ...current, email: current.email || user.email }));
+  }, [user?.email]);
 
   async function assign(event) {
     event.preventDefault();
@@ -132,7 +137,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     try {
       const token = await user.getIdToken();
       if (!geoProof) throw new Error("Secure location pricing is still loading. Please try again in a moment.");
-      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]), geoCountry: geoProof.country, geoIssuedAt: geoProof.issuedAt, geoSignature: geoProof.signature }) });
+      const order = await checkoutRequest("/v1/checkout/orders", token, { method: "POST", body: JSON.stringify({ offerKey: offer.key, recurringConsent: Boolean(recurringOffers[offer.key]), geoCountry: geoProof.country, geoIssuedAt: geoProof.issuedAt, geoSignature: geoProof.signature, customer: checkoutCustomer }) });
       window.location.assign(order.redirectUrl);
     } catch (error) {
       setState((current) => ({ ...current, error: error.message, message: "" }));
@@ -173,6 +178,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   return <section className="role-workspace" aria-label={`${meta.label} workspace`}>
     <div className="role-workspace-head"><span><Icon size={16} /></span><div><strong>{meta.label} workspace</strong><small>{meta.copy}</small></div></div>
     {showSettings && geoProof && <p className="role-location-notice">Pricing is based on your detected network location: <strong>{billingCountry}</strong>. Location is locked at checkout.</p>}
+    {showSettings && visibleOffers.length > 0 && <section className="role-checkout-details" aria-label="Required checkout details"><strong>Checkout details</strong><small>These details are required before we can open secure Pesapal checkout.</small><div className="role-checkout-details-grid"><label className="account-field">Full legal name<input value={checkoutCustomer.fullName} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, fullName: event.target.value }))} required minLength={2} autoComplete="name" /></label><label className="account-field">Email<input type="email" value={checkoutCustomer.email} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, email: event.target.value }))} required autoComplete="email" /></label><label className="account-field">Phone number<input type="tel" value={checkoutCustomer.phone} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, phone: event.target.value }))} required minLength={7} autoComplete="tel" /></label><label className="account-field">Street address<input value={checkoutCustomer.addressLine1} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, addressLine1: event.target.value }))} required minLength={3} autoComplete="street-address" /></label><label className="account-field">City<input value={checkoutCustomer.city} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, city: event.target.value }))} required minLength={2} autoComplete="address-level2" /></label><label className="account-field">State / province<input value={checkoutCustomer.state} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, state: event.target.value }))} required minLength={2} autoComplete="address-level1" /></label><label className="account-field">Postal code<input value={checkoutCustomer.postalCode} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, postalCode: event.target.value }))} required minLength={2} autoComplete="postal-code" /></label></div></section>}
     {showSettings && isAdmin && <button className="button button-dark account-wide" onClick={onOpenAdmin}><Crown size={15} /> Open control room</button>}
     {showSettings && workspace?.role === "SCHOOL" && !workspace.school && <form className="role-assignment-form" onSubmit={saveSchool}><strong>Create your school workspace</strong><small>Students select this school in their settings. Once your school plan is active, you can assign games directly to them.</small><label className="account-field">School name<input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} required minLength={2} /></label><button className="button button-primary account-wide">Create school</button></form>}
     {showSettings && ["TEACHER", "STUDENT"].includes(workspace?.role) && <form className="role-assignment-form" onSubmit={chooseSchool}><strong>{workspace.school ? `School: ${workspace.school.name}` : "Choose your school"}</strong><small>Choose the school you belong to. Its school account pays for the plan and assigns games directly to students.</small><label className="account-field">School<select value={selectedSchoolId} onChange={(event) => setSelectedSchoolId(event.target.value)} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><button className="button button-primary account-wide" disabled={!selectedSchoolId}>Save school</button></form>}

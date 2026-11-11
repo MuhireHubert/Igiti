@@ -1,0 +1,22 @@
+.role-checkout-details {
+  display: grid;
+  gap: .7rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid rgba(101, 230, 168, .28);
+  border-radius: .75rem;
+  background: rgba(13, 32, 53, .72);
+}
+
+.role-checkout-details > strong { color: #eaf7ef; }
+.role-checkout-details > small { color: #aebfd1; }
+
+.role-checkout-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+@media (max-width: 650px) {
+  .role-checkout-details-grid { grid-template-columns: 1fr; }
+}
