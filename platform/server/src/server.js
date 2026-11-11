@@ -41,6 +41,15 @@ const ownerEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS,
   .flatMap((value) => (value || "").split(","))
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean));
+const igitiAdminReportingToken = process.env.IGITI_ADMIN_REPORTING_TOKEN || "";
+
+function reportingTokenIsValid(header) {
+  const token = String(header || "").replace(/^Bearer\s+/i, "");
+  if (!igitiAdminReportingToken || !token) return false;
+  const received = Buffer.from(token);
+  const expected = Buffer.from(igitiAdminReportingToken);
+  return received.length === expected.length && crypto.timingSafeEqual(received, expected);
+}
 
 // These entries are deliberate account-role assignments, not client-side
 // labels. Reapplying them on sign-in repairs profiles created before the role
@@ -178,6 +187,41 @@ app.get("/v1/country-assets", async (_req, res, next) => {
 // This is intentionally safe to expose: it contains no provider credentials,
 // only whether checkout can be started and the selected non-secret environment.
 app.get("/v1/checkout/status", (_req, res) => res.json({ data: pesapalConfiguration() }));
+
+// The separate Igiti Admin application consumes this read-only operational
+// report. It intentionally returns no checkout address, phone, email, or
+// provider credential; the report is for reconciliation, not fulfilment.
+app.get("/v1/integrations/igiti-admin/play-payments", async (req, res, next) => {
+  if (!reportingTokenIsValid(req.headers.authorization)) return res.status(401).json({ error: "Reporting access is not configured." });
+  try {
+    const orders = await prisma.paymentOrder.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 150,
+      select: {
+        id: true, provider: true, providerOrderId: true, amountMinor: true, currency: true, status: true,
+        createdAt: true, updatedAt: true, paidAt: true, metadata: true,
+        player: { select: { displayName: true } },
+        events: { orderBy: { receivedAt: "desc" }, take: 1, select: { eventType: true, verified: true, receivedAt: true } },
+      },
+    });
+    const data = orders.map((order) => {
+      const metadata = order.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata) ? order.metadata : {};
+      return {
+        id: order.id, provider: order.provider, providerOrderId: order.providerOrderId,
+        amountMinor: order.amountMinor, currency: order.currency, status: order.status,
+        createdAt: order.createdAt, updatedAt: order.updatedAt, paidAt: order.paidAt,
+        player: order.player.displayName || "Player",
+        offerKey: typeof metadata.offerKey === "string" ? metadata.offerKey : null,
+        offerTitle: typeof metadata.title === "string" ? metadata.title : null,
+        billingCountry: typeof metadata.billingCountry === "string" ? metadata.billingCountry : null,
+        pricingTier: typeof metadata.pricingTier === "string" ? metadata.pricingTier : null,
+        lastEvent: order.events[0] || null,
+      };
+    });
+    res.set("Cache-Control", "private, no-store");
+    res.json({ data });
+  } catch (error) { next(error); }
+});
 
 app.get("/v1/games", async (_req, res, next) => {
   try {
