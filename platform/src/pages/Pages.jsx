@@ -78,6 +78,7 @@ export function GamePage() {
       // pending orders with Pesapal before concluding that access is absent.
       if (!payload.data?.permitted) {
         await fetch(`${getApiBaseUrl()}/v1/me/payments/reconcile`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } }).catch(() => null);
+        await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/repair-access`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } }).catch(() => null);
         response = await accessRequest();
         payload = await response.json().catch(() => ({}));
       }

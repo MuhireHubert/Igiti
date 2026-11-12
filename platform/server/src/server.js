@@ -631,6 +631,33 @@ async function puzzleAccessForPlayer(player, puzzleId) {
   return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`, { requirePurchase: true })) };
 }
 
+// Content can be re-uploaded as a replacement puzzle. When an owner has
+// accidentally left an older duplicate offer active, honour a buyer's already
+// verified payment for the exact same named monthly/yearly product, without
+// extending its original term or accepting a browser assertion of payment.
+async function repairRecreatedPuzzleEntitlement(player, puzzleId) {
+  const puzzle = await prisma.puzzle.findFirst({ where: { id: puzzleId, isActive: true, game: { status: "PUBLISHED", publishedAt: { lte: new Date() } } }, select: { id: true, title: true } });
+  if (!puzzle) return false;
+  const orders = await prisma.paymentOrder.findMany({ where: { playerId: player.id, provider: "PESAPAL", status: "PAID", paidAt: { not: null } }, orderBy: { paidAt: "desc" }, take: 40, select: { id: true, paidAt: true, metadata: true } });
+  const match = orders.find((order) => {
+    const metadata = order.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata) ? order.metadata : {};
+    const interval = String(metadata.interval || "");
+    return ["MONTHLY", "YEARLY"].includes(interval) && String(metadata.resource || "").startsWith("puzzle:") && String(metadata.title || "") === `${puzzle.title} · ${interval === "MONTHLY" ? "Monthly" : "Annual"} access`;
+  });
+  if (!match) return false;
+  const metadata = match.metadata;
+  const interval = String(metadata.interval);
+  const paidAt = match.paidAt || new Date();
+  const expiresAt = expiryFor(interval, paidAt);
+  if (expiresAt && expiresAt <= new Date()) return false;
+  await prisma.accessEntitlement.upsert({
+    where: { playerId_resource: { playerId: player.id, resource: `puzzle:${puzzle.id}` } },
+    update: { status: "ACTIVE", orderId: match.id, startsAt: paidAt, expiresAt },
+    create: { playerId: player.id, orderId: match.id, resource: `puzzle:${puzzle.id}`, startsAt: paidAt, expiresAt },
+  });
+  return true;
+}
+
 function paymentStatusFromPesapal(transaction) {
   const status = String(transaction.payment_status_description || "").toUpperCase();
   if (status === "COMPLETED" || Number(transaction.status_code) === 1) return "PAID";
@@ -769,6 +796,14 @@ app.post("/v1/me/payments/reconcile", requirePlayer, async (req, res, next) => {
       }
     }));
     res.json({ data: { checked: results.length, results } });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/me/puzzles/:puzzleId/repair-access", requirePlayer, async (req, res, next) => {
+  try {
+    const repaired = await repairRecreatedPuzzleEntitlement(req.player, req.params.puzzleId);
+    const access = await puzzleAccessForPlayer(req.player, req.params.puzzleId);
+    res.json({ data: { repaired, access } });
   } catch (error) { next(error); }
 });
 
