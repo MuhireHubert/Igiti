@@ -62,7 +62,7 @@ export function GamePage() {
       .catch((error) => { if (error.name !== "AbortError") setAccessMessage(error.message); });
     return () => controller.abort();
   }, []);
-  const requiresPurchase = Boolean(game?.requiresPurchase || Number(game?.price?.amountMinor || 0) > 0);
+  const requiresPurchase = Boolean(game?.requiresPurchase || (game?.price?.access !== "FREE" && (Number(game?.price?.monthlyAmountMinor ?? game?.price?.amountMinor ?? 0) > 0 || Number(game?.price?.yearlyAmountMinor ?? 0) > 0)));
   async function startPuzzle() {
     if (!cataloguePolicy) { setAccessMessage("Checking access. Please try again in a moment."); return; }
     if (!requiresPurchase) { setPlaying(true); return; }

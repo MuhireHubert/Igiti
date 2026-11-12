@@ -241,11 +241,12 @@ app.get("/v1/games", async (_req, res, next) => {
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
     res.json({ data: games.map((game) => ({
       ...game,
-      // A puzzle is free only when its own admin-set price is empty or zero.
-      // Never tie access to a particular game slug.
+      // A puzzle is free only when its own admin-set subscription pricing is
+      // explicitly free or both subscription tiers are zero. Never tie access
+      // to a particular game slug.
       puzzles: game.puzzles.map((puzzle) => ({
         ...puzzle,
-        requiresPurchase: Number(puzzle.metadata?.pricing?.amountMinor || 0) > 0,
+        requiresPurchase: puzzle.metadata?.pricing?.access !== "FREE" && (Number(puzzle.metadata?.pricing?.monthlyAmountMinor ?? puzzle.metadata?.pricing?.amountMinor ?? 0) > 0 || Number(puzzle.metadata?.pricing?.yearlyAmountMinor ?? 0) > 0),
       })),
     })) });
   } catch (error) { next(error); }
