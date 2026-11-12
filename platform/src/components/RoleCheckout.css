@@ -10,6 +10,10 @@
 
 .role-checkout-details > strong { color: #eaf7ef; }
 .role-checkout-details > small { color: #aebfd1; }
+.role-checkout-details .account-field { color: #edf4ff; }
+.role-checkout-details .account-field input { border-color: #4d6280; background: #0e172a; color: #f7fbff; }
+.role-checkout-details .account-field input::placeholder { color: #b8c5d7; opacity: 1; }
+.role-checkout-details .account-field input:-webkit-autofill { -webkit-text-fill-color: #f7fbff; -webkit-box-shadow: 0 0 0 1000px #0e172a inset; }
 
 .role-checkout-details-grid {
   display: grid;
