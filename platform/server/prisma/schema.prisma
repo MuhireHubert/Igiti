@@ -65,6 +65,11 @@ model PlayerProfile {
   avatarUrl   String?          @db.VarChar(2048)
   role        UserRole         @default(PLAYER)
   isDisabled  Boolean          @default(false)
+  // Igiti Play supports one actively signed-in device per account. The API
+  // compares this browser identifier with the Firebase sign-in time.
+  activeDeviceId String?       @db.VarChar(80)
+  activeAuthTime Int?
+  activeDeviceAt DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   progress    PuzzleProgress[]
@@ -99,6 +104,9 @@ model SchoolMembership {
   schoolId  String
   playerId  String
   role      SchoolMemberRole
+  // Members choose their school, then remain pending until the school owner
+  // approves them. Existing memberships are migrated as approved.
+  approvedAt DateTime?
   createdAt DateTime         @default(now())
   school    School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   player    PlayerProfile    @relation(fields: [playerId], references: [id], onDelete: Cascade)

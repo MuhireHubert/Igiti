@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Copy, Radio, Users } from "lucide-react";
 import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
+import { deviceHeaders } from "../lib/device.js";
 
 async function apiRequest(user, path, options = {}) {
   const token = await user.getIdToken();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...options,
-    headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders(), ...(options.headers || {}) },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "Live match is unavailable right now.");

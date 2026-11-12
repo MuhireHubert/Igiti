@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenCheck, CalendarDays, Crown, GraduationCap, LifeBuoy, School, ShoppingBag, UserRound } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CalendarDays, Crown, GraduationCap, LifeBuoy, School, ShoppingBag, UserRound, Users } from "lucide-react";
 import { getApiBaseUrl, getGames } from "../lib/api.js";
+import { deviceHeaders } from "../lib/device.js";
 import { cardModes } from "../lib/africaDeck.js";
 import "./RoleLocation.css";
 import "./RoleCheckout.css";
@@ -39,7 +40,7 @@ function priceLabel(amountMinor, currency) {
 async function playerRequest(path, token, options = {}) {
   const response = await fetch(`${getApiBaseUrl()}/v1/me${path}`, {
     ...options,
-    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders(), ...(options.headers || {}) },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "We couldn't load your workspace.");
@@ -49,7 +50,7 @@ async function playerRequest(path, token, options = {}) {
 async function checkoutRequest(path, token, options = {}) {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...options,
-    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(options.headers || {}) },
+    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders(), ...(options.headers || {}) },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "We couldn't start checkout.");
@@ -155,7 +156,17 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
 
   async function chooseSchool(event) {
     event.preventDefault();
-    try { const token = await user.getIdToken(); await playerRequest("/school-membership", token, { method: "PUT", body: JSON.stringify({ schoolId: selectedSchoolId }) }); setState((current) => ({ ...current, message: "School membership saved." })); await refresh(); } catch (error) { setState((current) => ({ ...current, error: error.message })); }
+    try { const token = await user.getIdToken(); const membership = await playerRequest("/school-membership", token, { method: "PUT", body: JSON.stringify({ schoolId: selectedSchoolId }) }); setState((current) => ({ ...current, message: membership.pending ? "Your school request has been sent. You can access its learning programme once the school approves it." : "School membership saved." })); await refresh(); } catch (error) { setState((current) => ({ ...current, error: error.message })); }
+  }
+
+  async function manageSchoolMember(membershipId, action) {
+    setState((current) => ({ ...current, error: "", message: "" }));
+    try {
+      const token = await user.getIdToken();
+      await playerRequest(`/school-members/${membershipId}`, token, { method: "PATCH", body: JSON.stringify({ action }) });
+      await refresh();
+      setState({ loading: false, error: "", message: action === "approve" ? "Member approved." : "Member access revoked." });
+    } catch (error) { setState((current) => ({ ...current, error: error.message })); }
   }
 
   if (state.loading) return <p className="role-workspace-loading">Loading your workspace…</p>;
@@ -185,7 +196,8 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     {showSettings && visibleOffers.length > 0 && <section className="role-checkout-details" aria-label="Required checkout details"><strong>Checkout details</strong><small>These details are required before we can open secure Pesapal checkout.</small><div className="role-checkout-details-grid"><label className="account-field">Full legal name<input value={checkoutCustomer.fullName} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, fullName: event.target.value }))} required minLength={2} autoComplete="name" /></label><label className="account-field">Email<input type="email" value={checkoutCustomer.email} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, email: event.target.value }))} required autoComplete="email" /></label><label className="account-field">Phone number<input type="tel" value={checkoutCustomer.phone} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, phone: event.target.value }))} required minLength={7} autoComplete="tel" /></label><label className="account-field">Street address<input value={checkoutCustomer.addressLine1} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, addressLine1: event.target.value }))} required minLength={3} autoComplete="street-address" /></label><label className="account-field">City<input value={checkoutCustomer.city} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, city: event.target.value }))} required minLength={2} autoComplete="address-level2" /></label><label className="account-field">State / province<input value={checkoutCustomer.state} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, state: event.target.value }))} required minLength={2} autoComplete="address-level1" /></label><label className="account-field">Postal code<input value={checkoutCustomer.postalCode} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, postalCode: event.target.value }))} required minLength={2} autoComplete="postal-code" /></label></div></section>}
     {showSettings && isAdmin && <button className="button button-dark account-wide" onClick={onOpenAdmin}><Crown size={15} /> Open control room</button>}
     {showSettings && workspace?.role === "SCHOOL" && !workspace.school && <form className="role-assignment-form" onSubmit={saveSchool}><strong>Create your school workspace</strong><small>Students select this school in their settings. Once your school plan is active, you can assign games directly to them.</small><label className="account-field">School name<input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} required minLength={2} /></label><button className="button button-primary account-wide">Create school</button></form>}
-    {showSettings && ["TEACHER", "STUDENT"].includes(workspace?.role) && <form className="role-assignment-form" onSubmit={chooseSchool}><strong>{workspace.school ? `School: ${workspace.school.name}` : "Choose your school"}</strong><small>Choose the school you belong to. Its school account pays for the plan and assigns games directly to students.</small><label className="account-field">School<select value={selectedSchoolId} onChange={(event) => setSelectedSchoolId(event.target.value)} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><button className="button button-primary account-wide" disabled={!selectedSchoolId}>Save school</button></form>}
+    {showSettings && ["TEACHER", "STUDENT"].includes(workspace?.role) && <form className="role-assignment-form" onSubmit={chooseSchool}><strong>{workspace.school ? `School: ${workspace.school.name}` : "Choose your school"}</strong><small>Choose the school you belong to. The school owner must approve your request before its learning programme and assignments become active.</small><label className="account-field">School<select value={selectedSchoolId} onChange={(event) => setSelectedSchoolId(event.target.value)} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><button className="button button-primary account-wide" disabled={!selectedSchoolId}>Request school approval</button></form>}
+    {showSettings && isSchool && workspace.school && <section className="role-member-management" aria-label="School member management"><strong><Users size={15} /> School members</strong><small>Review people who selected your school. Only approved members can receive school games or use school access.</small>{(workspace.members || []).length ? <div className="role-member-list">{workspace.members.map((member) => <article key={member.id}><div><b>{member.player.displayName || "Unnamed account"}</b><small>{member.role.toLowerCase()} · {member.approvedAt ? "Approved" : `Requested ${new Date(member.createdAt).toLocaleDateString()}`}</small></div><span>{member.approvedAt ? "Active" : "Pending"}</span><div>{!member.approvedAt && <button className="button button-primary" onClick={() => manageSchoolMember(member.id, "approve")}>Approve</button>}<button className="role-member-revoke" onClick={() => manageSchoolMember(member.id, "revoke")}>{member.approvedAt ? "Revoke" : "Decline"}</button></div></article>)}</div> : <p className="account-copy">No teachers or students have requested to join this school yet.</p>}</section>}
     {showAssignments && canAssign && <form className="role-assignment-form" onSubmit={assign}>
       <strong>Assign a game directly to a student</strong>
       <small>{workspace.school ? `${workspace.school.name} · ${workspace.recipients.length} eligible recipient(s)` : "Open Settings to choose your school first."}</small>

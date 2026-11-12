@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, firebaseReady } from "../lib/firebase.js";
+import { deviceHeaders } from "./device.js";
 
 const PlayerAuthContext = createContext(null);
 
@@ -37,7 +38,7 @@ export function PlayerAuthProvider({ children }) {
       const token = await credential.user.getIdToken();
       const response = await fetch(`${(import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "")}/v1/me/role`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() },
         body: JSON.stringify({ role }),
       });
       const payload = await response.json().catch(() => ({}));

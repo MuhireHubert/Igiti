@@ -46,6 +46,16 @@ async function recordAudit(actorId, action, targetType, targetId, details) {
   await prisma.adminAudit.create({ data: { actorId, action, targetType, targetId, details } });
 }
 
+async function claimAdminDevice(req, profile, decoded) {
+  const deviceId = String(req.get("x-igiti-device-id") || "").trim();
+  const authTime = Number(decoded.auth_time || 0);
+  if (!/^[a-z0-9-]{16,80}$/i.test(deviceId) || !Number.isSafeInteger(authTime) || authTime < 1) return null;
+  if (!profile.activeDeviceId || profile.activeDeviceId === deviceId || authTime > Number(profile.activeAuthTime || 0)) {
+    return prisma.playerProfile.update({ where: { id: profile.id }, data: { activeDeviceId: deviceId, activeAuthTime: authTime, activeDeviceAt: new Date() } });
+  }
+  return false;
+}
+
 async function requireAdmin(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -78,10 +88,12 @@ async function requireAdmin(req, res, next) {
     if (profile.isDisabled) {
       return res.status(403).json({ error: "This account has been disabled. Ask the platform owner to restore access." });
     }
-    if ((roleRank[profile.role] ?? 0) < roleRank.CONTENT_MANAGER) {
+    const activeProfile = await claimAdminDevice(req, profile, decoded);
+    if (!activeProfile) return res.status(401).json({ error: "This account is active on another device. Sign in here again to safely replace that session.", code: "DEVICE_REPLACED" });
+    if ((roleRank[activeProfile.role] ?? 0) < roleRank.CONTENT_MANAGER) {
       return res.status(403).json({ error: "This account is signed in, but it does not have an administrator role. A platform owner can grant one in Players." });
     }
-    req.adminUser = { id: profile.id, uid: decoded.uid, email, role: profile.role };
+    req.adminUser = { id: activeProfile.id, uid: decoded.uid, email, role: activeProfile.role };
     next();
   } catch {
     return res.status(401).json({ error: "Your session could not be verified. Please sign in again." });
@@ -189,7 +201,7 @@ router.post("/schools/:schoolId/members", requireRole("OWNER"), async (req, res,
   try {
     const player = await prisma.playerProfile.findUnique({ where: { id: parsed.data.playerId }, select: { id: true, role: true } });
     if (!player || player.role !== parsed.data.role) return res.status(400).json({ error: "Set the player's matching platform role before adding them to a school." });
-    const membership = await prisma.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: req.params.schoolId, playerId: parsed.data.playerId } }, update: { role: parsed.data.role }, create: { schoolId: req.params.schoolId, ...parsed.data }, select: { id: true, schoolId: true, playerId: true, role: true } });
+    const membership = await prisma.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: req.params.schoolId, playerId: parsed.data.playerId } }, update: { role: parsed.data.role, approvedAt: new Date() }, create: { schoolId: req.params.schoolId, ...parsed.data, approvedAt: new Date() }, select: { id: true, schoolId: true, playerId: true, role: true } });
     await recordAudit(req.adminUser.id, "school.membership_updated", "SchoolMembership", membership.id, { schoolId: membership.schoolId, playerId: membership.playerId, role: membership.role });
     res.json({ data: membership });
   } catch (error) { if (error?.code === "P2003") return res.status(404).json({ error: "School not found." }); next(error); }

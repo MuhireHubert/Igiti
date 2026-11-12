@@ -258,6 +258,26 @@ const progressSchema = z.object({
   completed: z.boolean().optional(),
 });
 
+function activeDeviceId(req) {
+  const value = String(req.get("x-igiti-device-id") || "").trim();
+  return /^[a-z0-9-]{16,80}$/i.test(value) ? value : null;
+}
+
+async function claimActiveDevice(req, player, decoded) {
+  const deviceId = activeDeviceId(req);
+  if (!deviceId) return { permitted: false, error: "This device could not be identified. Refresh Igiti Play and sign in again." };
+  const authTime = Number(decoded.auth_time || 0);
+  if (!Number.isSafeInteger(authTime) || authTime < 1) return { permitted: false, error: "Your sign-in session is incomplete. Please sign in again." };
+  if (!player.activeDeviceId || player.activeDeviceId === deviceId || authTime > Number(player.activeAuthTime || 0)) {
+    const updated = await prisma.playerProfile.update({
+      where: { id: player.id },
+      data: { activeDeviceId: deviceId, activeAuthTime: authTime, activeDeviceAt: new Date() },
+    });
+    return { permitted: true, player: updated };
+  }
+  return { permitted: false, error: "This account is active on another device. Signing in here will safely sign out the other device." };
+}
+
 async function requirePlayer(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -277,7 +297,9 @@ async function requirePlayer(req, res, next) {
       create: { firebaseUid: decoded.uid, displayName: decoded.name || null, avatarUrl: decoded.picture || null, role: configuredRole || "PLAYER" },
     });
     if (player.isDisabled) return res.status(403).json({ error: "This player account is unavailable." });
-    req.player = { ...player, email };
+    const device = await claimActiveDevice(req, player, decoded);
+    if (!device.permitted) return res.status(401).json({ error: device.error, code: "DEVICE_REPLACED" });
+    req.player = { ...device.player, email };
     next();
   } catch {
     return res.status(401).json({ error: "The session could not be verified." });
@@ -316,7 +338,7 @@ app.get("/v1/schools", async (_req, res, next) => {
 
 app.get("/v1/me/school-demo", requirePlayer, async (req, res, next) => {
   try {
-    const school = await prisma.school.findFirst({ where: { OR: [{ ownerId: req.player.id }, { memberships: { some: { playerId: req.player.id } } }] }, select: { id: true, name: true } });
+    const school = await prisma.school.findFirst({ where: { OR: [{ ownerId: req.player.id }, { memberships: { some: { playerId: req.player.id, approvedAt: { not: null } } } }] }, select: { id: true, name: true } });
     const demo = school ? await activeSchoolDemo(school.id) : null;
     res.json({ data: { school, demo: demo ? { title: demo.offer.title, expiresAt: demo.expiresAt, grantedAt: demo.grantedAt } : null } });
   } catch (error) { next(error); }
@@ -388,12 +410,48 @@ app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
     const availability = await schoolSeatAvailability(parsed.data.schoolId);
     if (!availability) return res.status(404).json({ error: "School not found." });
     const school = await prisma.school.findUnique({ where: { id: parsed.data.schoolId }, select: { id: true, name: true } });
-    const existing = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } }, select: { id: true } });
+    const existing = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } }, select: { id: true, approvedAt: true } });
     if (!existing && availability.seatLimit && availability.school._count.memberships >= availability.seatLimit) {
       return res.status(409).json({ error: `This school has reached its ${availability.seatLimit}-learner plan limit. Ask the school owner to upgrade the plan.` });
     }
-    const membership = await prisma.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } }, update: { role: req.player.role }, create: { schoolId: school.id, playerId: req.player.id, role: req.player.role }, select: { id: true, schoolId: true, role: true } });
-    res.json({ data: { ...membership, school } });
+    const membership = await prisma.schoolMembership.upsert({
+      where: { schoolId_playerId: { schoolId: school.id, playerId: req.player.id } },
+      // Keep an approved member approved; a changed role or a new request
+      // needs the school's explicit review before it can become active.
+      update: existing?.approvedAt ? {} : { role: req.player.role, approvedAt: null },
+      create: { schoolId: school.id, playerId: req.player.id, role: req.player.role, approvedAt: null },
+      select: { id: true, schoolId: true, role: true, approvedAt: true },
+    });
+    res.json({ data: { ...membership, school, pending: !membership.approvedAt } });
+  } catch (error) { next(error); }
+});
+
+app.get("/v1/me/school-members", requirePlayer, async (req, res, next) => {
+  if (req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only school accounts can manage school members." });
+  try {
+    const school = await prisma.school.findUnique({
+      where: { ownerId: req.player.id },
+      select: { id: true, name: true, memberships: { orderBy: [{ approvedAt: "asc" }, { createdAt: "asc" }], select: { id: true, role: true, createdAt: true, approvedAt: true, player: { select: { id: true, displayName: true } } } } },
+    });
+    res.json({ data: { school, members: school?.memberships || [] } });
+  } catch (error) { next(error); }
+});
+
+const schoolMemberActionSchema = z.object({ action: z.enum(["approve", "revoke"]) });
+app.patch("/v1/me/school-members/:membershipId", requirePlayer, async (req, res, next) => {
+  if (req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only school accounts can manage school members." });
+  const parsed = schoolMemberActionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose whether to approve or revoke this member." });
+  try {
+    const school = await prisma.school.findUnique({ where: { ownerId: req.player.id }, select: { id: true } });
+    const membership = school && await prisma.schoolMembership.findFirst({ where: { id: req.params.membershipId, schoolId: school.id }, select: { id: true } });
+    if (!membership) return res.status(404).json({ error: "School member not found." });
+    if (parsed.data.action === "revoke") {
+      await prisma.schoolMembership.delete({ where: { id: membership.id } });
+      return res.json({ data: { id: membership.id, revoked: true } });
+    }
+    const approved = await prisma.schoolMembership.update({ where: { id: membership.id }, data: { approvedAt: new Date() }, select: { id: true, approvedAt: true } });
+    return res.json({ data: approved });
   } catch (error) { next(error); }
 });
 
@@ -480,7 +538,7 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
       // A teacher can prepare a lesson, but enrolled students receive access
       // through a direct school assignment. This avoids opening the full paid
       // catalogue merely because a student selected a school.
-      OR: [{ ownerId: player.id }, { memberships: { some: { playerId: player.id, role: "TEACHER" } } }],
+      OR: [{ ownerId: player.id }, { memberships: { some: { playerId: player.id, role: "TEACHER", approvedAt: { not: null } } } }],
     },
     select: { id: true, owner: { select: { entitlements: { where: { resource: "plan:school:all", ...activeAccess }, select: { id: true, expiresAt: true }, take: 1 } } } },
   });
@@ -639,18 +697,19 @@ app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
     if (player.role === "SCHOOL") {
       const school = await prisma.school.findUnique({
         where: { ownerId: player.id },
-        select: { id: true, name: true, memberships: { where: { role: "STUDENT" }, orderBy: { player: { displayName: "asc" } }, select: { player: { select: { id: true, displayName: true } } } } },
+        select: { id: true, name: true, memberships: { orderBy: [{ approvedAt: "asc" }, { createdAt: "asc" }], select: { id: true, role: true, createdAt: true, approvedAt: true, player: { select: { id: true, displayName: true } } } } },
       });
-      return res.json({ data: { ...base, workspace: "SCHOOL", school, recipients: school?.memberships.map((member) => member.player) || [] } });
+      const members = school?.memberships || [];
+      return res.json({ data: { ...base, workspace: "SCHOOL", school: school ? { id: school.id, name: school.name } : null, members, recipients: members.filter((member) => member.role === "STUDENT" && member.approvedAt).map((member) => member.player) } });
     }
     if (player.role === "TEACHER") {
       const membership = await prisma.schoolMembership.findFirst({
-        where: { playerId: player.id, role: "TEACHER" },
+        where: { playerId: player.id, role: "TEACHER", approvedAt: { not: null } },
         select: { school: { select: { id: true, name: true } } },
       });
       return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: [] } });
     }
-    const membership = player.role === "STUDENT" ? await prisma.schoolMembership.findFirst({ where: { playerId: player.id, role: "STUDENT" }, select: { school: { select: { id: true, name: true } } } }) : null;
+    const membership = player.role === "STUDENT" ? await prisma.schoolMembership.findFirst({ where: { playerId: player.id, role: "STUDENT", approvedAt: { not: null } }, select: { school: { select: { id: true, name: true } } } }) : null;
     const [gameAssignments, resourceAssignments] = await Promise.all([
       prisma.gameAssignment.findMany({
       where: { recipientId: player.id }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
@@ -697,7 +756,7 @@ app.post("/v1/me/assignments", requirePlayer, async (req, res, next) => {
       const school = await prisma.school.findUnique({ where: { ownerId: sender.id }, select: { id: true } });
       if (!school || recipient.role !== "STUDENT") return res.status(403).json({ error: "A school may assign games only to its students." });
       const membership = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: recipientId } } });
-      if (!membership || membership.role !== "STUDENT") return res.status(403).json({ error: "That student is not a member of your school." });
+      if (!membership || membership.role !== "STUDENT" || !membership.approvedAt) return res.status(403).json({ error: "That student must be an approved member of your school." });
       resolvedSchoolId = school.id;
     }
     const game = await prisma.game.findFirst({
@@ -732,7 +791,7 @@ app.post("/v1/me/resource-assignments", requirePlayer, async (req, res, next) =>
     if (sender.role === "SCHOOL") {
       const school = await prisma.school.findUnique({ where: { ownerId: sender.id }, select: { id: true } });
       const membership = school && await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: school.id, playerId: recipientId } } });
-      if (!school || recipient.role !== "STUDENT" || membership?.role !== "STUDENT") return res.status(403).json({ error: "A school may assign card modes only to students in its school." });
+      if (!school || recipient.role !== "STUDENT" || membership?.role !== "STUDENT" || !membership.approvedAt) return res.status(403).json({ error: "A school may assign card modes only to approved students in its school." });
       resolvedSchoolId = school.id;
     }
     const senderAccess = await resourceAccessForPlayer(sender, resource, { requirePurchase: true });

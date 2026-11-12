@@ -3,12 +3,13 @@ import { ArrowLeft, ArrowRight, BookOpenCheck, CheckCircle2, GraduationCap, Scho
 import { Link, Navigate } from "react-router-dom";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import { getApiBaseUrl } from "../lib/api.js";
+import { deviceHeaders } from "../lib/device.js";
 import RoleWorkspace from "../components/RoleWorkspace.jsx";
 import "./RolePortal.css";
 
 async function workspaceRequest(user) {
   const token = await user.getIdToken();
-  const response = await fetch(`${getApiBaseUrl()}/v1/me/workspace`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+  const response = await fetch(`${getApiBaseUrl()}/v1/me/workspace`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || "We couldn't load your role workspace.");
   return payload.data;

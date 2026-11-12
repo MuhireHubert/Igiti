@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Eye, Layers3, Lightbulb, Map, RotateCcw, Shuffle, Timer, Volume2, VolumeX, Zap } from "lucide-react";
 import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
+import { deviceHeaders } from "../lib/device.js";
 import { playGameCue, savedSoundEnabled, saveSoundEnabled } from "../lib/gameAudio.js";
 import { countries } from "../lib/africaDeck.js";
 import MultiplayerRoom from "./MultiplayerRoom.jsx";
@@ -109,7 +110,7 @@ export default function PuzzleGame({ game, onBack }) {
       try {
         const token = await user.getIdToken();
         const response = await fetch(`${apiBase}/v1/me/progress`, {
-          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() },
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || "Cloud progress could not be loaded.");
@@ -151,6 +152,7 @@ export default function PuzzleGame({ game, onBack }) {
             Accept: "application/json",
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            ...deviceHeaders(),
           },
           body: JSON.stringify({
             state: { pieces, moves, seconds, hintsUsed, timeLimit },

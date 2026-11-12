@@ -3,6 +3,7 @@ import { onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, 
 import { ArrowLeft, BarChart3, BookOpen, CheckCircle2, CircleAlert, CreditCard, FileText, Gamepad2, LogOut, Plus, RefreshCw, Save, Settings, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { auth, firebaseReady } from "../lib/firebase.js";
+import { deviceHeaders } from "../lib/device.js";
 import "./AdminPortal.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
@@ -43,6 +44,7 @@ async function adminRequest(path, token, options = {}) {
       Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      ...deviceHeaders(),
       ...(options.headers || {}),
     },
   });
@@ -206,7 +208,7 @@ export default function AdminPortal() {
       const token = await user.getIdToken();
       const body = new FormData();
       body.append("file", file);
-      const response = await fetch(`${API_BASE}/v1/admin/media/images`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body });
+      const response = await fetch(`${API_BASE}/v1/admin/media/images`, { method: "POST", headers: { Authorization: `Bearer ${token}`, ...deviceHeaders() }, body });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Image upload failed.");
       update(payload.data.url);

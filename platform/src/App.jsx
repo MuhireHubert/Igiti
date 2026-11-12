@@ -5,6 +5,7 @@ import {
   ShieldCheck, Sparkles, Trophy, X,
 } from "lucide-react";
 import { getApiBaseUrl, getGames } from "./lib/api.js";
+import { deviceHeaders } from "./lib/device.js";
 import PuzzleGame from "./components/PuzzleGame.jsx";
 import CardGame from "./components/CardGame.jsx";
 import PlayerAccount from "./components/PlayerAccount.jsx";
@@ -94,7 +95,7 @@ function GamePreview({ game, onBack }) {
     setAccessMessage("");
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
       if (payload.data?.permitted) { setPlaying(true); return; }

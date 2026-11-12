@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Gamepad2, Leaf, Puzzle, ShieldCheck, Sparkles } from "lucide-react";
 import { getApiBaseUrl, getGameById, getGames } from "../lib/api.js";
+import { deviceHeaders } from "../lib/device.js";
 import PuzzleGame from "../components/PuzzleGame.jsx";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import CardGame from "../components/CardGame.jsx";
@@ -69,7 +70,7 @@ export function GamePage() {
     setCheckingAccess(true); setAccessMessage("");
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
       if (payload.data?.permitted) { setPlaying(true); return; }
