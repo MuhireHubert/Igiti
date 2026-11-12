@@ -61,11 +61,11 @@ export function GamePage() {
       .catch((error) => { if (error.name !== "AbortError") setAccessMessage(error.message); });
     return () => controller.abort();
   }, []);
-  const requiresPurchase = Boolean(game?.requiresPurchase || Number(game?.price?.amountMinor || 0) > 0 || cataloguePolicy?.catalogueRequiresSubscription);
+  const requiresPurchase = Boolean(game?.requiresPurchase || Number(game?.price?.amountMinor || 0) > 0);
   async function startPuzzle() {
     if (!cataloguePolicy) { setAccessMessage("Checking access. Please try again in a moment."); return; }
     if (!requiresPurchase) { setPlaying(true); return; }
-    if (!user) { setAccessMessage("Sign in, then purchase access before playing this game."); return; }
+    if (!user) { setAccessMessage("This game is included with a subscription. Sign in, then visit subscription plans to unlock it."); return; }
     setCheckingAccess(true); setAccessMessage("");
     try {
       const token = await user.getIdToken();
@@ -73,14 +73,14 @@ export function GamePage() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
       if (payload.data?.permitted) { setPlaying(true); return; }
-      setAccessMessage(`This game requires purchase. ${payload.data?.offer?.title || "This product needs a checkout offer from the platform owner."}`);
+      setAccessMessage(`This game is included with a subscription. ${payload.data?.offer?.title || "Visit subscription plans to choose access."}`);
     } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
   }
   if (game?.kind === "card") return <><PageHeader /><CardGame onBack={() => navigate("/games")} /><PageFooter /></>;
   return <PageLayout eyebrow="YOUR NEXT ADVENTURE" title={game ? game.title : "A story in the making"} subtitle={game ? game.description : "Explore the growing world of Igiti Play."}>
     {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && (playing
       ? <PuzzleGame game={game} onBack={() => setPlaying(false)} />
-      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div>{accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}{requiresPurchase && <p className="game-price">Paid access required</p>}<button className="button button-primary" onClick={startPuzzle} disabled={!cataloguePolicy || checkingAccess}>{!cataloguePolicy || checkingAccess ? "Checking access…" : requiresPurchase ? "Play or unlock" : "Start puzzle"} <ArrowRight size={16} /></button>{requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>View plans and secure checkout <ArrowRight size={16} /></button>}</div></div>)}
+      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div>{accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}{requiresPurchase && <p className="game-price">Included with an active subscription</p>}<button className="button button-primary" onClick={startPuzzle} disabled={!cataloguePolicy || checkingAccess}>{!cataloguePolicy || checkingAccess ? "Checking access…" : requiresPurchase ? "View subscription plans" : "Play for free"} <ArrowRight size={16} /></button>{requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>Visit subscription plans <ArrowRight size={16} /></button>}</div></div>)}
   </PageLayout>;
 }
 

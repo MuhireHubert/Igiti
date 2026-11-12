@@ -272,7 +272,7 @@ export default function PuzzleGame({ game, onBack }) {
         <div><span>PIECES PLACED</span><strong>{solvedCount} / {pieceCount}</strong></div>
       </div>
       <div className="puzzle-progress" aria-label={`${progress}% complete`}><span style={{ width: `${progress}%` }} /></div>
-      <div className="puzzle-board-stage">
+      <div className={`puzzle-board-stage ${showReference ? "guide-visible" : "guide-hidden"}`}>
         {showReference && <figure className="puzzle-side-reference puzzle-side-reference-left"><img src={game.image} alt={`Reference image for ${game.title}`} /><figcaption>Picture guide</figcaption></figure>}
         <div className="puzzle-board-wrap">
           <div className={`puzzle-board ${complete ? "is-complete" : ""} ${timeExpired ? "is-expired" : ""}`} style={boardStyle}>
@@ -319,7 +319,7 @@ export default function PuzzleGame({ game, onBack }) {
         <button className="puzzle-secondary" onClick={() => setShowReference((shown) => !shown)}><Eye size={16} /> {showReference ? "Hide picture guide" : "Show picture guide"}</button>
         <span>{selected === null ? "Use the visible picture guide, then select a piece to begin swapping." : "Now select the piece you want to swap with."}</span>
       </div>
-      {showReference && <p className="puzzle-reference-note">Two picture guides stay beside the board while you build. Use the button above to hide them for a harder challenge.</p>}
+      {showReference && <><figure className="puzzle-large-reference"><img src={game.image} alt={`Large reference image for ${game.title}`} /><figcaption><strong>Full picture guide</strong><span>Use this larger view to study the detail before placing your next piece.</span></figcaption></figure><p className="puzzle-reference-note">Picture guides stay beside and below the board while you build. Hide them for a harder challenge—the board will expand to use the full space.</p></>}
       {timeExpired && <div className="puzzle-time-expired" role="status"><Timer size={23} /><div><strong>Time attack complete.</strong><p>You placed {solvedCount} of {pieceCount} pieces. Try again to beat the clock.</p></div><button onClick={() => resetPuzzle(timeLimit)}>Try again</button></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
       {(activeFunFact || showFunFact) && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">{activeFunFact ? "CORRECT PIECE · FACT UNLOCKED" : "PUZZLE COMPLETE · FACT UNLOCKED"}</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{activeFunFact || game.funFact}</p><button className="button button-primary" onClick={() => { setActiveFunFact(null); setShowFunFact(false); }}>Keep playing</button></section></div>}

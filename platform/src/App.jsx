@@ -77,7 +77,7 @@ function GamePreview({ game, onBack }) {
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [cataloguePolicy, setCataloguePolicy] = useState(null);
   const paid = Number(game.price?.amountMinor || 0) > 0;
-  const requiresPurchase = paid || game.requiresPurchase || cataloguePolicy?.catalogueRequiresSubscription === true;
+  const requiresPurchase = paid || game.requiresPurchase;
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${getApiBaseUrl()}/v1/access-policy`, { headers: { Accept: "application/json" }, signal: controller.signal })
@@ -116,7 +116,7 @@ function GamePreview({ game, onBack }) {
           <div className="notice"><Sparkles size={17} /><span>Beat the board, protect your streak, and return anytime—your progress saves automatically.</span></div>
           {accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}
           {requiresPurchase && <p className="game-price">{paid ? `Individual access · ${(Number(game.price.amountMinor) / 100).toFixed(2)} ${game.price.currency}` : "Subscriber access required"}</p>}
-          <button className="button button-primary" onClick={startPuzzle} disabled={checkingAccess || !cataloguePolicy}>{checkingAccess || !cataloguePolicy ? "Checking access…" : requiresPurchase ? "Play or unlock" : "Play puzzle"} <ArrowRight size={17} /></button>
+          <button className="button button-primary" onClick={startPuzzle} disabled={checkingAccess || !cataloguePolicy}>{checkingAccess || !cataloguePolicy ? "Checking access…" : requiresPurchase ? "View subscription plans" : "Play for free"} <ArrowRight size={17} /></button>
           {requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>View plans and secure checkout <ArrowRight size={16} /></button>}
         </div>
       </div>
@@ -189,7 +189,7 @@ function App() {
           <div className="play-paths-heading"><span className="eyebrow">A COMPLETE PLAY SPACE</span><h2>Everything here has a <em>purpose.</em></h2><p>Choose a meaningful challenge, learn as you play, and keep every paid experience secure and easy to return to.</p></div>
           <div className="play-path-grid">
             <article className="play-path-card"><span className="play-path-icon"><Puzzle size={23} /></span><span className="play-path-kicker">PUZZLE QUESTS</span><h3>Build the picture. Unlock the story.</h3><p>Choose your level, use a limited hint when you need it, and reveal an admin-curated fact with every correct piece.</p><Link to="/games" className="play-path-link">Explore puzzles <ArrowRight size={16} /></Link></article>
-            <article className="play-path-card play-path-featured"><span className="play-path-icon"><Gamepad2 size={23} /></span><span className="play-path-kicker">A-54 CARD GAME</span><h3>108 country cards. Eight distinct ways to think.</h3><p>Test memory, geography, quick facts, regions, strategy, and role play—at a pace that feels like a game, not a worksheet.</p><Link to="/games/a54-card-game" className="play-path-link">Open A-54 <ArrowRight size={16} /></Link></article>
+            <article className="play-path-card play-path-featured"><span className="play-path-icon"><Gamepad2 size={23} /></span><span className="play-path-kicker">A-54 CARD GAME</span><h3>108 country cards. Eight distinct ways to think.</h3><p>Test memory, geography, quick facts, regions, strategy, and role play—then explore map layers, audio cues, and private real-time multiplayer rooms.</p><Link to="/games/a54-card-game" className="play-path-link">Open A-54 <ArrowRight size={16} /></Link></article>
             <article className="play-path-card"><span className="play-path-icon"><ShieldCheck size={23} /></span><span className="play-path-kicker">YOUR ACCOUNT</span><h3>Progress, plans, and access in one place.</h3><p>Sign in to save your play, see your active access, manage a school plan, and securely unlock paid games through Pesapal.</p><Link to="/settings" className="play-path-link">View account & plans <ArrowRight size={16} /></Link></article>
           </div>
         </section>
