@@ -309,6 +309,14 @@ app.get("/v1/schools", async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.get("/v1/me/school-demo", requirePlayer, async (req, res, next) => {
+  try {
+    const school = await prisma.school.findFirst({ where: { OR: [{ ownerId: req.player.id }, { memberships: { some: { playerId: req.player.id } } }] }, select: { id: true, name: true } });
+    const demo = school ? await activeSchoolDemo(school.id) : null;
+    res.json({ data: { school, demo: demo ? { title: demo.offer.title, expiresAt: demo.expiresAt, grantedAt: demo.grantedAt } : null } });
+  } catch (error) { next(error); }
+});
+
 app.put("/v1/me/school", requirePlayer, async (req, res, next) => {
   const parsed = schoolNameSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Provide a school name." });
@@ -328,7 +336,9 @@ async function schoolSeatAvailability(schoolId) {
     orderBy: { updatedAt: "desc" }, select: { order: { select: { metadata: true } } },
   });
   const seatLimit = Number(entitlement?.order?.metadata?.seatLimit);
-  return { school, seatLimit: Number.isInteger(seatLimit) && seatLimit > 0 ? seatLimit : null };
+  if (Number.isInteger(seatLimit) && seatLimit > 0) return { school, seatLimit };
+  const demo = await activeSchoolDemo(schoolId, now);
+  return { school, seatLimit: Number(demo?.offer.seatLimit) > 0 ? Number(demo.offer.seatLimit) : null };
 }
 
 function activeEntitlementFilters(now = new Date()) {
@@ -343,6 +353,16 @@ function activeAccessWhere(resource, now = new Date()) {
   return { resource, ...activeEntitlementFilters(now) };
 }
 
+async function activeSchoolDemo(schoolId, now = new Date()) {
+  if (!schoolId) return null;
+  const setting = await prisma.appSetting.findUnique({ where: { key: "commerce.school-demo-plans" }, select: { value: true } });
+  const entry = setting?.value && typeof setting.value === "object" && !Array.isArray(setting.value) ? setting.value[schoolId] : null;
+  if (!entry || typeof entry !== "object" || typeof entry.offerKey !== "string") return null;
+  if (entry.expiresAt && (Number.isNaN(+new Date(entry.expiresAt)) || new Date(entry.expiresAt) <= now)) return null;
+  const offer = await prisma.accessOffer.findFirst({ where: { key: entry.offerKey, resource: "plan:school:all", isActive: true }, select: { key: true, title: true, seatLimit: true } });
+  return offer ? { offer, grantedAt: entry.grantedAt || null, expiresAt: entry.expiresAt || null } : null;
+}
+
 // Student assignments are a delivery mechanism for a school's paid plan, not
 // a permanent bypass. This keeps access in sync with a plan expiry, revocation,
 // or upgrade without trusting anything held in the browser.
@@ -352,7 +372,7 @@ async function hasActiveSchoolPlan(schoolId) {
     where: { id: schoolId, owner: { entitlements: { some: activeAccessWhere("plan:school:all") } } },
     select: { id: true },
   });
-  return Boolean(school);
+  return Boolean(school) || Boolean(await activeSchoolDemo(schoolId));
 }
 
 app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
@@ -456,12 +476,12 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
       // through a direct school assignment. This avoids opening the full paid
       // catalogue merely because a student selected a school.
       OR: [{ ownerId: player.id }, { memberships: { some: { playerId: player.id, role: "TEACHER" } } }],
-      owner: { entitlements: { some: { resource: "plan:school:all", ...activeAccess } } },
     },
     select: { id: true, owner: { select: { entitlements: { where: { resource: "plan:school:all", ...activeAccess }, select: { id: true, expiresAt: true }, take: 1 } } } },
   });
   const schoolEntitlement = schoolAccess?.owner.entitlements[0] || null;
-  return { permitted: Boolean(schoolEntitlement), paid: true, offer: purchaseOffer, entitlement: schoolEntitlement, schoolId: schoolAccess?.id || null };
+  const demo = schoolAccess ? await activeSchoolDemo(schoolAccess.id) : null;
+  return { permitted: Boolean(schoolEntitlement || demo), paid: true, offer: purchaseOffer, entitlement: schoolEntitlement, schoolId: schoolAccess?.id || null, demo: Boolean(demo) };
 }
 
 async function puzzleAccessForPlayer(player, puzzleId) {

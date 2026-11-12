@@ -85,6 +85,9 @@ export default function AdminPortal() {
   const [entitlements, setEntitlements] = useState([]);
   const [countryAssets, setCountryAssets] = useState([]);
   const [offers, setOffers] = useState([]);
+  const [schools, setSchools] = useState([]);
+  const [schoolDemos, setSchoolDemos] = useState({});
+  const [schoolDemoForm, setSchoolDemoForm] = useState({ schoolId: "", offerKey: "", expiresAt: "" });
   const [settingKey, setSettingKey] = useState("");
   const [settingValue, setSettingValue] = useState("{}");
   const [entitlementForm, setEntitlementForm] = useState({ playerId: "", resource: "", expiresAt: "" });
@@ -132,9 +135,9 @@ export default function AdminPortal() {
       setGames(gameList);
       setPlayers(playerList);
       if (administratorRoles.has(session.role)) {
-        const [settingList, events, orders, entitlementList, assetList, offerList] = await Promise.all([
+        const [settingList, events, orders, entitlementList, assetList, offerList, schoolList, demos] = await Promise.all([
           adminRequest("/settings", token), adminRequest("/audit", token),
-          adminRequest("/payments", token), adminRequest("/entitlements", token), adminRequest("/country-assets", token), adminRequest("/offers", token),
+          adminRequest("/payments", token), adminRequest("/entitlements", token), adminRequest("/country-assets", token), adminRequest("/offers", token), adminRequest("/schools", token), adminRequest("/school-demos", token),
         ]);
         setSettings(settingList);
         setAuditEvents(events);
@@ -142,8 +145,10 @@ export default function AdminPortal() {
         setEntitlements(entitlementList);
         setCountryAssets(assetList);
         setOffers(offerList);
+        setSchools(schoolList);
+        setSchoolDemos(demos || {});
       } else {
-        setSettings([]); setAuditEvents([]); setPaymentOrders([]); setEntitlements([]); setCountryAssets([]); setOffers([]);
+        setSettings([]); setAuditEvents([]); setPaymentOrders([]); setEntitlements([]); setCountryAssets([]); setOffers([]); setSchools([]); setSchoolDemos({});
       }
     } catch (error) {
       setWorkspaceError(error.message);
@@ -385,6 +390,18 @@ export default function AdminPortal() {
     }, "Access entitlement revoked.");
   }
 
+  async function grantSchoolDemo(event) {
+    event.preventDefault();
+    await withAdminRequest(async (token) => {
+      await adminRequest(`/schools/${schoolDemoForm.schoolId}/demo-plan`, token, { method: "PUT", body: JSON.stringify({ offerKey: schoolDemoForm.offerKey, expiresAt: schoolDemoForm.expiresAt ? new Date(schoolDemoForm.expiresAt).toISOString() : null }) });
+    }, "School demo access granted. Members will see that this is demo access.");
+  }
+
+  async function revokeSchoolDemo(schoolId, name) {
+    if (!window.confirm(`Revoke demo access for ${name}? This removes access for the school and its associated members immediately.`)) return;
+    await withAdminRequest(async (token) => { await adminRequest(`/schools/${schoolId}/demo-plan`, token, { method: "DELETE" }); }, "School demo access revoked.");
+  }
+
   function editCountryAsset(asset) {
     setEditingCountryAssetId(asset.id);
     setCountryAssetForm({ country: asset.country, imageUrl: asset.imageUrl, caption: asset.caption || "" });
@@ -603,6 +620,11 @@ export default function AdminPortal() {
             </form>}
             {offers.map((offer) => <article className="admin-list-row" key={offer.id}><div className="admin-list-copy"><strong>{offer.title} · {formatMoney(offer.amountMinor, offer.currency)}</strong><span>{offer.kind} · {offer.interval.replace("_", " ")} · {offer.resource}</span></div><span className={`admin-status status-${offer.isActive ? "published" : "draft"}`}>{offer.isActive ? "ACTIVE" : "DRAFT"}</span>{adminSession?.role === "OWNER" && <button className="admin-row-action" onClick={() => editOffer(offer)}>Edit</button>}</article>)}
             {!offers.length && <p className="admin-empty">No paid game or account offers have been configured.</p>}
+          </section>
+          <section className="admin-panel"><div className="admin-panel-heading"><div><h2>School demo approvals</h2><p>Approve a specific school for an active school plan without checkout. Every associated teacher and student sees “Demo access”; revoke it here at any time.</p></div></div>
+            {adminSession?.role === "OWNER" && <form className="admin-form" onSubmit={grantSchoolDemo}><label className="admin-field">School<select value={schoolDemoForm.schoolId} onChange={(e) => setSchoolDemoForm({ ...schoolDemoForm, schoolId: e.target.value })} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><label className="admin-field">Demo plan<select value={schoolDemoForm.offerKey} onChange={(e) => setSchoolDemoForm({ ...schoolDemoForm, offerKey: e.target.value })} required><option value="">Choose an active school plan</option>{offers.filter((offer) => offer.isActive && offer.resource === "plan:school:all").map((offer) => <option key={offer.id} value={offer.key}>{offer.title} · {formatMoney(offer.amountMinor, offer.currency)} · {offer.seatLimit || "No"} seats</option>)}</select></label><label className="admin-field">Demo expiry <small>(optional)</small><input type="datetime-local" value={schoolDemoForm.expiresAt} onChange={(e) => setSchoolDemoForm({ ...schoolDemoForm, expiresAt: e.target.value })} /></label><button className="admin-button admin-button-primary" disabled={saving || !schoolDemoForm.schoolId || !schoolDemoForm.offerKey}><Plus size={15} /> Approve demo access</button></form>}
+            {Object.entries(schoolDemos).map(([schoolId, demo]) => { const school = schools.find((item) => item.id === schoolId); return <article className="admin-list-row" key={schoolId}><div className="admin-list-copy"><strong>{school?.name || "School"} · DEMO</strong><span>{demo.offerKey}{demo.expiresAt ? ` · expires ${new Date(demo.expiresAt).toLocaleString()}` : " · no expiry set"}</span></div><span className="admin-status status-published">DEMO ACTIVE</span>{adminSession?.role === "OWNER" && <button className="admin-row-action danger-text" onClick={() => revokeSchoolDemo(schoolId, school?.name || "this school")}>Revoke demo</button>}</article>; })}
+            {!Object.keys(schoolDemos).length && <p className="admin-empty">No school demo approvals are active.</p>}
           </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Verified payment orders</h2><p>Payment redirects never grant play access. Only a server-verified provider callback can mark an order paid.</p></div></div>
             {paymentOrders.map((order) => <article className="admin-list-row" key={order.id}><div className="admin-list-copy"><strong>{order.player.displayName || "Player"} · {order.amountMinor} {order.currency}</strong><span>{order.provider} · {order.providerOrderId || "Awaiting provider reference"} · {new Date(order.createdAt).toLocaleString()}</span></div><span className={`admin-status status-${order.status === "PAID" ? "published" : "draft"}`}>{order.status}</span></article>)}

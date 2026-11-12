@@ -75,6 +75,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [recurringOffers, setRecurringOffers] = useState({});
   const [billingCountry, setBillingCountry] = useState("RW");
   const [geoProof, setGeoProof] = useState(null);
+  const [schoolDemo, setSchoolDemo] = useState(null);
   const [checkoutCustomer, setCheckoutCustomer] = useState({ fullName: "", email: user?.email || "", phone: "", addressLine1: "", city: "", state: "", postalCode: "" });
   const [state, setState] = useState({ loading: true, error: "", message: "" });
 
@@ -85,17 +86,19 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
       const geoResponse = await fetch("/api/geo", { cache: "no-store" });
       const geo = await geoResponse.json().catch(() => ({}));
       if (!geoResponse.ok || !geo.country || !geo.signature || !geo.issuedAt) throw new Error(geo.error || "We could not securely determine your location for pricing.");
-      const [data, collection, offerResponse, checkoutResponse, accessList, schoolList] = await Promise.all([
+      const [data, collection, offerResponse, checkoutResponse, accessList, schoolList, demoStatus] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
         fetch(`${getApiBaseUrl()}/v1/offers?country=${encodeURIComponent(geo.country)}`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/entitlements", token),
         fetch(`${getApiBaseUrl()}/v1/schools`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
+        playerRequest("/school-demo", token),
       ]);
       setWorkspace(data);
       setOffers(offerResponse.data || []);
       setEntitlements(accessList || []);
       setSchools(schoolList.data || []);
+      setSchoolDemo(demoStatus?.demo ? { ...demoStatus.demo, school: demoStatus.school } : null);
       setCheckout(checkoutResponse.data || { configured: false, environment: "sandbox" });
       setBillingCountry(geo.country);
       setGeoProof(geo);
@@ -178,6 +181,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   return <section className="role-workspace" aria-label={`${meta.label} workspace`}>
     <div className="role-workspace-head"><span><Icon size={16} /></span><div><strong>{meta.label} workspace</strong><small>{meta.copy}</small></div></div>
     {showSettings && geoProof && <p className="role-location-notice">Pricing is based on your detected network location: <strong>{billingCountry}</strong>. Location is locked at checkout.</p>}
+    {showSettings && schoolDemo && <section className="role-demo-notice"><strong>Demo access</strong><span>{schoolDemo.school?.name || "Your school"} has administrator-approved demo access to {schoolDemo.title}.{schoolDemo.expiresAt ? ` It ends ${new Date(schoolDemo.expiresAt).toLocaleDateString()}.` : ""}</span></section>}
     {showSettings && visibleOffers.length > 0 && <section className="role-checkout-details" aria-label="Required checkout details"><strong>Checkout details</strong><small>These details are required before we can open secure Pesapal checkout.</small><div className="role-checkout-details-grid"><label className="account-field">Full legal name<input value={checkoutCustomer.fullName} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, fullName: event.target.value }))} required minLength={2} autoComplete="name" /></label><label className="account-field">Email<input type="email" value={checkoutCustomer.email} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, email: event.target.value }))} required autoComplete="email" /></label><label className="account-field">Phone number<input type="tel" value={checkoutCustomer.phone} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, phone: event.target.value }))} required minLength={7} autoComplete="tel" /></label><label className="account-field">Street address<input value={checkoutCustomer.addressLine1} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, addressLine1: event.target.value }))} required minLength={3} autoComplete="street-address" /></label><label className="account-field">City<input value={checkoutCustomer.city} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, city: event.target.value }))} required minLength={2} autoComplete="address-level2" /></label><label className="account-field">State / province<input value={checkoutCustomer.state} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, state: event.target.value }))} required minLength={2} autoComplete="address-level1" /></label><label className="account-field">Postal code<input value={checkoutCustomer.postalCode} onChange={(event) => setCheckoutCustomer((current) => ({ ...current, postalCode: event.target.value }))} required minLength={2} autoComplete="postal-code" /></label></div></section>}
     {showSettings && isAdmin && <button className="button button-dark account-wide" onClick={onOpenAdmin}><Crown size={15} /> Open control room</button>}
     {showSettings && workspace?.role === "SCHOOL" && !workspace.school && <form className="role-assignment-form" onSubmit={saveSchool}><strong>Create your school workspace</strong><small>Students select this school in their settings. Once your school plan is active, you can assign games directly to them.</small><label className="account-field">School name<input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} required minLength={2} /></label><button className="button button-primary account-wide">Create school</button></form>}

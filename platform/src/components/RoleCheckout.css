@@ -20,3 +20,6 @@
 @media (max-width: 650px) {
   .role-checkout-details-grid { grid-template-columns: 1fr; }
 }
+
+.role-demo-notice { display: grid; gap: .3rem; margin: 1rem 0; padding: .9rem 1rem; border: 1px solid #65e6a866; border-radius: .7rem; background: #65e6a812; color: #d9f8e8; font-size: .86rem; }
+.role-demo-notice strong { color: #65e6a8; text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; }

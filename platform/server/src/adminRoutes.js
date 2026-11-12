@@ -576,6 +576,48 @@ router.patch("/offers/:offerId", requireRole("OWNER"), async (req, res, next) =>
   }
 });
 
+const schoolDemoPlan = z.object({ offerKey: z.string().trim().min(2).max(120), expiresAt: z.string().datetime().optional().nullable() });
+router.get("/school-demos", requireRole("ADMIN"), async (_req, res, next) => {
+  try {
+    const setting = await prisma.appSetting.findUnique({ where: { key: "commerce.school-demo-plans" }, select: { value: true } });
+    const entries = setting?.value && typeof setting.value === "object" && !Array.isArray(setting.value) ? setting.value : {};
+    res.json({ data: entries });
+  } catch (error) { next(error); }
+});
+
+router.put("/schools/:schoolId/demo-plan", requireRole("OWNER"), async (req, res, next) => {
+  const parsed = schoolDemoPlan.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose an active school plan and an optional future expiry." });
+  try {
+    const expiry = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+    if (expiry && expiry <= new Date()) return res.status(400).json({ error: "Demo expiry must be in the future." });
+    const [school, offer, setting] = await Promise.all([
+      prisma.school.findUnique({ where: { id: req.params.schoolId }, select: { id: true, name: true } }),
+      prisma.accessOffer.findFirst({ where: { key: parsed.data.offerKey, resource: "plan:school:all", isActive: true }, select: { key: true, title: true, seatLimit: true } }),
+      prisma.appSetting.findUnique({ where: { key: "commerce.school-demo-plans" }, select: { value: true } }),
+    ]);
+    if (!school) return res.status(404).json({ error: "School not found." });
+    if (!offer) return res.status(400).json({ error: "Choose an active school plan." });
+    const plans = setting?.value && typeof setting.value === "object" && !Array.isArray(setting.value) ? { ...setting.value } : {};
+    plans[school.id] = { offerKey: offer.key, grantedAt: new Date().toISOString(), expiresAt: expiry?.toISOString() || null };
+    await prisma.appSetting.upsert({ where: { key: "commerce.school-demo-plans" }, update: { value: plans, updatedBy: req.adminUser.id }, create: { key: "commerce.school-demo-plans", value: plans, updatedBy: req.adminUser.id } });
+    await recordAudit(req.adminUser.id, "school_demo.granted", "School", school.id, { offerKey: offer.key, expiresAt: expiry?.toISOString() || null });
+    res.json({ data: { school, demo: { title: offer.title, offerKey: offer.key, expiresAt: expiry?.toISOString() || null } } });
+  } catch (error) { next(error); }
+});
+
+router.delete("/schools/:schoolId/demo-plan", requireRole("OWNER"), async (req, res, next) => {
+  try {
+    const setting = await prisma.appSetting.findUnique({ where: { key: "commerce.school-demo-plans" }, select: { value: true } });
+    const plans = setting?.value && typeof setting.value === "object" && !Array.isArray(setting.value) ? { ...setting.value } : {};
+    if (!plans[req.params.schoolId]) return res.status(404).json({ error: "That school does not have an active demo plan." });
+    delete plans[req.params.schoolId];
+    await prisma.appSetting.upsert({ where: { key: "commerce.school-demo-plans" }, update: { value: plans, updatedBy: req.adminUser.id }, create: { key: "commerce.school-demo-plans", value: plans, updatedBy: req.adminUser.id } });
+    await recordAudit(req.adminUser.id, "school_demo.revoked", "School", req.params.schoolId, {});
+    res.json({ data: { revoked: true } });
+  } catch (error) { next(error); }
+});
+
 router.get("/entitlements", requireRole("ADMIN"), async (_req, res, next) => {
   try {
     const entitlements = await prisma.accessEntitlement.findMany({
