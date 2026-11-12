@@ -69,6 +69,8 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [offers, setOffers] = useState([]);
   const [schools, setSchools] = useState([]);
   const [schoolName, setSchoolName] = useState("");
+  const [schoolInviteForm, setSchoolInviteForm] = useState({ firstName: "", lastName: "", email: "", role: "STUDENT" });
+  const [schoolInviteLink, setSchoolInviteLink] = useState("");
   const [selectedSchoolId, setSelectedSchoolId] = useState("");
   const [entitlements, setEntitlements] = useState([]);
   const [checkout, setCheckout] = useState({ configured: false, environment: "sandbox" });
@@ -169,6 +171,19 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     } catch (error) { setState((current) => ({ ...current, error: error.message })); }
   }
 
+  async function createSchoolInvite(event) {
+    event.preventDefault();
+    setState((current) => ({ ...current, error: "", message: "" }));
+    try {
+      const token = await user.getIdToken();
+      const invite = await playerRequest("/school-invites", token, { method: "POST", body: JSON.stringify(schoolInviteForm) });
+      const link = `${window.location.origin}/?invite=${encodeURIComponent(invite.token)}`;
+      setSchoolInviteLink(link);
+      setSchoolInviteForm({ firstName: "", lastName: "", email: "", role: "STUDENT" });
+      setState({ loading: false, error: "", message: `Private ${invite.role.toLowerCase()} invitation created for ${invite.email}. It expires ${new Date(invite.expiresAt).toLocaleDateString()}.` });
+    } catch (error) { setState((current) => ({ ...current, error: error.message })); }
+  }
+
   if (state.loading) return <p className="role-workspace-loading">Loading your workspace…</p>;
   if (state.error) return <p className="account-error">{state.error}</p>;
   const meta = roleMeta[workspace?.role] || roleMeta.PLAYER;
@@ -197,6 +212,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     {showSettings && isAdmin && <button className="button button-dark account-wide" onClick={onOpenAdmin}><Crown size={15} /> Open control room</button>}
     {showSettings && workspace?.role === "SCHOOL" && !workspace.school && <form className="role-assignment-form" onSubmit={saveSchool}><strong>Create your school workspace</strong><small>Students select this school in their settings. Once your school plan is active, you can assign games directly to them.</small><label className="account-field">School name<input value={schoolName} onChange={(event) => setSchoolName(event.target.value)} required minLength={2} /></label><button className="button button-primary account-wide">Create school</button></form>}
     {showSettings && ["TEACHER", "STUDENT"].includes(workspace?.role) && <form className="role-assignment-form" onSubmit={chooseSchool}><strong>{workspace.school ? `School: ${workspace.school.name}` : "Choose your school"}</strong><small>Choose the school you belong to. The school owner must approve your request before its learning programme and assignments become active.</small><label className="account-field">School<select value={selectedSchoolId} onChange={(event) => setSelectedSchoolId(event.target.value)} required><option value="">Choose a school</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select></label><button className="button button-primary account-wide" disabled={!selectedSchoolId}>Request school approval</button></form>}
+    {showSettings && isSchool && workspace.school && <form className="role-assignment-form" onSubmit={createSchoolInvite}><strong><Users size={15} /> Invite a teacher or student</strong><small>Create a private enrolment link. The recipient creates their own account and password with this email; joining through this link is automatically approved.</small><div className="account-name-grid"><label className="account-field">First name<input value={schoolInviteForm.firstName} onChange={(event) => setSchoolInviteForm((current) => ({ ...current, firstName: event.target.value }))} required /></label><label className="account-field">Last name<input value={schoolInviteForm.lastName} onChange={(event) => setSchoolInviteForm((current) => ({ ...current, lastName: event.target.value }))} required /></label></div><label className="account-field">Email address<input type="email" value={schoolInviteForm.email} onChange={(event) => setSchoolInviteForm((current) => ({ ...current, email: event.target.value }))} required /></label><label className="account-field">School role<select value={schoolInviteForm.role} onChange={(event) => setSchoolInviteForm((current) => ({ ...current, role: event.target.value }))}><option value="STUDENT">Student</option><option value="TEACHER">Teacher</option></select></label><button className="button button-primary account-wide">Create private invitation</button>{schoolInviteLink && <div className="role-invite-result"><strong>Invitation ready</strong><a href={schoolInviteLink}>{schoolInviteLink}</a><div><button type="button" className="button button-outline" onClick={() => navigator.clipboard?.writeText(schoolInviteLink)}>Copy link</button><a className="button button-outline" href={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(schoolInviteLink)}`} target="_blank" rel="noreferrer">Open QR code</a></div></div>}</form>}
     {showSettings && isSchool && workspace.school && <section className="role-member-management" aria-label="School member management"><strong><Users size={15} /> School members</strong><small>Review people who selected your school. Only approved members can receive school games or use school access.</small>{(workspace.members || []).length ? <div className="role-member-list">{workspace.members.map((member) => <article key={member.id}><div><b>{member.player.displayName || "Unnamed account"}</b><small>{member.role.toLowerCase()} · {member.approvedAt ? "Approved" : `Requested ${new Date(member.createdAt).toLocaleDateString()}`}</small></div><span>{member.approvedAt ? "Active" : "Pending"}</span><div>{!member.approvedAt && <button className="button button-primary" onClick={() => manageSchoolMember(member.id, "approve")}>Approve</button>}<button className="role-member-revoke" onClick={() => manageSchoolMember(member.id, "revoke")}>{member.approvedAt ? "Revoke" : "Decline"}</button></div></article>)}</div> : <p className="account-copy">No teachers or students have requested to join this school yet.</p>}</section>}
     {showAssignments && canAssign && <form className="role-assignment-form" onSubmit={assign}>
       <strong>Assign a game directly to a student</strong>

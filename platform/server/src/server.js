@@ -315,6 +315,7 @@ async function requirePlayer(req, res, next) {
 const selfRoleSchema = z.object({ role: z.enum(["PLAYER", "SCHOOL", "TEACHER", "STUDENT"]) });
 const schoolNameSchema = z.object({ name: z.string().trim().min(2).max(160) });
 const schoolMembershipSchema = z.object({ schoolId: z.string().trim().min(1).max(64) });
+const schoolInviteSchema = z.object({ firstName: z.string().trim().min(1).max(80), lastName: z.string().trim().min(1).max(80), email: z.string().trim().email().max(254), role: z.enum(["TEACHER", "STUDENT"]) });
 app.put("/v1/me/role", requirePlayer, async (req, res, next) => {
   const parsed = selfRoleSchema.safeParse(req.body);
   if (!parsed.success || !selfSelectableRoles.has(parsed.data?.role)) {
@@ -336,6 +337,14 @@ app.get("/v1/schools", async (_req, res, next) => {
   try {
     const schools = await prisma.school.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
     res.json({ data: schools });
+  } catch (error) { next(error); }
+});
+
+app.get("/v1/school-invites/:token", async (req, res, next) => {
+  try {
+    const invite = await prisma.schoolInvite.findFirst({ where: { token: String(req.params.token || ""), acceptedAt: null, expiresAt: { gt: new Date() } }, select: { firstName: true, role: true, school: { select: { name: true } } } });
+    if (!invite) return res.status(404).json({ error: "This school invitation is invalid, expired, or has already been used." });
+    res.json({ data: { firstName: invite.firstName, role: invite.role, schoolName: invite.school.name } });
   } catch (error) { next(error); }
 });
 
@@ -455,6 +464,42 @@ app.patch("/v1/me/school-members/:membershipId", requirePlayer, async (req, res,
     }
     const approved = await prisma.schoolMembership.update({ where: { id: membership.id }, data: { approvedAt: new Date() }, select: { id: true, approvedAt: true } });
     return res.json({ data: approved });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/me/school-invites", requirePlayer, async (req, res, next) => {
+  if (req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only school accounts can invite teachers and students." });
+  const parsed = schoolInviteSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a first name, last name, email, and school role." });
+  try {
+    const school = await prisma.school.findUnique({ where: { ownerId: req.player.id }, select: { id: true } });
+    if (!school) return res.status(409).json({ error: "Create your school workspace before inviting members." });
+    const email = parsed.data.email.toLowerCase();
+    const invite = await prisma.schoolInvite.upsert({
+      where: { schoolId_email: { schoolId: school.id, email } },
+      update: { firstName: parsed.data.firstName, lastName: parsed.data.lastName, role: parsed.data.role, token: crypto.randomUUID(), expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), acceptedAt: null, acceptedById: null },
+      create: { schoolId: school.id, email, firstName: parsed.data.firstName, lastName: parsed.data.lastName, role: parsed.data.role, token: crypto.randomUUID(), expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
+      select: { id: true, token: true, email: true, firstName: true, lastName: true, role: true, expiresAt: true },
+    });
+    res.status(201).json({ data: invite });
+  } catch (error) { next(error); }
+});
+
+app.post("/v1/me/school-invites/:token/accept", requirePlayer, async (req, res, next) => {
+  try {
+    const invite = await prisma.schoolInvite.findFirst({ where: { token: String(req.params.token || ""), acceptedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, schoolId: true, email: true, role: true, school: { select: { id: true, name: true } } } });
+    if (!invite) return res.status(404).json({ error: "This school invitation is invalid, expired, or has already been used." });
+    if (req.player.email.toLowerCase() !== invite.email || req.player.role !== invite.role) return res.status(403).json({ error: "Sign in with the invited email and choose the invited school role to accept this invitation." });
+    const availability = await schoolSeatAvailability(invite.schoolId);
+    if (!availability) return res.status(404).json({ error: "This school is no longer available." });
+    const existing = await prisma.schoolMembership.findUnique({ where: { schoolId_playerId: { schoolId: invite.schoolId, playerId: req.player.id } }, select: { id: true } });
+    if (!existing && availability.seatLimit && availability.school._count.memberships >= availability.seatLimit) return res.status(409).json({ error: "This school has reached its plan limit. Ask the school owner to add a seat." });
+    const membership = await prisma.$transaction(async (tx) => {
+      const member = await tx.schoolMembership.upsert({ where: { schoolId_playerId: { schoolId: invite.schoolId, playerId: req.player.id } }, update: { role: invite.role, approvedAt: new Date() }, create: { schoolId: invite.schoolId, playerId: req.player.id, role: invite.role, approvedAt: new Date() } });
+      await tx.schoolInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date(), acceptedById: req.player.id } });
+      return member;
+    });
+    res.json({ data: { membership, school: invite.school } });
   } catch (error) { next(error); }
 });
 

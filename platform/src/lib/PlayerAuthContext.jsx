@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
 import { auth, firebaseReady } from "../lib/firebase.js";
 import { deviceHeaders } from "./device.js";
 
@@ -32,9 +32,18 @@ export function PlayerAuthProvider({ children }) {
       }
       return credential;
     },
-    signUp: async (email, password, role) => {
+    acceptSchoolInvite: async (inviteToken) => {
+      if (!auth?.currentUser || !inviteToken) return null;
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch(`${(import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "")}/v1/me/school-invites/${encodeURIComponent(inviteToken)}/accept`, { method: "POST", headers: { Authorization: `Bearer ${token}`, ...deviceHeaders() } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "We could not accept this school invitation.");
+      return payload.data;
+    },
+    signUp: async (email, password, role, firstName, lastName, inviteToken) => {
       if (!auth) throw new Error("Player accounts are not configured yet.");
       const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await updateProfile(credential.user, { displayName: `${firstName.trim()} ${lastName.trim()}`.trim() });
       const token = await credential.user.getIdToken();
       const response = await fetch(`${(import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "")}/v1/me/role`, {
         method: "PUT",
@@ -43,6 +52,11 @@ export function PlayerAuthProvider({ children }) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Your account was created, but its role could not be saved.");
+      if (inviteToken) {
+        const inviteResponse = await fetch(`${(import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "")}/v1/me/school-invites/${encodeURIComponent(inviteToken)}/accept`, { method: "POST", headers: { Authorization: `Bearer ${token}`, ...deviceHeaders() } });
+        const invitePayload = await inviteResponse.json().catch(() => ({}));
+        if (!inviteResponse.ok) throw new Error(invitePayload.error || "Your account was created, but the school invitation could not be accepted.");
+      }
       await sendEmailVerification(credential.user);
       return credential;
     },

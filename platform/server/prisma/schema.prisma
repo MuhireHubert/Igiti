@@ -95,8 +95,30 @@ model School {
   updatedAt   DateTime @updatedAt
   owner       PlayerProfile @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   memberships SchoolMembership[]
+  invites     SchoolInvite[]
   assignments GameAssignment[]
   resourceAssignments ResourceAssignment[]
+}
+
+// A school invitation never contains a password. It is bound to one email and
+// role, and becomes an approved membership only after the recipient signs up.
+model SchoolInvite {
+  id          String           @id @default(cuid())
+  schoolId    String
+  email       String           @db.VarChar(254)
+  firstName   String           @db.VarChar(80)
+  lastName    String           @db.VarChar(80)
+  role        SchoolMemberRole
+  token       String           @unique @db.VarChar(80)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  acceptedById String?         @db.VarChar(191)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, email])
+  @@index([token, expiresAt])
 }
 
 model SchoolMembership {

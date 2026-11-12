@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./PlayerAccount.css";
 import { CheckCircle2, LogIn, LogOut, UserRound, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -14,17 +14,31 @@ function authErrorMessage(error) {
 }
 
 export default function PlayerAccount() {
-  const { user, ready, signIn, signUp, signOut, resetPassword } = usePlayerAuth();
+  const { user, ready, signIn, signUp, signOut, resetPassword, acceptSchoolInvite } = usePlayerAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("PLAYER");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [invite, setInvite] = useState(null);
+  const inviteToken = new URLSearchParams(window.location.search).get("invite");
+
+  useEffect(() => {
+    if (!inviteToken) return undefined;
+    const controller = new AbortController();
+    fetch(`${(import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "")}/v1/school-invites/${encodeURIComponent(inviteToken)}`, { signal: controller.signal })
+      .then((response) => response.json().then((payload) => ({ response, payload })))
+      .then(({ response, payload }) => { if (response.ok) { setInvite(payload.data); setRole(payload.data.role); setFirstName((current) => current || payload.data.firstName || ""); } else setError(payload.error || "This school invitation is no longer available."); })
+      .catch(() => { if (!controller.signal.aborted) setError("We could not check this school invitation."); });
+    return () => controller.abort();
+  }, [inviteToken]);
 
   if (!ready) return null;
 
@@ -35,10 +49,11 @@ export default function PlayerAccount() {
     setMessage("");
     try {
       if (mode === "signup") {
-        await signUp(email, password, role);
-        setMessage("Your account is ready. Check your email for a verification message, then sign in again.");
+        await signUp(email, password, role, firstName, lastName, inviteToken);
+        setMessage(invite ? `Your account is ready and you are enrolled with ${invite.schoolName}. Check your email for verification.` : "Your account is ready. Check your email for a verification message, then sign in again.");
       } else {
         await signIn(email, password);
+        if (inviteToken) await acceptSchoolInvite(inviteToken);
         setOpen(false);
         navigate("/settings");
       }
@@ -99,13 +114,14 @@ export default function PlayerAccount() {
             {confirmingSignOut ? <div className="account-signout-confirm"><p>Sign out of Igiti Play on this device?</p><div><button className="button button-dark" onClick={handleSignOut}><LogOut size={16} /> Yes, sign out</button><button className="button button-outline" onClick={() => setConfirmingSignOut(false)}>Stay signed in</button></div></div> : <button className="account-signout-link" onClick={() => setConfirmingSignOut(true)}><LogOut size={15} /> Sign out securely</button>}
             <p className="account-copy account-small">Your browser save remains available even when you sign out.</p>
           </> : <>
-            <p className="account-copy">{mode === "signup" ? "Choose the workspace that fits you. Platform administration is assigned only by the platform owner." : "Sign in to access account-based progress where available."}</p>
+            <p className="account-copy">{invite ? `You have been invited to join ${invite.schoolName} as a ${invite.role.toLowerCase()}. Create an account with the invited email and choose your own password.` : mode === "signup" ? "Choose the workspace that fits you. Platform administration is assigned only by the platform owner." : "Sign in to access account-based progress where available."}</p>
             {error && <p className="account-error" role="alert">{error}</p>}
             {message && <p className="account-message" role="status">{message}</p>}
             <form onSubmit={submit}>
+              {mode === "signup" && <div className="account-name-grid"><label className="account-field">First name<input autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required /></label><label className="account-field">Last name<input autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} required /></label></div>}
               <label className="account-field">Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
               <label className="account-field">Password<input type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
-              {mode === "signup" && <label className="account-field">I am joining as<select value={role} onChange={(event) => setRole(event.target.value)}><option value="PLAYER">Player — play and save my progress</option><option value="STUDENT">Student — receive learning game assignments</option><option value="TEACHER">Teacher — assign games when linked to a school</option><option value="SCHOOL">School — manage a school programme</option></select><small>After joining, schools create their workspace and teachers or students select their school in Account Settings.</small></label>}
+              {mode === "signup" && <label className="account-field">I am joining as<select value={role} onChange={(event) => setRole(event.target.value)} disabled={Boolean(invite)}><option value="PLAYER">Player — play and save my progress</option><option value="STUDENT">Student — receive learning game assignments</option><option value="TEACHER">Teacher — assign games when linked to a school</option><option value="SCHOOL">School — manage a school programme</option></select><small>{invite ? "This role is set by the school invitation." : "After joining, schools create their workspace and teachers or students select their school in Account Settings."}</small></label>}
               <button className="button button-primary account-wide" type="submit" disabled={busy}><LogIn size={16} /> {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}</button>
             </form>
             {mode === "signin" && <button className="account-switch account-reset-link" type="button" onClick={handlePasswordReset} disabled={busy}>Forgot password? Send a secure reset link</button>}
