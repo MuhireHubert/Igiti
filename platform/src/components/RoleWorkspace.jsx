@@ -73,6 +73,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const [schoolInviteLink, setSchoolInviteLink] = useState("");
   const [selectedSchoolId, setSelectedSchoolId] = useState("");
   const [entitlements, setEntitlements] = useState([]);
+  const [progress, setProgress] = useState([]);
   const [checkout, setCheckout] = useState({ configured: false, environment: "sandbox" });
   const [purchasing, setPurchasing] = useState("");
   const [recurringOffers, setRecurringOffers] = useState({});
@@ -89,17 +90,19 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
       const geoResponse = await fetch("/api/geo", { cache: "no-store" });
       const geo = await geoResponse.json().catch(() => ({}));
       if (!geoResponse.ok || !geo.country || !geo.signature || !geo.issuedAt) throw new Error(geo.error || "We could not securely determine your location for pricing.");
-      const [data, collection, offerResponse, checkoutResponse, accessList, schoolList, demoStatus] = await Promise.all([
+      const [data, collection, offerResponse, checkoutResponse, accessList, progressList, schoolList, demoStatus] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
         fetch(`${getApiBaseUrl()}/v1/offers?country=${encodeURIComponent(geo.country)}`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/entitlements", token),
+        playerRequest("/progress", token),
         fetch(`${getApiBaseUrl()}/v1/schools`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/school-demo", token),
       ]);
       setWorkspace(data);
       setOffers(offerResponse.data || []);
       setEntitlements(accessList || []);
+      setProgress(progressList || []);
       setSchools(schoolList.data || []);
       setSchoolDemo(demoStatus?.demo ? { ...demoStatus.demo, school: demoStatus.school } : null);
       setCheckout(checkoutResponse.data || { configured: false, environment: "sandbox" });
@@ -197,6 +200,13 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
   const unlockedResources = new Set(entitlements.map((entitlement) => entitlement.resource));
   const activeOfferKeys = new Set(entitlements.map((entitlement) => entitlement.offerKey).filter(Boolean));
   const hasCataloguePlan = unlockedResources.has(isSchool ? "plan:school:all" : "plan:user:all");
+  const hasAnyCataloguePlan = unlockedResources.has("plan:user:all") || unlockedResources.has("plan:school:all");
+  const assignedGameIds = new Set((workspace?.assignments || []).map((assignment) => assignment.game?.id).filter(Boolean));
+  const accessibleGames = games.filter((game) => {
+    const free = game.price?.access === "FREE" || (!game.price?.monthlyAmountMinor && !game.price?.yearlyAmountMinor && !game.price?.amountMinor);
+    return free || hasAnyCataloguePlan || unlockedResources.has(`puzzle:${game.id}`) || assignedGameIds.has(game.gameId);
+  });
+  const progressByPuzzle = new Map(progress.map((item) => [item.puzzleId, item]));
   const visibleOffers = offers.filter((offer) => {
     if (!["MONTHLY", "YEARLY"].includes(offer.interval)) return false;
     if (isSchool) return offer.resource === "plan:school:all" || offer.kind === "GAME";
@@ -226,7 +236,7 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     {showAssignments && workspace?.workspace === "STUDENT" && !workspace.assignments?.length && <p className="account-copy">No games have been assigned yet. Your school account can add one directly after its plan is active.</p>}
     {showSettings && visibleOffers.length > 0 && <div className="role-offers"><strong><ShoppingBag size={15} /> {isSchool ? "Choose a school plan or game subscription" : "Choose your access"}</strong><small>{checkout.configured ? `Secure Pesapal checkout (${checkout.environment}). Access is enabled only after Pesapal verifies payment.` : "Payments are being configured. Prices are shown, but checkout is not available yet."}</small><label className="account-field"><span>Billing country</span><select value={billingCountry} onChange={(event) => setBillingCountry(event.target.value)}>{billingCountries.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</select><small>Africa pricing is applied when your billing country is in Africa. Pesapal receives this billing country with the order.</small></label>{visibleOffers.map((offer) => { const unlocked = unlockedResources.has(offer.resource) && (offer.kind !== "ACCOUNT" || activeOfferKeys.has(offer.key)) || (offer.kind === "GAME" && hasCataloguePlan) || isAdmin; const isSubscription = ["MONTHLY", "YEARLY"].includes(offer.interval); return <article key={offer.key} className={offer.kind === "ACCOUNT" ? "role-offer-plan" : ""}><div><b>{offer.title}</b><small>{offer.description || `${offer.kind === "GAME" ? "Game" : "Account"} access`} · {offer.interval.replace("_", " ")}{offer.seatLimit ? ` · up to ${offer.seatLimit} teachers and students` : ""}</small>{isSubscription && !unlocked && <label className="role-recurring-consent"><input type="checkbox" checked={Boolean(recurringOffers[offer.key])} onChange={(event) => setRecurringOffers((current) => ({ ...current, [offer.key]: event.target.checked }))} /> Allow recurring payments. Pesapal confirms this during checkout; you can cancel through Pesapal.</label>}</div><button className="button button-primary" disabled={unlocked || !checkout.configured || purchasing === offer.key} onClick={() => beginCheckout(offer)}>{unlocked ? "Included in your active plan" : purchasing === offer.key ? "Opening secure checkout…" : `Pay securely · ${priceLabel(offer.amountMinor, offer.currency)}`}</button></article>; })}</div>}
     {showSettings && ["STUDENT", "TEACHER"].includes(workspace?.role) && <p className="account-copy">Your school manages paid access and sends games directly to students. You never need to complete a school checkout or pass assignments through a teacher.</p>}
-    {showSettings && <section className="role-account-settings" aria-label="Account and access settings"><strong><CalendarDays size={15} /> Account & access</strong><small>Activate an available plan above, review your verified access, and check renewal dates here.</small>{entitlements.length ? <div className="role-entitlement-list">{entitlements.map((entitlement) => <article key={`${entitlement.resource}-${entitlement.orderId || "manual"}`}><div><b>{accessLabel(entitlement.resource)}</b><small>{expiryLabel(entitlement.expiresAt)}</small></div><span>Active</span></article>)}</div> : <p>No paid access is active on this account yet.</p>}<a className="role-support-link" href="https://igiti.africa/contact"><LifeBuoy size={15} /> Contact Igiti support</a></section>}
+    {showSettings && <section className="role-account-settings" aria-label="Account and access settings"><strong><CalendarDays size={15} /> Account dashboard</strong><small>Your profile, school relationship, verified access and saved play are shown together here.</small><div className="role-dashboard-grid"><article><span>Profile</span><b>{workspace?.player?.displayName || user?.displayName || "Igiti member"}</b><small>{user?.email || "No email available"} · {meta.label}</small></article><article><span>School</span><b>{workspace?.school?.name || (isSchool ? "Set up your school" : "Not connected")}</b><small>{workspace?.school ? (isSchool ? `${workspace.members?.filter((member) => member.approvedAt).length || 0} approved members` : "Associated school") : "Choose or create a school in this dashboard"}</small></article><article><span>Accessible games</span><b>{accessibleGames.length}</b><small>{hasAnyCataloguePlan ? "Full catalogue plan active" : "Free, assigned and individually subscribed games"}</small></article><article><span>Saved progress</span><b>{progress.length}</b><small>{progress.filter((item) => item.completedAt).length} completed · {progress.length - progress.filter((item) => item.completedAt).length} in progress</small></article></div>{accessibleGames.length > 0 && <div className="role-accessible-games"><strong>My accessible games</strong>{accessibleGames.slice(0, 8).map((game) => { const saved = progressByPuzzle.get(game.id); return <article key={game.id}><img src={game.image} alt="" /><div><b>{game.title}</b><small>{saved?.completedAt ? "Completed" : saved ? "In progress" : "Ready to play"}</small></div></article>; })}{accessibleGames.length > 8 && <small>Plus {accessibleGames.length - 8} more accessible game(s).</small>}</div>}{entitlements.length ? <div className="role-entitlement-list"><strong>Active subscriptions and access</strong>{entitlements.map((entitlement) => <article key={`${entitlement.resource}-${entitlement.orderId || "manual"}`}><div><b>{accessLabel(entitlement.resource)}</b><small>{expiryLabel(entitlement.expiresAt)}</small></div><span>Active</span></article>)}</div> : <p>No paid access is active on this account yet. Free and school-assigned games can still appear above.</p>}<a className="role-support-link" href="https://igiti.africa/contact"><LifeBuoy size={15} /> Contact Igiti support</a></section>}
     {state.message && <p className="account-message">{state.message}</p>}
   </section>;
 }
