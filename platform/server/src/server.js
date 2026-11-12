@@ -717,7 +717,7 @@ app.post("/v1/me/resource-assignments", requirePlayer, async (req, res, next) =>
   } catch (error) { next(error); }
 });
 
-const multiplayerCreateSchema = z.object({ mode: z.enum([...CARD_MODE_IDS]), maxPlayers: z.number().int().min(2).max(6).optional().default(4) });
+const multiplayerCreateSchema = z.object({ mode: z.enum([...CARD_MODE_IDS, "puzzle"]), maxPlayers: z.number().int().min(2).max(6).optional().default(4) });
 const multiplayerJoinSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{6}$/) });
 const multiplayerAnswerSchema = z.object({ answer: z.string().trim().min(1).max(120) });
 const multiplayerQuestions = [
@@ -762,6 +762,7 @@ async function findMatch(code) {
   });
 }
 async function requireMatchAccess(player, mode) {
+  if (mode === "puzzle") return true;
   const access = await resourceAccessForPlayer(player, `card-mode:${mode}`, { requirePurchase: true });
   return access.permitted;
 }
