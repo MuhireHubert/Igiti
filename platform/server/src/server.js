@@ -160,13 +160,13 @@ app.get("/v1/offers", async (req, res, next) => {
 // gated, without exposing credentials or treating the client as the authority.
 app.get("/v1/access-policy", async (_req, res, next) => {
   try {
-    const plans = await prisma.accessOffer.findMany({
+    const [plans, cardOffers] = await Promise.all([prisma.accessOffer.findMany({
       where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } },
       select: { key: true, title: true, description: true, resource: true, amountMinor: true, currency: true, interval: true },
       orderBy: { amountMinor: "asc" },
-    });
+    }), prisma.accessOffer.findMany({ where: { isActive: true, resource: { startsWith: "card-mode:" }, interval: { in: ["MONTHLY", "YEARLY"] } }, select: { resource: true, amountMinor: true } })]);
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
-    res.json({ data: { catalogueRequiresSubscription: plans.length > 0, cardRequiresPayment: true, plans } });
+    res.json({ data: { catalogueRequiresSubscription: plans.length > 0, cardRequiresPayment: cardOffers.some((offer) => offer.amountMinor > 0), freeCardResources: cardOffers.filter((offer) => offer.amountMinor < 1).map((offer) => offer.resource), plans } });
   } catch (error) { next(error); }
 });
 
@@ -414,6 +414,18 @@ async function hasActiveSchoolPlan(schoolId) {
   return Boolean(school) || Boolean(await activeSchoolDemo(schoolId));
 }
 
+// A school may subscribe to the full catalogue or to one puzzle/card mode.
+// Assignments only work while the owner still holds the matching entitlement.
+async function hasActiveSchoolResource(schoolId, resources) {
+  if (!schoolId) return false;
+  const allowedResources = [...new Set([...(resources || []), "plan:school:all"])];
+  const school = await prisma.school.findFirst({
+    where: { id: schoolId, owner: { entitlements: { some: { resource: { in: allowedResources }, ...activeEntitlementFilters() } } } },
+    select: { id: true },
+  });
+  return Boolean(school) || Boolean(await activeSchoolDemo(schoolId));
+}
+
 app.put("/v1/me/school-membership", requirePlayer, async (req, res, next) => {
   const parsed = schoolMembershipSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Choose a valid school." });
@@ -551,12 +563,13 @@ function recurringSubscriptionFor(offer, orderId, now = new Date()) {
 
 async function resourceAccessForPlayer(player, resource, { requirePurchase = false } = {}) {
   const eligibleOfferResources = resource.startsWith("card-mode:") ? [resource, "card:all"] : [resource];
-  const [offer, allAccessOffers, assignment] = await Promise.all([
+  const [directOffer, deckOffer, allAccessOffers, assignment] = await Promise.all([
     prisma.accessOffer.findFirst({
-      where: { resource: { in: eligibleOfferResources }, isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } },
+      where: { resource, isActive: true, interval: { in: ["MONTHLY", "YEARLY"] } },
       orderBy: { amountMinor: "asc" },
       select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
     }),
+    resource.startsWith("card-mode:") ? prisma.accessOffer.findFirst({ where: { resource: "card:all", isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } }, orderBy: { amountMinor: "asc" }, select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true } }) : Promise.resolve(null),
     prisma.accessOffer.findMany({
       where: { resource: { in: ALL_ACCESS_RESOURCES }, isActive: true, amountMinor: { gt: 0 }, interval: { in: ["MONTHLY", "YEARLY"] } },
       select: { key: true, title: true, amountMinor: true, currency: true, interval: true, resource: true },
@@ -566,13 +579,16 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
       select: { id: true, dueAt: true, schoolId: true },
     }),
   ]);
-  // A plan makes the full catalogue paid, while a direct offer locks only its
-  // own resource. This permits individual purchases alongside monthly access.
-  if (!offer && !allAccessOffers.length && !requirePurchase) return { permitted: true, paid: false, offer: null };
+  // An active zero-price direct offer deliberately means free play. When an
+  // item has no offer, it is also free; a catalogue pass must never turn a
+  // specifically-free game into paid content.
+  if (directOffer && directOffer.amountMinor < 1) return { permitted: true, paid: false, offer: null, freePreview: true };
+  const offer = directOffer?.amountMinor > 0 ? directOffer : deckOffer;
+  if (!offer) return { permitted: true, paid: false, offer: null, freePreview: true };
   // Platform operators need access to test and administer paid content.
   const purchaseOffer = offer || allAccessOffers.find((item) => item.resource === (player.role === "SCHOOL" ? "plan:school:all" : "plan:user:all")) || allAccessOffers[0];
   if (["ADMIN", "OWNER", "CONTENT_MANAGER", "MODERATOR"].includes(player.role)) return { permitted: true, paid: true, offer: purchaseOffer, operator: true };
-  if (assignment && await hasActiveSchoolPlan(assignment.schoolId)) return { permitted: true, paid: true, offer: purchaseOffer, assignment };
+  if (assignment && await hasActiveSchoolResource(assignment.schoolId, eligibleOfferResources)) return { permitted: true, paid: true, offer: purchaseOffer, assignment };
   const now = new Date();
   const activeAccess = activeEntitlementFilters(now);
   const entitlement = await prisma.accessEntitlement.findFirst({
@@ -603,12 +619,14 @@ async function puzzleAccessForPlayer(player, puzzleId) {
   if (!puzzle) return { found: false, permitted: false, paid: false, offer: null };
   // A zero-priced puzzle remains free, even when the platform has a paid
   // catalogue plan. This is intentionally based on the puzzle configuration.
-  const priceMinor = Number(puzzle.metadata?.pricing?.amountMinor || 0);
-  if (!Number.isFinite(priceMinor) || priceMinor < 1) {
+  const pricing = puzzle.metadata?.pricing;
+  const monthlyPriceMinor = Number(pricing?.monthlyAmountMinor ?? pricing?.amountMinor ?? 0);
+  const yearlyPriceMinor = Number(pricing?.yearlyAmountMinor ?? 0);
+  if (pricing?.access === "FREE" || (!Number.isFinite(monthlyPriceMinor) || monthlyPriceMinor < 1) && (!Number.isFinite(yearlyPriceMinor) || yearlyPriceMinor < 1)) {
     return { found: true, permitted: true, paid: false, offer: null, freePreview: true };
   }
   const assignment = await prisma.gameAssignment.findFirst({ where: { recipientId: player.id, game: { puzzles: { some: { id: puzzleId } } } }, select: { id: true, dueAt: true, schoolId: true } });
-  if (assignment && await hasActiveSchoolPlan(assignment.schoolId)) return { found: true, permitted: true, paid: true, offer: null, assignment };
+  if (assignment && await hasActiveSchoolResource(assignment.schoolId, [`puzzle:${puzzle.id}`])) return { found: true, permitted: true, paid: true, offer: null, assignment };
   return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`, { requirePurchase: true })) };
 }
 
@@ -670,7 +688,7 @@ app.post("/v1/checkout/orders", requirePlayer, async (req, res, next) => {
     // teachers receive access through their school's assignments instead.
     if (offer.resource === "plan:school:all" && req.player.role !== "SCHOOL") return res.status(403).json({ error: "Only a school account can buy a school plan." });
     if (offer.resource === "plan:user:all" && req.player.role !== "PLAYER") return res.status(403).json({ error: "The player pass is available to individual player accounts. School members receive access through their school." });
-    if (offer.kind === "GAME" && req.player.role !== "PLAYER") return res.status(403).json({ error: "Individual game purchases are for player accounts. Students and teachers receive paid game access through their school assignments." });
+    if (offer.kind === "GAME" && !["PLAYER", "SCHOOL"].includes(req.player.role)) return res.status(403).json({ error: "Only player or school accounts can purchase a game subscription. Students and teachers receive assigned access through their school." });
     const billingCountry = verifiedGeoCountry(parsed.data);
     if (!billingCountry) return res.status(403).json({ error: "We could not securely determine your checkout location. Disable any VPN and try again." });
     const pricedOffer = await regionalOffer(offer, billingCountry);

@@ -319,12 +319,19 @@ function normalizePuzzleMetadata(metadata) {
   }
   if (value.pricing != null) {
     const pricing = value.pricing;
-    const amountMinor = Number(pricing?.amountMinor);
+    const access = pricing?.access === "FREE" ? "FREE" : "SUBSCRIPTION";
+    // `amountMinor` is retained as a backwards-compatible monthly price for
+    // puzzles created before annual, item-specific subscriptions existed.
+    const monthlyAmountMinor = Number(pricing?.monthlyAmountMinor ?? pricing?.amountMinor ?? 0);
+    const yearlyAmountMinor = Number(pricing?.yearlyAmountMinor ?? 0);
     const currency = String(pricing?.currency || "").toUpperCase();
-    if (!Number.isInteger(amountMinor) || amountMinor < 0 || amountMinor > 100000000 || !/^[A-Z]{3}$/.test(currency)) {
+    if (![monthlyAmountMinor, yearlyAmountMinor].every((amount) => Number.isInteger(amount) && amount >= 0 && amount <= 100000000) || !/^[A-Z]{3}$/.test(currency)) {
       throw new Error("Puzzle pricing must use a valid currency and non-negative amount.");
     }
-    value.pricing = { amountMinor, currency };
+    if (access === "SUBSCRIPTION" && monthlyAmountMinor < 1 && yearlyAmountMinor < 1) {
+      throw new Error("Add a monthly or yearly price for a subscription puzzle.");
+    }
+    value.pricing = { access, monthlyAmountMinor: access === "FREE" ? 0 : monthlyAmountMinor, yearlyAmountMinor: access === "FREE" ? 0 : yearlyAmountMinor, currency };
   }
   return value;
 }
@@ -337,16 +344,21 @@ function requireOneFunFactPerPiece(metadata, pieceCount) {
 
 async function syncPuzzleOffer(puzzle) {
   const pricing = puzzle.metadata?.pricing;
-  const key = `puzzle.${puzzle.id}`;
-  if (!pricing || pricing.amountMinor < 1) {
-    await prisma.accessOffer.updateMany({ where: { key }, data: { isActive: false } });
-    return;
-  }
-  await prisma.accessOffer.upsert({
-    where: { key },
-    update: { title: `${puzzle.title} · Monthly access`, description: `Monthly access to ${puzzle.title} while the subscription is active.`, kind: "GAME", resource: `puzzle:${puzzle.id}`, amountMinor: pricing.amountMinor, currency: pricing.currency, interval: "MONTHLY", isActive: true },
-    create: { key, title: `${puzzle.title} · Monthly access`, description: `Monthly access to ${puzzle.title} while the subscription is active.`, kind: "GAME", resource: `puzzle:${puzzle.id}`, amountMinor: pricing.amountMinor, currency: pricing.currency, interval: "MONTHLY", isActive: true },
-  });
+  const resource = `puzzle:${puzzle.id}`;
+  const monthlyAmountMinor = Number(pricing?.monthlyAmountMinor ?? pricing?.amountMinor ?? 0);
+  const yearlyAmountMinor = Number(pricing?.yearlyAmountMinor ?? 0);
+  const paid = pricing?.access !== "FREE" && (monthlyAmountMinor > 0 || yearlyAmountMinor > 0);
+  await prisma.accessOffer.updateMany({ where: { key: `puzzle.${puzzle.id}` }, data: { isActive: false } });
+  await Promise.all(["MONTHLY", "YEARLY"].map(async (interval) => {
+    const amountMinor = interval === "MONTHLY" ? monthlyAmountMinor : yearlyAmountMinor;
+    const key = `puzzle.${puzzle.id}.${interval.toLowerCase()}`;
+    const active = paid && amountMinor > 0;
+    return prisma.accessOffer.upsert({
+      where: { key },
+      update: { title: `${puzzle.title} · ${interval === "MONTHLY" ? "Monthly" : "Annual"} access`, description: `${interval === "MONTHLY" ? "Monthly" : "Annual"} access to ${puzzle.title} while the subscription is active.`, kind: "GAME", resource, amountMinor: active ? amountMinor : 0, currency: pricing?.currency || "USD", interval, isActive: active },
+      create: { key, title: `${puzzle.title} · ${interval === "MONTHLY" ? "Monthly" : "Annual"} access`, description: `${interval === "MONTHLY" ? "Monthly" : "Annual"} access to ${puzzle.title} while the subscription is active.`, kind: "GAME", resource, amountMinor: active ? amountMinor : 0, currency: pricing?.currency || "USD", interval, isActive: active },
+    });
+  }));
 }
 
 router.post("/games", async (req, res, next) => {
