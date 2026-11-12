@@ -757,24 +757,48 @@ const resourceAssignmentSchema = z.object({
   dueAt: z.string().datetime().optional(),
 });
 
+// One server-owned view of what this account can really use. The browser never
+// infers access from a label or a price: every returned game has passed the
+// same entitlement/assignment check that protects play and progress writes.
+async function dashboardForPlayer(player) {
+  const [publishedGames, progress] = await Promise.all([
+    prisma.game.findMany({
+      where: { status: "PUBLISHED", publishedAt: { lte: new Date() } },
+      orderBy: [{ publishedAt: "desc" }, { title: "asc" }],
+      select: { id: true, title: true, slug: true, coverImage: true, category: true, puzzles: { where: { isActive: true }, orderBy: { sortOrder: "asc" }, select: { id: true, title: true, slug: true, pieceCount: true, difficulty: true } } },
+    }),
+    prisma.puzzleProgress.findMany({
+      where: { playerId: player.id }, orderBy: { updatedAt: "desc" },
+      select: { puzzleId: true, completedAt: true, elapsedSeconds: true, updatedAt: true, puzzle: { select: { title: true, game: { select: { id: true, title: true, slug: true, coverImage: true } } } } },
+    }),
+  ]);
+  const puzzles = publishedGames.flatMap((game) => game.puzzles.map((puzzle) => ({ game, puzzle })));
+  const checks = await Promise.all(puzzles.map(async ({ game, puzzle }) => ({ game, puzzle, access: await puzzleAccessForPlayer(player, puzzle.id) })));
+  return {
+    accessibleGames: checks.filter(({ access }) => access.permitted).map(({ game, puzzle, access }) => ({ gameId: game.id, gameTitle: game.title, gameSlug: game.slug, coverImage: game.coverImage, category: game.category, puzzleId: puzzle.id, puzzleTitle: puzzle.title, puzzleSlug: puzzle.slug, pieceCount: puzzle.pieceCount, difficulty: puzzle.difficulty, accessSource: access.assignment ? "SCHOOL_ASSIGNMENT" : access.freePreview ? "FREE" : access.operator ? "ADMIN" : access.entitlement ? "SUBSCRIPTION" : access.demo ? "SCHOOL_DEMO" : "SCHOOL_PLAN" })),
+    progress: progress.map((item) => ({ puzzleId: item.puzzleId, completedAt: item.completedAt, elapsedSeconds: item.elapsedSeconds, updatedAt: item.updatedAt, puzzleTitle: item.puzzle.title, game: item.puzzle.game })),
+  };
+}
+
 app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
   try {
     const player = req.player;
     const base = { role: player.role, player: { id: player.id, displayName: player.displayName } };
+    const dashboard = await dashboardForPlayer(player);
     if (player.role === "SCHOOL") {
       const school = await prisma.school.findUnique({
         where: { ownerId: player.id },
         select: { id: true, name: true, memberships: { orderBy: [{ approvedAt: "asc" }, { createdAt: "asc" }], select: { id: true, role: true, createdAt: true, approvedAt: true, player: { select: { id: true, displayName: true } } } } },
       });
       const members = school?.memberships || [];
-      return res.json({ data: { ...base, workspace: "SCHOOL", school: school ? { id: school.id, name: school.name } : null, members, recipients: members.filter((member) => member.role === "STUDENT" && member.approvedAt).map((member) => member.player) } });
+      return res.json({ data: { ...base, ...dashboard, workspace: "SCHOOL", school: school ? { id: school.id, name: school.name } : null, members, recipients: members.filter((member) => member.role === "STUDENT" && member.approvedAt).map((member) => member.player) } });
     }
     if (player.role === "TEACHER") {
       const membership = await prisma.schoolMembership.findFirst({
         where: { playerId: player.id, role: "TEACHER", approvedAt: { not: null } },
         select: { school: { select: { id: true, name: true } } },
       });
-      return res.json({ data: { ...base, workspace: "TEACHER", school: membership?.school || null, recipients: [] } });
+      return res.json({ data: { ...base, ...dashboard, workspace: "TEACHER", school: membership?.school || null, recipients: [] } });
     }
     const membership = player.role === "STUDENT" ? await prisma.schoolMembership.findFirst({ where: { playerId: player.id, role: "STUDENT", approvedAt: { not: null } }, select: { school: { select: { id: true, name: true } } } }) : null;
     const [gameAssignments, resourceAssignments] = await Promise.all([
@@ -788,7 +812,7 @@ app.get("/v1/me/workspace", requirePlayer, async (req, res, next) => {
       }),
     ]);
     const assignments = [...gameAssignments, ...resourceAssignments.map((assignment) => ({ ...assignment, label: cardModeLabel(assignment.resource) }))].sort((left, right) => +new Date(left.dueAt || "9999-12-31") - +new Date(right.dueAt || "9999-12-31"));
-    return res.json({ data: { ...base, workspace: player.role === "STUDENT" ? "STUDENT" : "PLAYER", school: membership?.school || null, assignments } });
+    return res.json({ data: { ...base, ...dashboard, workspace: player.role === "STUDENT" ? "STUDENT" : "PLAYER", school: membership?.school || null, assignments } });
   } catch (error) { next(error); }
 });
 
