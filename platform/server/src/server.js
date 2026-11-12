@@ -241,7 +241,12 @@ app.get("/v1/games", async (_req, res, next) => {
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
     res.json({ data: games.map((game) => ({
       ...game,
-      puzzles: game.puzzles.map((puzzle) => ({ ...puzzle, requiresPurchase: game.slug !== "africa-landmarks" })),
+      // A puzzle is free only when its own admin-set price is empty or zero.
+      // Never tie access to a particular game slug.
+      puzzles: game.puzzles.map((puzzle) => ({
+        ...puzzle,
+        requiresPurchase: Number(puzzle.metadata?.pricing?.amountMinor || 0) > 0,
+      })),
     })) });
   } catch (error) { next(error); }
 });
@@ -487,10 +492,15 @@ async function resourceAccessForPlayer(player, resource, { requirePurchase = fal
 async function puzzleAccessForPlayer(player, puzzleId) {
   const puzzle = await prisma.puzzle.findFirst({
     where: { id: puzzleId, isActive: true, game: { status: "PUBLISHED", publishedAt: { lte: new Date() } } },
-    select: { id: true, game: { select: { slug: true } } },
+    select: { id: true, metadata: true },
   });
   if (!puzzle) return { found: false, permitted: false, paid: false, offer: null };
-  if (puzzle.game.slug === "africa-landmarks") return { found: true, permitted: true, paid: false, offer: null, freePreview: true };
+  // A zero-priced puzzle remains free, even when the platform has a paid
+  // catalogue plan. This is intentionally based on the puzzle configuration.
+  const priceMinor = Number(puzzle.metadata?.pricing?.amountMinor || 0);
+  if (!Number.isFinite(priceMinor) || priceMinor < 1) {
+    return { found: true, permitted: true, paid: false, offer: null, freePreview: true };
+  }
   const assignment = await prisma.gameAssignment.findFirst({ where: { recipientId: player.id, game: { puzzles: { some: { id: puzzleId } } } }, select: { id: true, dueAt: true, schoolId: true } });
   if (assignment && await hasActiveSchoolPlan(assignment.schoolId)) return { found: true, permitted: true, paid: true, offer: null, assignment };
   return { found: true, ...(await resourceAccessForPlayer(player, `puzzle:${puzzle.id}`, { requirePurchase: true })) };

@@ -245,13 +245,12 @@ export default function AdminPortal() {
       if (editingGameId) {
         await adminRequest(`/games/${editingGameId}`, token, { method: "PATCH", body: JSON.stringify(game) });
       } else {
-        if (gameForm.price === "") throw new Error("Every new game needs a price. Africa: Landmarks & Wonders is the only free player game.");
-        const price = Math.round(Number(gameForm.price) * 100);
+        const price = gameForm.price === "" ? 0 : Math.round(Number(gameForm.price) * 100);
         const puzzle = {
           slug: toSlug(`${game.slug}-puzzle`), title: game.title, imageUrl: game.coverImage,
           pieceCount: Number(gameForm.pieceCount), difficulty: gameForm.difficulty, sortOrder: 0,
           isActive: game.status === "PUBLISHED",
-          metadata: { allowedDifficulties: gameForm.allowedDifficulties, funFacts, pricing: price == null ? null : { amountMinor: price, currency: gameForm.currency } },
+          metadata: { allowedDifficulties: gameForm.allowedDifficulties, funFacts, pricing: price > 0 ? { amountMinor: price, currency: gameForm.currency } : null },
         };
         await adminRequest("/games/with-puzzle", token, { method: "POST", body: JSON.stringify({ game, puzzle }) });
       }
@@ -305,10 +304,6 @@ export default function AdminPortal() {
   async function savePuzzle(event) {
     event.preventDefault();
     if (!activeGameId) return;
-    if (puzzleForm.price === "" && !games.find((game) => game.id === activeGameId && game.slug === "africa-landmarks")) {
-      setWorkspaceError("Every new puzzle needs a price. Africa: Landmarks & Wonders is the only free player game.");
-      return;
-    }
     const price = puzzleForm.price === "" ? null : Math.round(Number(puzzleForm.price) * 100);
     const funFacts = puzzleForm.funFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean);
     if (funFacts.length !== Number(puzzleForm.pieceCount)) {
