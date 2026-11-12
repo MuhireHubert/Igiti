@@ -745,7 +745,31 @@ app.get("/v1/payments/pesapal/return", async (req, res) => {
     try { await reconcilePesapalPayment({ orderTrackingId, merchantReference: String(req.query.OrderMerchantReference || "").trim() }); } catch (error) { console.warn("Pesapal return verification pending", error.message); }
   }
   const origin = allowedOrigins[0] || "http://localhost:5173";
-  return res.redirect(`${origin.replace(/\/$/, "")}/?payment=pending`);
+  return res.redirect(`${origin.replace(/\/$/, "")}/workspace?payment=processing`);
+});
+
+// Pesapal IPNs are authoritative, but networks and browser returns are not
+// guaranteed to arrive in a particular order. A signed-in buyer can safely
+// ask us to re-check only their own pending orders; each result is still
+// verified against Pesapal before any entitlement is written.
+app.post("/v1/me/payments/reconcile", requirePlayer, async (req, res, next) => {
+  try {
+    const orders = await prisma.paymentOrder.findMany({
+      where: { playerId: req.player.id, provider: "PESAPAL", status: { in: ["PENDING", "PROCESSING"] }, providerOrderId: { not: null } },
+      orderBy: { createdAt: "desc" }, take: 8,
+      select: { id: true, providerOrderId: true },
+    });
+    const results = await Promise.all(orders.map(async (order) => {
+      try {
+        const result = await reconcilePesapalPayment({ orderTrackingId: order.providerOrderId, merchantReference: order.id });
+        return { orderId: order.id, status: result.status };
+      } catch {
+        // A still-pending gateway transaction is not an application error.
+        return { orderId: order.id, status: "PROCESSING" };
+      }
+    }));
+    res.json({ data: { checked: results.length, results } });
+  } catch (error) { next(error); }
 });
 
 const assignmentSchema = z.object({

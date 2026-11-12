@@ -70,11 +70,19 @@ export function GamePage() {
     setCheckingAccess(true); setAccessMessage("");
     try {
       const token = await user.getIdToken();
-      const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } });
-      const payload = await response.json().catch(() => ({}));
+      const accessRequest = () => fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } });
+      let response = await accessRequest();
+      let payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
+      // If checkout has just returned, reconcile this signed-in buyer's own
+      // pending orders with Pesapal before concluding that access is absent.
+      if (!payload.data?.permitted) {
+        await fetch(`${getApiBaseUrl()}/v1/me/payments/reconcile`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } }).catch(() => null);
+        response = await accessRequest();
+        payload = await response.json().catch(() => ({}));
+      }
       if (payload.data?.permitted) { setPlaying(true); return; }
-      setAccessMessage(`This game is included with a subscription. ${payload.data?.offer?.title || "Visit subscription plans to choose access."}`);
+      setAccessMessage(`Payment has not been verified for this account yet. ${payload.data?.offer?.title || "Open your subscription plans to choose access."}`);
     } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
   }
   if (game?.kind === "card") return <><PageHeader /><CardGame onBack={() => navigate("/games")} /><PageFooter /></>;

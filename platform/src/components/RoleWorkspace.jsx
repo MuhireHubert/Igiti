@@ -87,6 +87,9 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState({ loading: true, error: "", message: "" });
     try {
       const token = await user.getIdToken();
+      // Reconcile a just-completed Pesapal checkout before loading plans and
+      // entitlements. The API verifies the provider status server-side.
+      await playerRequest("/payments/reconcile", token, { method: "POST" }).catch(() => null);
       const geoResponse = await fetch("/api/geo", { cache: "no-store" });
       const geo = await geoResponse.json().catch(() => ({}));
       if (!geoResponse.ok || !geo.country || !geo.signature || !geo.issuedAt) throw new Error(geo.error || "We could not securely determine your location for pricing.");
