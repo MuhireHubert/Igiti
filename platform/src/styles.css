@@ -47,3 +47,10 @@ body{background:radial-gradient(circle at 14% -10%,#5830a955,transparent 30%),ra
 /* The mobile menu opens over a light page by default, so its dark game skin
    must be explicit. This keeps Game library and How to play readable. */
 @media(max-width:680px){.nav-links.is-open{background:#161a33;border-color:#353962;color:#f7f7ff}.nav-links.is-open a{color:#f7f7ff}.nav-links.is-open a:hover{color:#65e6a8}.mobile-menu{color:#f7f7ff}.section-heading h2,.manifesto-copy h2{color:#f7f7ff}}
+
+/* Contrast audit: these content cards intentionally retain a light surface inside
+   the dark Play shell, so their headings must not inherit the shell's light ink. */
+.subpage-game h2,
+.subpage-detail-copy h2,
+.step-card h2,
+.how-callout h2{color:#211d17}
