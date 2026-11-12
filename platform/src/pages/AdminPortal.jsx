@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { ArrowLeft, BarChart3, BookOpen, CheckCircle2, CircleAlert, CreditCard, FileText, Gamepad2, LogOut, Plus, RefreshCw, Save, Settings, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { auth, firebaseReady } from "../lib/firebase.js";
@@ -181,6 +181,20 @@ export default function AdminPortal() {
         : error.code === "auth/too-many-requests"
           ? "Too many attempts. Please wait and try again."
           : "Sign-in failed. Check the Firebase Authentication setup and try again.");
+    }
+  }
+
+  async function handlePasswordReset() {
+    setLoginError("");
+    if (!email.trim()) {
+      setLoginError("Enter your administrator email address first, then choose Forgot password.");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setLoginError("If an account exists for that email, Firebase has sent a secure password-reset link.");
+    } catch {
+      setLoginError("We could not start the password reset. Check the email address and try again.");
     }
   }
 
@@ -495,6 +509,7 @@ export default function AdminPortal() {
         <label className="admin-field">Email address<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
         <label className="admin-field">Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
         <button className="admin-button admin-button-primary admin-button-wide" type="submit">Sign in securely <ShieldCheck size={16} /></button>
+        <button className="admin-back-link" type="button" onClick={handlePasswordReset}>Forgot password? Send a secure reset link</button>
         <Link className="admin-back-link" to="/">← Return to Igiti Play</Link>
       </form>
     </main>

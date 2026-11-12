@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, firebaseReady } from "../lib/firebase.js";
 import { deviceHeaders } from "./device.js";
 
@@ -47,6 +47,10 @@ export function PlayerAuthProvider({ children }) {
       return credential;
     },
     signOut: () => auth ? signOut(auth) : Promise.resolve(),
+    resetPassword: async (email) => {
+      if (!auth) throw new Error("Player accounts are not configured yet.");
+      await sendPasswordResetEmail(auth, email.trim());
+    },
   }), [user, loading]);
 
   return <PlayerAuthContext.Provider value={value}>{children}</PlayerAuthContext.Provider>;

@@ -264,6 +264,9 @@ function activeDeviceId(req) {
 }
 
 async function claimActiveDevice(req, player, decoded) {
+  // Administrators and owners may work from several trusted devices. The
+  // one-device rule protects customer, school, teacher, and student accounts.
+  if (["ADMIN", "OWNER"].includes(player.role)) return { permitted: true, player };
   const deviceId = activeDeviceId(req);
   if (!deviceId) return { permitted: false, error: "This device could not be identified. Refresh Igiti Play and sign in again." };
   const authTime = Number(decoded.auth_time || 0);

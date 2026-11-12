@@ -47,6 +47,9 @@ async function recordAudit(actorId, action, targetType, targetId, details) {
 }
 
 async function claimAdminDevice(req, profile, decoded) {
+  // Platform administrators coordinate work across trusted office and mobile
+  // devices, so the one-device policy deliberately applies below ADMIN.
+  if ((roleRank[profile.role] ?? 0) >= roleRank.ADMIN) return profile;
   const deviceId = String(req.get("x-igiti-device-id") || "").trim();
   const authTime = Number(decoded.auth_time || 0);
   if (!/^[a-z0-9-]{16,80}$/i.test(deviceId) || !Number.isSafeInteger(authTime) || authTime < 1) return null;

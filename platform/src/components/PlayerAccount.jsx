@@ -14,7 +14,7 @@ function authErrorMessage(error) {
 }
 
 export default function PlayerAccount() {
-  const { user, ready, signIn, signUp, signOut } = usePlayerAuth();
+  const { user, ready, signIn, signUp, signOut, resetPassword } = usePlayerAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("signin");
@@ -61,6 +61,24 @@ export default function PlayerAccount() {
     }
   }
 
+  async function handlePasswordReset() {
+    setError("");
+    setMessage("");
+    if (!email.trim()) {
+      setError("Enter your email address first, then choose Forgot password.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await resetPassword(email);
+      setMessage("If an Igiti account exists for that email, a secure password-reset link has been sent.");
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <button className="account-button" onClick={() => { setOpen(true); setError(""); setMessage(""); }} aria-haspopup="dialog">
@@ -90,6 +108,7 @@ export default function PlayerAccount() {
               {mode === "signup" && <label className="account-field">I am joining as<select value={role} onChange={(event) => setRole(event.target.value)}><option value="PLAYER">Player — play and save my progress</option><option value="STUDENT">Student — receive learning game assignments</option><option value="TEACHER">Teacher — assign games when linked to a school</option><option value="SCHOOL">School — manage a school programme</option></select><small>After joining, schools create their workspace and teachers or students select their school in Account Settings.</small></label>}
               <button className="button button-primary account-wide" type="submit" disabled={busy}><LogIn size={16} /> {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}</button>
             </form>
+            {mode === "signin" && <button className="account-switch account-reset-link" type="button" onClick={handlePasswordReset} disabled={busy}>Forgot password? Send a secure reset link</button>}
             <button className="account-switch" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); setMessage(""); }}>{mode === "signup" ? "Already have an account? Sign in" : "New to Igiti Play? Create an account"}</button>
           </>}
         </section>
