@@ -333,6 +333,20 @@ model PuzzleProgress {
   @@index([playerId, updatedAt])
 }
 
+// Privacy-preserving first-party usage telemetry.  No account identifier, IP
+// address, email, payment data, or stable browser fingerprint is retained.
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  source     String   @db.VarChar(24)
+  path       String   @db.VarChar(512)
+  deviceType String   @db.VarChar(24)
+  createdAt  DateTime @default(now())
+
+  @@index([source, createdAt])
+  @@index([path, createdAt])
+  @@index([deviceType, createdAt])
+}
+
 enum GameStatus {
   DRAFT
   PUBLISHED

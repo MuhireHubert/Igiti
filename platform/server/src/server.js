@@ -15,8 +15,8 @@ const port = Number(process.env.PORT || 4000);
 // Render terminates TLS and forwards the original address in X-Forwarded-For.
 // Trust exactly the first proxy hop so rate limits remain per client.
 app.set("trust proxy", 1);
-const allowedOrigins = (process.env.WEB_ORIGIN || "http://localhost:5173")
-  .split(",").map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = new Set(["http://localhost:5173", "https://play.igiti.africa", "https://buy.igiti.africa", "https://igiti.africa", "https://www.igiti.africa", ...(process.env.WEB_ORIGIN || "").split(",")]
+  .map((origin) => origin.trim()).filter(Boolean));
 const bootstrapRoles = (() => {
   try {
     const value = JSON.parse(process.env.BOOTSTRAP_ROLE_EMAILS || "{}");
@@ -86,7 +86,7 @@ app.disable("x-powered-by");
 app.use(helmet());
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
     return callback(new Error("Origin is not allowed by CORS."));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -100,6 +100,39 @@ app.use("/v1", rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests. Please try again shortly." },
 }));
+
+const analyticsEventSchema = z.object({
+  source: z.enum(["play", "buy", "web"]),
+  path: z.string().trim().min(1).max(512).refine((value) => value.startsWith("/")),
+  deviceType: z.enum(["mobile", "tablet", "desktop", "unknown"]),
+});
+
+// Anonymous, first-party analytics intake. Deliberately accept no user ID,
+// account token, IP, or contact information.
+app.post("/v1/analytics/events", async (req, res, next) => {
+  const parsed = analyticsEventSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide a valid anonymous analytics event." });
+  try {
+    await prisma.analyticsEvent.create({ data: parsed.data });
+    return res.status(202).json({ data: { accepted: true } });
+  } catch (error) { return next(error); }
+});
+
+app.get("/v1/integrations/igiti-admin/analytics", async (req, res, next) => {
+  if (!reportingTokenIsValid(req.headers.authorization)) return res.status(401).json({ error: "Reporting access is not configured." });
+  const source = ["play", "buy", "web", "all"].includes(String(req.query.source)) ? String(req.query.source) : "all";
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+  const since = new Date(Date.now() - days * 86400000);
+  const where = { createdAt: { gte: since }, ...(source === "all" ? {} : { source }) };
+  try {
+    const [total, pages, devices] = await Promise.all([
+      prisma.analyticsEvent.count({ where }),
+      prisma.analyticsEvent.groupBy({ by: ["path"], where, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 8 }),
+      prisma.analyticsEvent.groupBy({ by: ["deviceType"], where, _count: { _all: true }, orderBy: { _count: { deviceType: "desc" } }, take: 8 }),
+    ]);
+    return res.json({ data: { total, pages: pages.map((row) => ({ requestPath: row.path, count: row._count._all })), devices: devices.map((row) => ({ deviceType: row.deviceType, count: row._count._all })), countries: [] } });
+  } catch (error) { return next(error); }
+});
 
 // Render uses this endpoint to verify that the API and its database are reachable.
 app.get("/health", async (_req, res) => {
