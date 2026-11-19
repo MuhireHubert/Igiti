@@ -6,11 +6,18 @@ const dishes = [
   { name: "Thieboudienne", country: "Senegal", region: "West Africa", ingredients: ["Rice", "Fish", "Tomato"], distractors: ["Teff", "Cassava leaves", "Plantain"], fact: "In this test kitchen, ingredients, region, and preparation choices must all agree before a recipe card is earned." },
   { name: "Injera", country: "Ethiopia", region: "East Africa", ingredients: ["Teff", "Water", "Fermentation"], distractors: ["Rice", "Fish", "Plantain"], fact: "Master rounds ask players to reason through ingredients and preparation rather than simply name a country." },
   { name: "Isombe", country: "Rwanda", region: "East Africa", ingredients: ["Cassava leaves", "Peanuts", "Vegetables"], distractors: ["Teff", "Fish", "Couscous"], fact: "Each completed dish unlocks a source-and-story card for future community-reviewed content." },
+  { name: "Jollof rice", country: "Nigeria", region: "West Africa", ingredients: ["Rice", "Tomato", "Pepper"], distractors: ["Teff", "Plantain", "Couscous"], fact: "Food routes are varied: this round asks players to identify ingredients, regional histories, and family traditions without treating any one recipe as the only version." },
+  { name: "Ackee and saltfish", country: "Jamaica", region: "Caribbean", ingredients: ["Ackee", "Saltfish", "Scotch bonnet"], distractors: ["Teff", "Couscous", "Cassava leaves"], fact: "Diaspora rounds connect ingredients, migration, and cooking traditions across the Atlantic while respecting the distinct history of every community." },
+  { name: "Moqueca", country: "Brazil", region: "South America", ingredients: ["Fish", "Coconut milk", "Tomato"], distractors: ["Teff", "Plantain", "Couscous"], fact: "This journey round explores Afro-Brazilian food traditions through place, ingredients, and credited stories rather than one-dimensional country labels." },
 ];
 const habitatMissions = [
   { animal: "Forest elephants", habitat: "Connected rainforest", challenge: "A road proposal would cut through a known movement route between two forest areas.", actions: ["Protect a forest corridor and work with nearby communities", "Build the road through the narrowest habitat link", "Relocate all animals into a fenced city park", "Remove water points to redirect movement"], correct: 0 },
   { animal: "Sea turtles", habitat: "Dark coastal nesting beach", challenge: "New nighttime lighting is planned close to a nesting beach.", actions: ["Shield or redirect lights and protect the nesting area", "Brighten the beach so nests are easier to photograph", "Pave the sand around nesting areas", "Move hatchlings only after visitors arrive"], correct: 0 },
   { animal: "Savanna wildlife", habitat: "Seasonal grassland and water routes", challenge: "A dry season is putting pressure on water access across a shared landscape.", actions: ["Protect water access and reduce barriers along movement routes", "Block all access so one group controls the water", "Replace habitat with a parking area", "Ignore local rangers and community knowledge"], correct: 0 },
+  { animal: "Mountain gorillas", habitat: "Highland forest edge", challenge: "A new walking trail is planned near a family group and community gardens.", actions: ["Set a guided buffer route with local trackers and quiet zones", "Send visitors directly through the family group", "Remove the forest edge so the trail is faster", "Close community gardens without consultation"], correct: 0 },
+  { animal: "Penguins", habitat: "Cool coastal nesting colony", challenge: "A fuel spill is moving toward a breeding shore after a storm.", actions: ["Coordinate shoreline response, rehabilitation, and local monitoring", "Wait until the storm season is over", "Use loud boats to push birds away", "Move all nesting material without a rescue plan"], correct: 0 },
+  { animal: "Desert-adapted elephants", habitat: "Seasonal riverbed", challenge: "A drought has concentrated wildlife, herders, and visitors around a small water source.", actions: ["Set shared water rules, protect the riverbed, and monitor pressure", "Reserve all water for one group", "Build a resort over the riverbed", "Remove ranger posts to cut costs"], correct: 0 },
+  { animal: "African wild dogs", habitat: "Open migration corridor", challenge: "A fence proposal would divide a pack from its hunting and denning grounds.", actions: ["Redesign the boundary with a wildlife passage and community agreement", "Build the continuous fence immediately", "Relocate the pack without habitat assessment", "Ignore seasonal movement data"], correct: 0 },
 ];
 
 const levels = [
@@ -44,6 +51,17 @@ function RangerEngine() {
 }
 
 function EngineFeedback({ message, good }) { return <div className={good ? "engine-feedback success" : "engine-feedback"}><CheckCircle2 size={20} /><p>{message}</p></div>; }
-function EngineShell({ eyebrow, title, icon: Icon, level, setLevel, restart, score, lives, children }) { return <main className="collection-engine-page"><section className="collection-engine-shell"><Link className="hero-quest-back" to="/#games-under-test"><ArrowLeft size={16} /> Games under Test</Link><header className="collection-engine-header"><div><span className="eyebrow">{eyebrow}</span><h1><Icon size={36} /> {title}</h1></div><div><span>MISSION SCORE</span><strong>{score}</strong><small>Trust / lives: {lives}</small></div></header><LevelPicker level={level} setLevel={setLevel} restart={restart} />{children}<p className="engine-disclaimer">Prototype engine: choices, levels, and outcomes are functional. Final content will be expanded with expert-reviewed sources, voices, images, and classroom missions.</p></section></main>; }
+function EngineShell({ eyebrow, title, icon: Icon, level, setLevel, restart, score, lives, children }) {
+  const wildlife = eyebrow.includes("WILDLIFE");
+  const characterLabel = wildlife ? "Friendly turtle ranger ready for a conservation mission" : "Friendly recipe guide ready to cook a story";
+  return <main className={`collection-engine-page ${wildlife ? "wildlife-engine" : "taste-engine"}`}><section className="collection-engine-shell">
+    <Link className="hero-quest-back" to="/#games-under-test"><ArrowLeft size={16} /> Games under Test</Link>
+    <div className="engine-character" role="img" aria-label={characterLabel} />
+    <header className="collection-engine-header"><div><span className="eyebrow">{eyebrow}</span><h1><Icon size={36} /> {title}</h1></div><div><span>MISSION SCORE</span><strong>{score}</strong><small>Trust / lives: {lives}</small></div></header>
+    <LevelPicker level={level} setLevel={setLevel} restart={restart} />
+    {children}
+    <p className="engine-disclaimer">Prototype engine: choices, levels, and outcomes are functional. Final content will be expanded with expert-reviewed sources, voices, images, and classroom missions.</p>
+  </section></main>;
+}
 
 export default function CollectionEngines() { const { gameId } = useParams(); return gameId === "taste-of-africa" ? <TasteEngine /> : <RangerEngine />; }
