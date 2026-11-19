@@ -57,3 +57,8 @@ body{background:radial-gradient(circle at 14% -10%,#5830a955,transparent 30%),ra
 /* Puzzle boards are intentionally a light play surface; keep global detail
    styling from overriding the component's readable puzzle palette. */
 .puzzle-game{background:#fffdf8;border-color:var(--line);color:#30291f}
+
+/* Older uploads get a graceful, light placeholder until their one-time WebP
+   preview backfill completes. This deliberately prevents the library from
+   downloading a 30–100 MB original just to render a catalogue card. */
+.game-art-placeholder{display:grid;place-items:center;width:100%;height:100%;background:linear-gradient(135deg,#1c5c68,#e28a36);color:#fffdf8;font-family:var(--serif);font-size:25px;letter-spacing:.5px}

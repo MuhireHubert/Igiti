@@ -61,7 +61,7 @@ function GameCard({ game, onSelect }) {
   return (
     <article className={`game-card ${comingSoon ? "is-coming" : ""}`}>
       <button className="game-art" onClick={() => onSelect(game)} aria-label={`View ${game.title}`} disabled={comingSoon}>
-        <img src={game.image} alt="" loading="lazy" />
+        {game.image ? <img src={game.image} alt="" loading="lazy" /> : <span className="game-art-placeholder" aria-hidden="true">Igiti Play</span>}
         <span className="art-wash" />
         <span className="game-category">{game.category}</span>
         {comingSoon ? <span className="coming-label">Coming soon</span> : <span className="play-bubble"><ArrowDownRight size={23} /></span>}

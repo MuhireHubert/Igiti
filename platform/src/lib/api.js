@@ -62,7 +62,7 @@ export async function getGames({ signal, detail = false } = {}) {
         description: game.description,
         difficulty: "Relaxed",
         pieces: 0,
-        image: game.thumbnailUrl || game.coverImage,
+        image: game.thumbnailUrl || null,
         status: "coming-soon",
       }];
     }
@@ -78,7 +78,7 @@ export async function getGames({ signal, detail = false } = {}) {
         EXPERT: "Challenging",
       })[puzzle.difficulty] || "Curious",
       pieces: puzzle.pieceCount,
-      image: puzzle.imageUrl || game.thumbnailUrl || game.coverImage,
+      image: puzzle.imageUrl || game.thumbnailUrl || null,
       status: "available",
       gameId: game.id,
       gameSlug: game.slug,

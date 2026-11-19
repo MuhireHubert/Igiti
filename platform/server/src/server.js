@@ -284,7 +284,7 @@ app.get("/v1/games", async (req, res, next) => {
         ...puzzle,
         // The library must never download full-resolution artwork or hundreds
         // of facts per puzzle. Details retain the original source and facts.
-        imageUrl: includeDetail ? puzzle.imageUrl : (puzzle.thumbnailUrl || game.thumbnailUrl || puzzle.imageUrl),
+        imageUrl: includeDetail ? puzzle.imageUrl : (puzzle.thumbnailUrl || game.thumbnailUrl || null),
         metadata: includeDetail ? metadata : catalogueMetadata,
         requiresPurchase: metadata?.pricing?.access !== "FREE" && (Number(metadata?.pricing?.monthlyAmountMinor ?? metadata?.pricing?.amountMinor ?? 0) > 0 || Number(metadata?.pricing?.yearlyAmountMinor ?? 0) > 0),
       };
