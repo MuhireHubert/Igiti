@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight, ArrowRight, BookOpen, Check, ChevronDown, Compass,
   Crown, Flame, Gamepad2, Globe2, Heart, Leaf, Menu, Puzzle, Search,
@@ -6,14 +6,22 @@ import {
 } from "lucide-react";
 import { getApiBaseUrl, getGames } from "./lib/api.js";
 import { deviceHeaders } from "./lib/device.js";
-import PuzzleGame from "./components/PuzzleGame.jsx";
-import CardGame from "./components/CardGame.jsx";
 import PlayerAccount from "./components/PlayerAccount.jsx";
 import { usePlayerAuth } from "./lib/PlayerAuthContext.jsx";
 import { Link, useNavigate } from "react-router-dom";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
+const PuzzleGame = lazy(() => import("./components/PuzzleGame.jsx"));
+const CardGame = lazy(() => import("./components/CardGame.jsx"));
+
+function GameLoader() {
+  return <div className="game-loader" aria-live="polite">Preparing your game…</div>;
+}
+
+function DeferredGame({ children }) {
+  return <Suspense fallback={<GameLoader />}>{children}</Suspense>;
+}
 
 function Brand() {
   return (
@@ -102,8 +110,8 @@ function GamePreview({ game, onBack }) {
       setAccessMessage(`This game requires purchase. ${payload.data?.offer?.title || "Open your workspace to complete secure Pesapal checkout."}`);
     } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
   }
-  if (game.kind === "card") return <CardGame onBack={onBack} />;
-  if (playing) return <PuzzleGame game={game} onBack={() => setPlaying(false)} />;
+  if (game.kind === "card") return <DeferredGame><CardGame onBack={onBack} /></DeferredGame>;
+  if (playing) return <DeferredGame><PuzzleGame game={game} onBack={() => setPlaying(false)} /></DeferredGame>;
   return (
     <section className="detail-panel" aria-live="polite">
       <button className="back-link" onClick={onBack}>← Back to the library</button>

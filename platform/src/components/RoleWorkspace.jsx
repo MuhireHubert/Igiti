@@ -87,25 +87,26 @@ export default function RoleWorkspace({ user, onOpenAdmin, view = "all" }) {
     setState({ loading: true, error: "", message: "" });
     try {
       const token = await user.getIdToken();
-      // Reconcile a just-completed Pesapal checkout before loading plans and
-      // entitlements. The API verifies the provider status server-side.
-      await playerRequest("/payments/reconcile", token, { method: "POST" }).catch(() => null);
+      // Only reconcile Pesapal after its browser return. Calling the gateway on
+      // every dashboard visit makes ordinary account pages wait on an external
+      // payment service even when there is no payment to verify.
+      if (new URLSearchParams(window.location.search).has("payment")) {
+        await playerRequest("/payments/reconcile", token, { method: "POST" }).catch(() => null);
+      }
       const geoResponse = await fetch("/api/geo", { cache: "no-store" });
       const geo = await geoResponse.json().catch(() => ({}));
       if (!geoResponse.ok || !geo.country || !geo.signature || !geo.issuedAt) throw new Error(geo.error || "We could not securely determine your location for pricing.");
-      const [data, collection, offerResponse, checkoutResponse, accessList, progressList, schoolList, demoStatus] = await Promise.all([
+      const [data, collection, offerResponse, checkoutResponse, schoolList, demoStatus] = await Promise.all([
         playerRequest("/workspace", token), getGames(),
         fetch(`${getApiBaseUrl()}/v1/offers?country=${encodeURIComponent(geo.country)}`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         fetch(`${getApiBaseUrl()}/v1/checkout/status`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
-        playerRequest("/entitlements", token),
-        playerRequest("/progress", token),
         fetch(`${getApiBaseUrl()}/v1/schools`, { headers: { Accept: "application/json" } }).then((response) => response.json()),
         playerRequest("/school-demo", token),
       ]);
       setWorkspace(data);
       setOffers(offerResponse.data || []);
-      setEntitlements(accessList || []);
-      setProgress(progressList || []);
+      setEntitlements(data.entitlements || []);
+      setProgress(data.progress || []);
       setSchools(schoolList.data || []);
       setSchoolDemo(demoStatus?.demo ? { ...demoStatus.demo, school: demoStatus.school } : null);
       setCheckout(checkoutResponse.data || { configured: false, environment: "sandbox" });

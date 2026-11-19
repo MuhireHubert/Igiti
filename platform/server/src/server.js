@@ -853,7 +853,8 @@ const resourceAssignmentSchema = z.object({
 // infers access from a label or a price: every returned game has passed the
 // same entitlement/assignment check that protects play and progress writes.
 async function dashboardForPlayer(player) {
-  const [publishedGames, progress] = await Promise.all([
+  const now = new Date();
+  const [publishedGames, progress, entitlements] = await Promise.all([
     prisma.game.findMany({
       where: { status: "PUBLISHED", publishedAt: { lte: new Date() } },
       orderBy: [{ publishedAt: "desc" }, { title: "asc" }],
@@ -863,12 +864,18 @@ async function dashboardForPlayer(player) {
       where: { playerId: player.id }, orderBy: { updatedAt: "desc" },
       select: { puzzleId: true, completedAt: true, elapsedSeconds: true, updatedAt: true, puzzle: { select: { title: true, game: { select: { id: true, title: true, slug: true, coverImage: true } } } } },
     }),
+    prisma.accessEntitlement.findMany({
+      where: { playerId: player.id, status: "ACTIVE", startsAt: { lte: now }, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      select: { resource: true, startsAt: true, expiresAt: true, orderId: true, order: { select: { metadata: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
   const puzzles = publishedGames.flatMap((game) => game.puzzles.map((puzzle) => ({ game, puzzle })));
   const checks = await Promise.all(puzzles.map(async ({ game, puzzle }) => ({ game, puzzle, access: await puzzleAccessForPlayer(player, puzzle.id) })));
   return {
     accessibleGames: checks.filter(({ access }) => access.permitted).map(({ game, puzzle, access }) => ({ gameId: game.id, gameTitle: game.title, gameSlug: game.slug, coverImage: game.coverImage, category: game.category, puzzleId: puzzle.id, puzzleTitle: puzzle.title, puzzleSlug: puzzle.slug, pieceCount: puzzle.pieceCount, difficulty: puzzle.difficulty, accessSource: access.assignment ? "SCHOOL_ASSIGNMENT" : access.freePreview ? "FREE" : access.operator ? "ADMIN" : access.entitlement ? "SUBSCRIPTION" : access.demo ? "SCHOOL_DEMO" : "SCHOOL_PLAN" })),
     progress: progress.map((item) => ({ puzzleId: item.puzzleId, completedAt: item.completedAt, elapsedSeconds: item.elapsedSeconds, updatedAt: item.updatedAt, puzzleTitle: item.puzzle.title, game: item.puzzle.game })),
+    entitlements: entitlements.map(({ order, ...entitlement }) => ({ ...entitlement, offerKey: String(order?.metadata?.offerKey || "") || null })),
   };
 }
 
@@ -1135,6 +1142,17 @@ app.get("/v1/me/access/:resource", requirePlayer, async (req, res, next) => {
   if (!/^(puzzle|card-mode|account):[a-z0-9._-]{1,160}$/i.test(resource)) return res.status(400).json({ error: "Invalid access resource." });
   try {
     return res.json({ data: await resourceAccessForPlayer(req.player, resource.toLowerCase()) });
+  } catch (error) { next(error); }
+});
+
+const accessBatchSchema = z.object({ resources: z.array(z.string().regex(/^(puzzle|card-mode|account):[a-z0-9._-]{1,160}$/i)).min(1).max(16) });
+app.post("/v1/me/access/batch", requirePlayer, async (req, res, next) => {
+  const parsed = accessBatchSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Provide between one and sixteen valid access resources." });
+  try {
+    const resources = [...new Set(parsed.data.resources.map((resource) => resource.toLowerCase()))];
+    const access = await Promise.all(resources.map(async (resource) => [resource, await resourceAccessForPlayer(req.player, resource)]));
+    return res.json({ data: Object.fromEntries(access) });
   } catch (error) { next(error); }
 });
 
