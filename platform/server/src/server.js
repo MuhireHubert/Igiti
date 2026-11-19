@@ -263,11 +263,11 @@ app.get("/v1/games", async (req, res, next) => {
       orderBy: { publishedAt: "desc" },
       select: {
         id: true, slug: true, title: true, description: true, category: true,
-        coverImage: true, thumbnailUrl: true, publishedAt: true,
+        coverImage: true, thumbnailUrl: true, playImageUrl: true, publishedAt: true,
         puzzles: {
           where: { isActive: true },
           orderBy: { sortOrder: "asc" },
-          select: { id: true, slug: true, title: true, imageUrl: true, thumbnailUrl: true, pieceCount: true, difficulty: true, metadata: true },
+          select: { id: true, slug: true, title: true, imageUrl: true, thumbnailUrl: true, playImageUrl: true, pieceCount: true, difficulty: true, metadata: true },
         },
       },
     });
@@ -284,7 +284,7 @@ app.get("/v1/games", async (req, res, next) => {
         ...puzzle,
         // The library must never download full-resolution artwork or hundreds
         // of facts per puzzle. Details retain the original source and facts.
-        imageUrl: includeDetail ? puzzle.imageUrl : (puzzle.thumbnailUrl || game.thumbnailUrl || null),
+        imageUrl: includeDetail ? (puzzle.playImageUrl || game.playImageUrl || puzzle.imageUrl) : (puzzle.thumbnailUrl || game.thumbnailUrl || null),
         metadata: includeDetail ? metadata : catalogueMetadata,
         requiresPurchase: metadata?.pricing?.access !== "FREE" && (Number(metadata?.pricing?.monthlyAmountMinor ?? metadata?.pricing?.amountMinor ?? 0) > 0 || Number(metadata?.pricing?.yearlyAmountMinor ?? 0) > 0),
       };

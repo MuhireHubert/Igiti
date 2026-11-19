@@ -15,6 +15,7 @@ model Game {
   category    String
   coverImage  String     @db.VarChar(2048)
   thumbnailUrl String?   @db.VarChar(2048)
+  playImageUrl String?   @db.VarChar(2048)
   status      GameStatus @default(DRAFT)
   publishedAt DateTime?
   createdAt   DateTime   @default(now())
@@ -47,6 +48,7 @@ model Puzzle {
   title      String
   imageUrl   String     @db.VarChar(2048)
   thumbnailUrl String? @db.VarChar(2048)
+  playImageUrl String? @db.VarChar(2048)
   pieceCount Int
   difficulty Difficulty
   sortOrder  Int        @default(0)

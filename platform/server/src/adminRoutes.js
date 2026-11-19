@@ -35,10 +35,13 @@ function objectNameFromFirebaseUrl(url, bucket) {
   try { return decodeURIComponent(String(url).slice(prefix.length).split("?")[0]); } catch { return null; }
 }
 
-async function createThumbnail(bucket, objectName) {
+async function createRenditions(bucket, objectName) {
   const thumbnailName = `${objectName}.thumb.webp`;
+  const playImageName = `${objectName}.play.webp`;
   const thumbnail = bucket.file(thumbnailName);
+  const playImage = bucket.file(playImageName);
   const thumbnailToken = randomUUID();
+  const playImageToken = randomUUID();
   await pipeline(
     bucket.file(objectName).createReadStream(),
     sharp().rotate().resize({ width: 960, height: 720, fit: "inside", withoutEnlargement: true }).webp({ quality: 76, effort: 4 }),
@@ -48,7 +51,21 @@ async function createThumbnail(bucket, objectName) {
       metadata: { cacheControl: "public,max-age=31536000,immutable", metadata: { firebaseStorageDownloadTokens: thumbnailToken } },
     }),
   );
-  return { thumbnailName, thumbnailUrl: firebaseDownloadUrl(bucket, thumbnailName, thumbnailToken) };
+  await pipeline(
+    bucket.file(objectName).createReadStream(),
+    sharp().rotate().resize({ width: 1920, height: 1440, fit: "inside", withoutEnlargement: true }).webp({ quality: 82, effort: 4 }),
+    playImage.createWriteStream({
+      resumable: false,
+      contentType: "image/webp",
+      metadata: { cacheControl: "public,max-age=31536000,immutable", metadata: { firebaseStorageDownloadTokens: playImageToken } },
+    }),
+  );
+  return {
+    thumbnailName,
+    thumbnailUrl: firebaseDownloadUrl(bucket, thumbnailName, thumbnailToken),
+    playImageName,
+    playImageUrl: firebaseDownloadUrl(bucket, playImageName, playImageToken),
+  };
 }
 
 function createImageStorage() {
@@ -63,7 +80,9 @@ function createImageStorage() {
       const objectName = `igiti-play/country-cards/${Date.now()}-${randomUUID()}.${extensionFor(file.mimetype)}`;
       const object = bucket.file(objectName);
       const thumbnailName = `${objectName}.thumb.webp`;
+      const playImageName = `${objectName}.play.webp`;
       const thumbnail = bucket.file(thumbnailName);
+      const playImage = bucket.file(playImageName);
       let bytes = 0;
       let signature = Buffer.alloc(0);
       const inspectImage = new Transform({
@@ -91,18 +110,21 @@ function createImageStorage() {
         // Create a small, broadly supported preview after the original has
         // streamed to Storage. This never buffers the original in the API
         // process, which is crucial for 200 MB artwork uploads.
-        const generatedThumbnail = await createThumbnail(bucket, objectName);
+        const renditions = await createRenditions(bucket, objectName);
         callback(null, {
           objectName,
-          thumbnailName: generatedThumbnail.thumbnailName,
+          thumbnailName: renditions.thumbnailName,
+          playImageName: renditions.playImageName,
           size: bytes,
           contentType: file.mimetype,
           url: firebaseDownloadUrl(bucket, objectName, token),
-          thumbnailUrl: generatedThumbnail.thumbnailUrl,
+          thumbnailUrl: renditions.thumbnailUrl,
+          playImageUrl: renditions.playImageUrl,
         });
       } catch (error) {
         await object.delete({ ignoreNotFound: true }).catch(() => {});
         await thumbnail.delete({ ignoreNotFound: true }).catch(() => {});
+        await playImage.delete({ ignoreNotFound: true }).catch(() => {});
         callback(error);
       }
     },
@@ -136,8 +158,8 @@ router.post("/media/backfill-thumbnails", requireRole("OWNER"), async (_req, res
   try {
     const bucket = admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET);
     const [games, puzzles, assets] = await Promise.all([
-      prisma.game.findMany({ where: { thumbnailUrl: null }, orderBy: { updatedAt: "desc" }, take: 2, select: { id: true, coverImage: true } }),
-      prisma.puzzle.findMany({ where: { thumbnailUrl: null }, orderBy: { updatedAt: "desc" }, take: 2, select: { id: true, imageUrl: true } }),
+      prisma.game.findMany({ where: { OR: [{ thumbnailUrl: null }, { playImageUrl: null }] }, orderBy: { updatedAt: "desc" }, take: 2, select: { id: true, coverImage: true } }),
+      prisma.puzzle.findMany({ where: { OR: [{ thumbnailUrl: null }, { playImageUrl: null }] }, orderBy: { updatedAt: "desc" }, take: 2, select: { id: true, imageUrl: true } }),
       prisma.countryAsset.findMany({ where: { thumbnailUrl: null }, orderBy: { updatedAt: "desc" }, take: 2, select: { id: true, imageUrl: true } }),
     ]);
     const candidates = [
@@ -150,9 +172,9 @@ router.post("/media/backfill-thumbnails", requireRole("OWNER"), async (_req, res
     for (const item of candidates) {
       const objectName = objectNameFromFirebaseUrl(item.url, bucket);
       if (!objectName) { skipped += 1; continue; }
-      const generated = await createThumbnail(bucket, objectName);
-      if (item.type === "game") await prisma.game.update({ where: { id: item.id }, data: { thumbnailUrl: generated.thumbnailUrl } });
-      if (item.type === "puzzle") await prisma.puzzle.update({ where: { id: item.id }, data: { thumbnailUrl: generated.thumbnailUrl } });
+      const generated = await createRenditions(bucket, objectName);
+      if (item.type === "game") await prisma.game.update({ where: { id: item.id }, data: { thumbnailUrl: generated.thumbnailUrl, playImageUrl: generated.playImageUrl } });
+      if (item.type === "puzzle") await prisma.puzzle.update({ where: { id: item.id }, data: { thumbnailUrl: generated.thumbnailUrl, playImageUrl: generated.playImageUrl } });
       if (item.type === "asset") await prisma.countryAsset.update({ where: { id: item.id }, data: { thumbnailUrl: generated.thumbnailUrl } });
       completed += 1;
     }
@@ -253,8 +275,8 @@ router.post("/media/images", requireRole("OWNER"), (req, res, next) => {
     return res.status(400).json({ error: "Upload a valid JPG, PNG, or WebP image." });
   }
   try {
-    await recordAudit(req.adminUser.id, "media.image_uploaded", "FirebaseStorage", req.file.objectName, { mimeType: req.file.contentType, bytes: req.file.size, thumbnailPath: req.file.thumbnailName });
-    return res.status(201).json({ data: { url: req.file.url, thumbnailUrl: req.file.thumbnailUrl, path: req.file.objectName, thumbnailPath: req.file.thumbnailName, contentType: req.file.contentType, size: req.file.size } });
+    await recordAudit(req.adminUser.id, "media.image_uploaded", "FirebaseStorage", req.file.objectName, { mimeType: req.file.contentType, bytes: req.file.size, thumbnailPath: req.file.thumbnailName, playImagePath: req.file.playImageName });
+    return res.status(201).json({ data: { url: req.file.url, thumbnailUrl: req.file.thumbnailUrl, playImageUrl: req.file.playImageUrl, path: req.file.objectName, thumbnailPath: req.file.thumbnailName, playImagePath: req.file.playImageName, contentType: req.file.contentType, size: req.file.size } });
   } catch (error) {
     return next(error);
   }
@@ -262,11 +284,11 @@ router.post("/media/images", requireRole("OWNER"), (req, res, next) => {
 
 const gameSelect = {
   id: true, slug: true, title: true, description: true, category: true,
-  coverImage: true, thumbnailUrl: true, status: true, publishedAt: true, createdAt: true, updatedAt: true,
+  coverImage: true, thumbnailUrl: true, playImageUrl: true, status: true, publishedAt: true, createdAt: true, updatedAt: true,
   puzzles: {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: {
-      id: true, slug: true, title: true, imageUrl: true, thumbnailUrl: true, pieceCount: true,
+      id: true, slug: true, title: true, imageUrl: true, thumbnailUrl: true, playImageUrl: true, pieceCount: true,
       difficulty: true, sortOrder: true, isActive: true, metadata: true,
       createdAt: true, updatedAt: true,
     },
@@ -407,6 +429,7 @@ const gameCreate = z.object({
   category: z.string().trim().min(2).max(80),
   coverImage: z.string().url().max(2048),
   thumbnailUrl: z.string().url().max(2048).optional().nullable(),
+  playImageUrl: z.string().url().max(2048).optional().nullable(),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("DRAFT"),
 });
 const gameUpdate = gameCreate.partial();
@@ -414,6 +437,7 @@ const puzzleCreate = z.object({
   slug, title: z.string().trim().min(2).max(140),
   imageUrl: z.string().url().max(2048),
   thumbnailUrl: z.string().url().max(2048).optional().nullable(),
+  playImageUrl: z.string().url().max(2048).optional().nullable(),
   pieceCount: z.number().int().min(2).max(1000),
   difficulty: z.enum(["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"]),
   sortOrder: z.number().int().min(0).max(10000).default(0),
