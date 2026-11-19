@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, HeartHandshake, Leaf, Sprout, Trophy, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import EngineVisual from "../components/EngineVisual.jsx";
+import { seededShuffle } from "../lib/gameShuffle.js";
 
 const campaigns = [[
   { title: "Listen before leading", scene: "Families say nearby streams are drying up, food is less secure, and finding firewood takes longer. You have one meeting to decide where the work begins.", skill: "Community listening", icon: UsersRound, choices: [
@@ -84,6 +85,7 @@ export default function HeroQuest() {
   const [history, setHistory] = useState([]);
   const complete = chapter >= chapters.length;
   const active = chapters[Math.min(chapter, chapters.length - 1)];
+  const choices = useMemo(() => seededShuffle(active.choices, `hero:${campaignIndex}:${chapter}`), [active, campaignIndex, chapter]);
   const unlock = complete && stats.trust >= 6 && stats.roots >= 6;
   const result = useMemo(() => {
     if (!complete) return null;
@@ -92,10 +94,9 @@ export default function HeroQuest() {
     return { title: "Reflect and Rebuild", copy: "Every decision has consequences. Try again and listen closely to what makes community action last.", tone: "blue" };
   }, [complete, stats, unlock]);
 
-  function selectChoice(index) {
+  function selectChoice(selected) {
     if (choice !== null) return;
-    const selected = active.choices[index];
-    setChoice(index);
+    setChoice(selected);
     setStats((current) => ({ trust: clamp(current.trust + selected.effect.trust), roots: clamp(current.roots + selected.effect.roots), time: clamp(current.time + selected.effect.time) }));
     setHistory((items) => [...items, { title: active.title, selected: selected.label }]);
   }
@@ -108,7 +109,7 @@ export default function HeroQuest() {
     <div className="hero-quest-progress"><span style={{ width: `${(Math.min(chapter, chapters.length) / chapters.length) * 100}%` }} /></div>
     <EngineVisual type="heroes" step={Math.min(chapter, 3)} />
     <section className="hero-quest-stats" aria-label="Mission resources"><div><UsersRound size={18} /><span>Community trust</span><strong>{stats.trust}/10</strong></div><div><Sprout size={18} /><span>Living roots</span><strong>{stats.roots}/10</strong></div><div><Leaf size={18} /><span>Season time</span><strong>{stats.time}/10</strong></div></section>
-    {!complete ? <section className="hero-quest-scene"><div className="hero-quest-scene-label"><active.icon size={20} /><span>{active.skill}</span></div><h2>{active.title}</h2><p>{active.scene}</p><div className="hero-choice-list">{active.choices.map((item, index) => <button key={item.label} className={choice === index ? "selected" : ""} disabled={choice !== null} onClick={() => selectChoice(index)}><span>{String.fromCharCode(65 + index)}</span>{item.label}</button>)}</div>{choice !== null && <div className="hero-choice-feedback"><CheckCircle2 size={20} /><div><strong>Mission insight</strong><p>{active.choices[choice].feedback}</p></div></div>} {choice !== null && <button className="button button-primary hero-continue" onClick={continueQuest}>{chapter + 1 === chapters.length ? "See your legacy" : "Continue the quest"}<ArrowRight size={16} /></button>}</section> : <section className={`hero-quest-ending ${result.tone}`}><Trophy size={34} /><span className="eyebrow">COLLECTIBLE UNLOCK</span><h2>{result.title}</h2><p>{result.copy}</p>{unlock && <div className="hero-collectible"><Leaf size={26} /><div><strong>{campaignIndex === 0 ? "Wangari Maathai · Eco-citizenship card" : campaignIndex === 1 ? "Coastal Steward · Signal card" : "Living Archive · Connection card"}</strong><span>Unlocked for completing a balanced decision trail.</span></div></div>}<div className="hero-journey-log"><strong>Your decision trail</strong>{history.map((item) => <p key={item.title}><span>{item.title}</span>{item.selected}</p>)}</div><button className="button button-primary" onClick={() => restart(true)}>Open the next story <ArrowRight size={16} /></button></section>}
+    {!complete ? <section className="hero-quest-scene"><div className="hero-quest-scene-label"><active.icon size={20} /><span>{active.skill}</span></div><h2>{active.title}</h2><p>{active.scene}</p><div className="hero-choice-list">{choices.map((item, index) => <button key={item.label} className={choice === item ? "selected" : ""} disabled={choice !== null} onClick={() => selectChoice(item)}><span>{String.fromCharCode(65 + index)}</span>{item.label}</button>)}</div>{choice !== null && <div className="hero-choice-feedback"><CheckCircle2 size={20} /><div><strong>Mission insight</strong><p>{choice.feedback}</p></div></div>} {choice !== null && <button className="button button-primary hero-continue" onClick={continueQuest}>{chapter + 1 === chapters.length ? "See your legacy" : "Continue the quest"}<ArrowRight size={16} /></button>}</section> : <section className={`hero-quest-ending ${result.tone}`}><Trophy size={34} /><span className="eyebrow">COLLECTIBLE UNLOCK</span><h2>{result.title}</h2><p>{result.copy}</p>{unlock && <div className="hero-collectible"><Leaf size={26} /><div><strong>{campaignIndex === 0 ? "Wangari Maathai · Eco-citizenship card" : campaignIndex === 1 ? "Coastal Steward · Signal card" : "Living Archive · Connection card"}</strong><span>Unlocked for completing a balanced decision trail.</span></div></div>}<div className="hero-journey-log"><strong>Your decision trail</strong>{history.map((item) => <p key={item.title}><span>{item.title}</span>{item.selected}</p>)}</div><button className="button button-primary" onClick={() => restart(true)}>Open the next story <ArrowRight size={16} /></button></section>}
     <aside className="hero-quest-sources"><BookOpen size={17} /><p>{campaignIndex === 0 ? <>This quest is inspired by Wangari Maathai’s community-centred environmental work. <a href="https://www.greenbeltmovement.org/who-we-are/" target="_blank" rel="noreferrer">Read the Green Belt Movement source ↗</a> · <a href="https://www.nobelprize.org/prizes/lists/all-nobel-prizes/all/" target="_blank" rel="noreferrer">Nobel Peace Prize 2004 ↗</a></> : "Prototype story content. Release missions will be individually sourced, community-reviewed, and credited before publication."}</p></aside>
   </section></main>;
 }
