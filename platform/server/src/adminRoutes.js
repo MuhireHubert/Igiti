@@ -153,7 +153,7 @@ const imageUpload = multer({
 // Existing artwork predates previews. Process only two records per request so
 // a very large source image cannot monopolise the shared API instance. The
 // owner can run this from the media panel until it reports no items remaining.
-router.post("/media/backfill-thumbnails", requireRole("OWNER"), async (_req, res, next) => {
+router.post("/media/backfill-thumbnails", requireAdmin, requireRole("OWNER"), async (_req, res, next) => {
   if (!process.env.FIREBASE_STORAGE_BUCKET) return res.status(503).json({ error: "Image uploads are not configured yet." });
   try {
     const bucket = admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET);
