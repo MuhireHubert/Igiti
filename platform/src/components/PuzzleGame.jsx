@@ -27,6 +27,27 @@ function formatTime(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
+// A fixed ten-column board makes counts such as 30 render as a 10×3 strip.
+// Select an exact factor pair that is as close to square as possible instead,
+// while preferring a gently landscape board when both orientations are equal.
+// This keeps the image proportions and the physical size of each tile useful.
+function puzzleGrid(pieceCount) {
+  const count = Math.max(2, Math.floor(pieceCount));
+  let best = { columns: count, rows: 1, score: Math.abs(Math.log(count)) };
+
+  for (let rows = 1; rows <= Math.sqrt(count); rows += 1) {
+    if (count % rows !== 0) continue;
+    const columns = count / rows;
+    const ratio = columns / rows;
+    const score = Math.abs(Math.log(ratio));
+    if (score < best.score || (score === best.score && columns > best.columns)) {
+      best = { columns, rows, score };
+    }
+  }
+
+  return { columns: best.columns, rows: best.rows };
+}
+
 const islandCountries = new Set(["Cabo Verde", "Comoros", "Madagascar", "Mauritius", "Sao Tome and Principe", "Seychelles"]);
 const discoveryRegions = ["All", "North", "West", "Central", "East", "South", "Island Countries"];
 function igitiRegion(country) { return islandCountries.has(country.country) ? "Island Countries" : country.region === "Southern" ? "South" : country.region; }
@@ -36,8 +57,7 @@ export default function PuzzleGame({ game, onBack }) {
   const apiBase = getApiBaseUrl();
   const cloudEligible = Boolean(user && apiBase && game.gameId && game.puzzleSlug);
   const pieceCount = Math.max(2, Number(game.pieces) || 60);
-  const columns = 10;
-  const rows = Math.ceil(pieceCount / columns);
+  const { columns, rows } = useMemo(() => puzzleGrid(pieceCount), [pieceCount]);
   const saveKey = `igiti-puzzle-progress:${game.slug || game.id || game.title}:${pieceCount}`;
   const [initialProgress] = useState(() => {
     try {
