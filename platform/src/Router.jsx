@@ -14,6 +14,7 @@ const HeroQuest = lazy(() => import("./pages/HeroQuest.jsx"));
 const CollectionEngines = lazy(() => import("./pages/CollectionEngines.jsx"));
 const AudioEngines = lazy(() => import("./pages/AudioEngines.jsx"));
 const RemainingEngines = lazy(() => import("./pages/RemainingEngines.jsx"));
+const TestCollection = lazy(() => import("./pages/TestCollection.jsx"));
 
 function PageLoader() {
   return <main className="page-loader" aria-live="polite">Loading Igiti Play…</main>;
@@ -41,6 +42,7 @@ export default function Router() {
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/games" element={<DeferredPage><GamesPage /></DeferredPage>} />
+        <Route path="/games-under-test" element={<DeferredPage><TestCollection /></DeferredPage>} />
         <Route path="/games/:gameId" element={<DeferredPage><GamePage /></DeferredPage>} />
         <Route path="/games-under-test/african-heroes" element={<DeferredPage><HeroQuest /></DeferredPage>} />
         <Route path="/games-under-test/taste-of-africa" element={<DeferredPage><CollectionEngines /></DeferredPage>} />

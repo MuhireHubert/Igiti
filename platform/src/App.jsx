@@ -256,7 +256,7 @@ function App() {
             <div><UsersRound size={20} /><strong>Grow together</strong><span>Difficulty, collections, multiplayer, and classroom assignments scale the experience.</span></div>
           </div>
           <div className="test-game-grid">
-            {gamesUnderTest.map((game, index) => {
+            {gamesUnderTest.slice(0, 3).map((game, index) => {
               const Icon = game.icon;
               return <article className="test-game-card" key={game.title}>
                 <div className="test-game-top"><span className="test-game-number">{String(index + 1).padStart(2, "0")}</span><span className="test-game-phase">{game.phase}</span></div>
@@ -268,6 +268,7 @@ function App() {
               </article>;
             })}
           </div>
+          <Link className="button button-outline test-lab-all" to="/games-under-test">Explore all ten game engines <ArrowRight size={16} /></Link>
           <p className="test-lab-footnote">We will release games only after content review, playtesting, accessibility checks, and secure access setup. Early concepts do not affect existing paid access or school assignments.</p>
         </section>
 
