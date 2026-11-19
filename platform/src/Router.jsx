@@ -3,6 +3,7 @@ import { Analytics, track } from "@vercel/analytics/react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import App from "./App.jsx";
 import { PlayerAuthProvider } from "./lib/PlayerAuthContext.jsx";
+import GameWorldDock from "./components/GameWorldDock.jsx";
 
 const GamePage = lazy(() => import("./pages/Pages.jsx").then((module) => ({ default: module.GamePage })));
 const GamesPage = lazy(() => import("./pages/Pages.jsx").then((module) => ({ default: module.GamesPage })));
@@ -61,6 +62,7 @@ export default function Router() {
         <Route path="/settings" element={<DeferredPage><RolePortal /></DeferredPage>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <GameWorldDock />
       <Analytics />
     </BrowserRouter>
     </PlayerAuthProvider>
