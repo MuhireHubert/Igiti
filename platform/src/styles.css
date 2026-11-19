@@ -54,3 +54,6 @@ body{background:radial-gradient(circle at 14% -10%,#5830a955,transparent 30%),ra
 .subpage-detail-copy h2,
 .step-card h2,
 .how-callout h2{color:#211d17}
+/* Puzzle boards are intentionally a light play surface; keep global detail
+   styling from overriding the component's readable puzzle palette. */
+.puzzle-game{background:#fffdf8;border-color:var(--line);color:#30291f}
