@@ -11,6 +11,7 @@ const AdminPortal = lazy(() => import("./pages/AdminPortal.jsx"));
 const RolePortal = lazy(() => import("./pages/RolePortal.jsx"));
 const TestGames = lazy(() => import("./pages/TestGames.jsx"));
 const HeroQuest = lazy(() => import("./pages/HeroQuest.jsx"));
+const CollectionEngines = lazy(() => import("./pages/CollectionEngines.jsx"));
 
 function PageLoader() {
   return <main className="page-loader" aria-live="polite">Loading Igiti Play…</main>;
@@ -40,6 +41,8 @@ export default function Router() {
         <Route path="/games" element={<DeferredPage><GamesPage /></DeferredPage>} />
         <Route path="/games/:gameId" element={<DeferredPage><GamePage /></DeferredPage>} />
         <Route path="/games-under-test/african-heroes" element={<DeferredPage><HeroQuest /></DeferredPage>} />
+        <Route path="/games-under-test/taste-of-africa" element={<DeferredPage><CollectionEngines /></DeferredPage>} />
+        <Route path="/games-under-test/wildlife-rangers" element={<DeferredPage><CollectionEngines /></DeferredPage>} />
         <Route path="/games-under-test/:gameId" element={<DeferredPage><TestGames /></DeferredPage>} />
         <Route path="/how-to-play" element={<DeferredPage><HowToPlayPage /></DeferredPage>} />
         <Route path="/admin" element={<DeferredPage><AdminPortal /></DeferredPage>} />
