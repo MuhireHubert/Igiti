@@ -89,7 +89,9 @@ export default function PuzzleGame({ game, onBack }) {
   const [mapLayer, setMapLayer] = useState("regions");
   const [mapRegion, setMapRegion] = useState("All");
   const [showFunFact, setShowFunFact] = useState(false);
-  const [activeFunFact, setActiveFunFact] = useState(null);
+  // A swap can correctly place both tiles. Keep every unlocked fact in order
+  // so "Keep playing" reveals the second one instead of losing it.
+  const [funFactQueue, setFunFactQueue] = useState([]);
   const [dragging, setDragging] = useState(null);
   const [cloudReady, setCloudReady] = useState(!cloudEligible);
   const [cloudStatus, setCloudStatus] = useState("local");
@@ -100,11 +102,10 @@ export default function PuzzleGame({ game, onBack }) {
   const displaySeconds = timeLimit ? Math.max(0, timeLimit - seconds) : seconds;
   const hintLimit = Math.max(1, Math.floor(pieceCount * 0.1));
   const progress = Math.round((solvedCount / pieceCount) * 100);
-  const factSlotsRef = useRef(null);
-  const suppressNextFactRef = useRef(false);
   const elapsedStartedAtRef = useRef(Date.now() - seconds * 1000);
   const latestProgressRef = useRef({ pieces, moves, seconds, hintsUsed, timeLimit, complete: false });
   const perPieceFacts = useMemo(() => Array.isArray(game.funFacts) ? game.funFacts.filter(Boolean) : [], [game.funFacts]);
+  const activeFunFact = funFactQueue[0] || null;
   const boardStyle = useMemo(() => ({
     "--puzzle-columns": columns,
     "--puzzle-rows": rows,
@@ -149,7 +150,6 @@ export default function PuzzleGame({ game, onBack }) {
           state.pieces.every((piece) => Number.isInteger(piece) && piece >= 0 && piece < pieceCount) &&
           new Set(state.pieces).size === pieceCount;
         if (saved && validPieces && !initialProgress) {
-          suppressNextFactRef.current = true;
           setPieces(state.pieces);
           setMoves(Number.isFinite(state.moves) ? state.moves : 0);
           const restoredSeconds = Number.isFinite(saved.elapsedSeconds) ? saved.elapsedSeconds : (Number.isFinite(state.seconds) ? state.seconds : 0);
@@ -221,22 +221,6 @@ export default function PuzzleGame({ game, onBack }) {
     if (complete) { playGameCue("win", soundEnabled); if (game.funFact) setShowFunFact(true); }
   }, [complete, game.funFact, soundEnabled]);
 
-  // The first board render (and a cloud-save restore) establishes a baseline.
-  // Only a newly-correct placement during play triggers a per-piece fact.
-  useEffect(() => {
-    const correctSlots = new Set(pieces.flatMap((piece, slot) => piece === slot ? [slot] : []));
-    const previous = factSlotsRef.current;
-    factSlotsRef.current = correctSlots;
-    if (!previous || suppressNextFactRef.current) {
-      suppressNextFactRef.current = false;
-      return;
-    }
-    const newlyCorrect = [...correctSlots].find((slot) => !previous.has(slot));
-    if (newlyCorrect == null || perPieceFacts.length === 0) return;
-    playGameCue("correct", soundEnabled);
-    setActiveFunFact(perPieceFacts[newlyCorrect % perPieceFacts.length]);
-  }, [pieces, perPieceFacts, soundEnabled]);
-
   function resetPuzzle(nextTimeLimit = timeLimit) {
     try {
       window.localStorage.removeItem(saveKey);
@@ -253,18 +237,22 @@ export default function PuzzleGame({ game, onBack }) {
     setHintsUsed(0);
     setShowReference(true);
     setShowFunFact(false);
-    setActiveFunFact(null);
-    factSlotsRef.current = null;
+    setFunFactQueue([]);
   }
 
   function swapPieces(fromSlot, toSlot) {
     if (timeExpired || fromSlot === toSlot || fromSlot == null || toSlot == null) return;
     playGameCue("swap", soundEnabled);
-    setPieces((current) => {
-      const next = [...current];
-      [next[fromSlot], next[toSlot]] = [next[toSlot], next[fromSlot]];
-      return next;
-    });
+    const next = [...pieces];
+    [next[fromSlot], next[toSlot]] = [next[toSlot], next[fromSlot]];
+    // Only the two pieces the player just swapped can unlock facts. This also
+    // means a correct hint, restored save, or existing correct tile cannot do so.
+    const newlyCorrectSlots = [fromSlot, toSlot].filter((slot) => next[slot] === slot && pieces[slot] !== slot);
+    if (newlyCorrectSlots.length && perPieceFacts.length) {
+      playGameCue("correct", soundEnabled);
+      setFunFactQueue((queue) => [...queue, ...newlyCorrectSlots.map((slot) => perPieceFacts[slot % perPieceFacts.length])]);
+    }
+    setPieces(next);
     setMoves((current) => current + 1);
     setSelected(null);
     setDragging(null);
@@ -285,7 +273,6 @@ export default function PuzzleGame({ game, onBack }) {
   function useHint() {
     if (complete || timeExpired || hintsUsed >= hintLimit) return;
     playGameCue("hint", soundEnabled);
-    suppressNextFactRef.current = true;
     setPieces((current) => {
       const targetSlot = current.findIndex((piece, slot) => piece !== slot);
       if (targetSlot < 0) return current;
@@ -373,7 +360,7 @@ export default function PuzzleGame({ game, onBack }) {
       <MultiplayerRoom mode={{ id: "puzzle", title: "Puzzle challenge" }} locked={false} />
       {timeExpired && <div className="puzzle-time-expired" role="status"><Timer size={23} /><div><strong>Time attack complete.</strong><p>You placed {solvedCount} of {pieceCount} pieces. Try again to beat the clock.</p></div><button onClick={() => resetPuzzle(timeLimit)}>Try again</button></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
-      {(activeFunFact || showFunFact) && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">{activeFunFact ? "CORRECT PIECE · FACT UNLOCKED" : "PUZZLE COMPLETE · FACT UNLOCKED"}</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{activeFunFact || game.funFact}</p><button className="button button-primary" onClick={() => { setActiveFunFact(null); setShowFunFact(false); }}>Keep playing</button></section></div>}
+      {(activeFunFact || showFunFact) && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">{activeFunFact ? (funFactQueue.length > 1 ? `CORRECT PIECE · ${funFactQueue.length} FACTS READY` : "CORRECT PIECE · FACT UNLOCKED") : "PUZZLE COMPLETE · FACT UNLOCKED"}</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{activeFunFact || game.funFact}</p><button className="button button-primary" onClick={() => { if (activeFunFact) setFunFactQueue((queue) => queue.slice(1)); setShowFunFact(false); }}>Keep playing</button></section></div>}
       <p className="puzzle-footnote">{cloudEligible ? (cloudStatus === "syncing" ? "Syncing your arrangement to your account…" : cloudStatus === "saved" ? "Your arrangement, moves and timer are syncing to your account, so you can return on another device." : "Cloud sync is temporarily unavailable. Your progress is still saved on this browser.") : user ? "This preview puzzle saves on this browser. Sign-in and cloud saves will be available for published puzzles." : "Progress saves automatically on this browser, including your arrangement, moves, and timer. Sign in to use account-based saves on published puzzles."}</p>
     </section>
   );

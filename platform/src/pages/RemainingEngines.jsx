@@ -8,11 +8,19 @@ const timelineCards = [
   { title: "Swahili Coast city-states", era: "c. 800 CE", note: "Coastal trading communities linked African, Indian Ocean, and global networks." },
   { title: "Mali Empire", era: "c. 1235 CE", note: "A West African empire associated with trans-Saharan trade and centres of learning." },
   { title: "Great Zimbabwe", era: "c. 1100–1450 CE", note: "A southern African stone-built city and trading centre." },
+  { title: "Haitian Revolution", era: "1791–1804", note: "A revolution in Saint-Domingue that established Haiti and reshaped global debates on freedom and slavery." },
+  { title: "Harlem Renaissance", era: "1920s–1930s", note: "A cultural movement centred in New York with global Black artistic and intellectual connections." },
+  { title: "Pan-African Congress, Manchester", era: "1945", note: "A major gathering connecting anti-colonial organisers and thinkers from Africa and the diaspora." },
+  { title: "African Union founded", era: "2002", note: "A continental organisation succeeding the Organisation of African Unity." },
 ];
 const festivalCards = [
   { place: "Rwanda", stamp: "Imigongo", task: "Match a geometric pattern tile to complete the craft passport stamp." },
   { place: "Ghana", stamp: "Kente", task: "Choose a respectful way to credit makers and the meaning carried by a textile tradition." },
   { place: "Morocco", stamp: "Moussem", task: "Plan a visitor route that prioritises local hosts, learning, and consent." },
+  { place: "Trinidad and Tobago", stamp: "Carnival craft", task: "Choose a way to learn from costume makers, steelpan artists, and community archives with credit." },
+  { place: "Brazil", stamp: "Maracatu", task: "Trace how performance, community, and local history shape a respectful festival route." },
+  { place: "Japan", stamp: "Matsuri", task: "Build a visitor plan that follows local guidance and learns why the celebration matters." },
+  { place: "India", stamp: "Holi", task: "Decide how to join a celebration with local context, safety, and respect for community practices." },
 ];
 function Layout({ eyebrow, title, icon: Icon, level, setLevel, score, reset, children }) { return <main className="remaining-engine-page"><section className="remaining-engine-shell"><Link className="hero-quest-back" to="/#games-under-test"><ArrowLeft size={16} /> Games under Test</Link><header className="remaining-engine-header"><div><span className="eyebrow">{eyebrow}</span><h1><Icon size={36} /> {title}</h1></div><div><span>SESSION SCORE</span><strong>{score}</strong><button onClick={reset}>Reset</button></div></header><div className="remaining-levels">{complexity.map((item) => <button key={item.id} className={level === item.id ? "active" : ""} onClick={() => setLevel(item.id)}><strong>{item.label}</strong><span>{item.copy}</span></button>)}</div>{children}<p className="remaining-disclaimer">Playable engine prototype. Public release requires curriculum review, regional expert review, accessibility QA, and approved media/content packs.</p></section></main>; }
 function Feedback({ value, good }) { return value && <div className={good ? "remaining-feedback good" : "remaining-feedback"}><CheckCircle2 size={18} /><p>{value}</p></div>; }
