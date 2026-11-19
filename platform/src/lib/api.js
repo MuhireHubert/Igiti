@@ -68,7 +68,11 @@ export async function getGames({ signal, detail = false } = {}) {
     }
     return game.puzzles.map((puzzle) => ({
       id: puzzle.id,
-      title: game.puzzles.length === 1 ? game.title : `${game.title}: ${puzzle.title}`,
+      // A game can have several puzzles that intentionally share its title.
+      // Do not present a duplicated heading such as "Rwanda: Rwanda".
+      title: game.puzzles.length === 1 || puzzle.title.trim().toLowerCase() === game.title.trim().toLowerCase()
+        ? game.title
+        : `${game.title}: ${puzzle.title}`,
       category: game.category,
       description: game.description,
       difficulty: ({
