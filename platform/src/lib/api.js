@@ -1,8 +1,8 @@
 // Vercel proxies this path to the staging API. Keeping the explicit variable
 // first allows other hosts to opt into a different API without changing code.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
-let cachedGames = null;
-let cachedGamesAt = 0;
+let cachedCatalogue = null;
+let cachedCatalogueAt = 0;
 const GAMES_CACHE_MS = 60_000;
 
 const previewGames = [
@@ -41,11 +41,13 @@ const previewGames = [
   },
 ];
 
-export async function getGames({ signal } = {}) {
+export async function getGames({ signal, detail = false } = {}) {
   if (!API_BASE) return { data: previewGames, source: "preview" };
-  if (cachedGames && Date.now() - cachedGamesAt < GAMES_CACHE_MS) return cachedGames;
+  // Only cache the compact catalogue. A game detail has full artwork and all
+  // per-piece facts, so it must be freshly loaded when the player opens it.
+  if (!detail && cachedCatalogue && Date.now() - cachedCatalogueAt < GAMES_CACHE_MS) return cachedCatalogue;
 
-  const response = await fetch(`${API_BASE}/v1/games`, {
+  const response = await fetch(`${API_BASE}/v1/games${detail ? "?detail=1" : ""}`, {
     headers: { Accept: "application/json" },
     signal,
   });
@@ -60,7 +62,7 @@ export async function getGames({ signal } = {}) {
         description: game.description,
         difficulty: "Relaxed",
         pieces: 0,
-        image: game.coverImage,
+        image: game.thumbnailUrl || game.coverImage,
         status: "coming-soon",
       }];
     }
@@ -76,7 +78,7 @@ export async function getGames({ signal } = {}) {
         EXPERT: "Challenging",
       })[puzzle.difficulty] || "Curious",
       pieces: puzzle.pieceCount,
-      image: puzzle.imageUrl || game.coverImage,
+      image: puzzle.imageUrl || game.thumbnailUrl || game.coverImage,
       status: "available",
       gameId: game.id,
       gameSlug: game.slug,
@@ -89,13 +91,15 @@ export async function getGames({ signal } = {}) {
     }));
   });
   const result = { data: games, source: "api" };
-  cachedGames = result;
-  cachedGamesAt = Date.now();
+  if (!detail) {
+    cachedCatalogue = result;
+    cachedCatalogueAt = Date.now();
+  }
   return result;
 }
 
 export async function getGameById(id, options) {
-  const { data } = await getGames(options);
+  const { data } = await getGames({ ...options, detail: true });
   return data.find((game) => game.id === id) ?? null;
 }
 

@@ -7,9 +7,9 @@ import { deviceHeaders } from "../lib/device.js";
 import "./AdminPortal.css";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
-const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", status: "PUBLISHED", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFactsText: "", access: "FREE", monthlyPrice: "", yearlyPrice: "", currency: "USD" };
-const blankPuzzle = { slug: "", title: "", imageUrl: "", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFactsText: "", access: "FREE", monthlyPrice: "", yearlyPrice: "", currency: "USD", sortOrder: 0, isActive: false };
-const blankCountryAsset = { country: "", imageUrl: "", caption: "" };
+const blankGame = { slug: "", title: "", description: "", category: "Geography", coverImage: "", thumbnailUrl: "", status: "PUBLISHED", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFactsText: "", access: "FREE", monthlyPrice: "", yearlyPrice: "", currency: "USD" };
+const blankPuzzle = { slug: "", title: "", imageUrl: "", thumbnailUrl: "", pieceCount: 60, difficulty: "RELAXED", allowedDifficulties: ["RELAXED"], funFactsText: "", access: "FREE", monthlyPrice: "", yearlyPrice: "", currency: "USD", sortOrder: 0, isActive: false };
+const blankCountryAsset = { country: "", imageUrl: "", thumbnailUrl: "", caption: "" };
 const blankOffer = { key: "", title: "", description: "", kind: "GAME", resource: "", amountMinor: "", currency: "USD", interval: "MONTHLY", seatLimit: "", isActive: false };
 const a54Modes = [
   ["quick-facts", "Quick Facts Showdown"], ["matching", "Country Matching"], ["card-war", "Igiti Card War"], ["guess-country", "Guess the Country"],
@@ -230,13 +230,20 @@ export default function AdminPortal() {
       const response = await fetch(`${API_BASE}/v1/admin/media/images`, { method: "POST", headers: { Authorization: `Bearer ${token}`, ...deviceHeaders() }, body });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Image upload failed.");
-      update(payload.data.url);
+      update(payload.data);
       setNotice("Image uploaded. Save the form to attach it to this game or country card.");
     } catch (error) {
       setWorkspaceError(error.message);
     } finally {
       setSaving(false);
     }
+  }
+
+  async function backfillThumbnails() {
+    await withAdminRequest(async (token) => {
+      const result = await adminRequest("/media/backfill-thumbnails", token, { method: "POST" });
+      setNotice(`${result.completed} existing image${result.completed === 1 ? "" : "s"} optimized. ${result.remainingHint}`);
+    }, "Existing artwork optimization completed.");
   }
 
   function startNewGame() {
@@ -248,7 +255,7 @@ export default function AdminPortal() {
 
   function startEditGame(game) {
     setEditingGameId(game.id);
-    setGameForm({ slug: game.slug, title: game.title, description: game.description, category: game.category, coverImage: game.coverImage, status: game.status });
+    setGameForm({ ...blankGame, slug: game.slug, title: game.title, description: game.description, category: game.category, coverImage: game.coverImage, thumbnailUrl: game.thumbnailUrl || "", status: game.status });
     setGameSlugEdited(true);
     setActiveGameId(game.id);
     setTab("games");
@@ -262,14 +269,14 @@ export default function AdminPortal() {
       return;
     }
     await withAdminRequest(async (token) => {
-      const game = { slug: toSlug(gameForm.slug || gameForm.title), title: gameForm.title, description: gameForm.description, category: gameForm.category, coverImage: gameForm.coverImage, status: gameForm.status };
+      const game = { slug: toSlug(gameForm.slug || gameForm.title), title: gameForm.title, description: gameForm.description, category: gameForm.category, coverImage: gameForm.coverImage, thumbnailUrl: gameForm.thumbnailUrl || null, status: gameForm.status };
       if (editingGameId) {
         await adminRequest(`/games/${editingGameId}`, token, { method: "PATCH", body: JSON.stringify(game) });
       } else {
         const monthlyAmountMinor = gameForm.monthlyPrice === "" ? 0 : Math.round(Number(gameForm.monthlyPrice) * 100);
         const yearlyAmountMinor = gameForm.yearlyPrice === "" ? 0 : Math.round(Number(gameForm.yearlyPrice) * 100);
         const puzzle = {
-          slug: toSlug(`${game.slug}-puzzle`), title: game.title, imageUrl: game.coverImage,
+          slug: toSlug(`${game.slug}-puzzle`), title: game.title, imageUrl: game.coverImage, thumbnailUrl: gameForm.thumbnailUrl || null,
           pieceCount: Number(gameForm.pieceCount), difficulty: gameForm.difficulty, sortOrder: 0,
           isActive: game.status === "PUBLISHED",
           metadata: { allowedDifficulties: gameForm.allowedDifficulties, funFacts, pricing: { access: gameForm.access, monthlyAmountMinor, yearlyAmountMinor, currency: gameForm.currency } },
@@ -313,7 +320,7 @@ export default function AdminPortal() {
     setEditingPuzzleId(puzzle.id);
     setPuzzleSlugEdited(true);
     setPuzzleForm({
-      slug: puzzle.slug, title: puzzle.title, imageUrl: puzzle.imageUrl,
+      slug: puzzle.slug, title: puzzle.title, imageUrl: puzzle.imageUrl, thumbnailUrl: puzzle.thumbnailUrl || "",
       pieceCount: puzzle.pieceCount, difficulty: puzzle.difficulty,
       allowedDifficulties: Array.isArray(puzzle.metadata?.allowedDifficulties) ? puzzle.metadata.allowedDifficulties : [puzzle.difficulty],
       funFactsText: (Array.isArray(puzzle.metadata?.funFacts) ? puzzle.metadata.funFacts : (puzzle.metadata?.funFact ? [puzzle.metadata.funFact] : [])).join("\n"),
@@ -335,7 +342,7 @@ export default function AdminPortal() {
       setWorkspaceError(`Add exactly ${puzzleForm.pieceCount} fun facts — one for every puzzle piece.`);
       return;
     }
-    const payload = { slug: toSlug(puzzleForm.slug || puzzleForm.title), title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFacts, pricing: { access: puzzleForm.access, monthlyAmountMinor, yearlyAmountMinor, currency: puzzleForm.currency } } };
+    const payload = { slug: toSlug(puzzleForm.slug || puzzleForm.title), title: puzzleForm.title, imageUrl: puzzleForm.imageUrl, thumbnailUrl: puzzleForm.thumbnailUrl || null, pieceCount: Number(puzzleForm.pieceCount), difficulty: puzzleForm.difficulty, sortOrder: Number(puzzleForm.sortOrder), isActive: puzzleForm.isActive, metadata: { allowedDifficulties: puzzleForm.allowedDifficulties, funFacts, pricing: { access: puzzleForm.access, monthlyAmountMinor, yearlyAmountMinor, currency: puzzleForm.currency } } };
     await withAdminRequest(async (token) => {
       const path = editingPuzzleId ? `/puzzles/${editingPuzzleId}` : `/games/${activeGameId}/puzzles`;
       await adminRequest(path, token, { method: editingPuzzleId ? "PATCH" : "POST", body: JSON.stringify(payload) });
@@ -424,7 +431,7 @@ export default function AdminPortal() {
 
   function editCountryAsset(asset) {
     setEditingCountryAssetId(asset.id);
-    setCountryAssetForm({ country: asset.country, imageUrl: asset.imageUrl, caption: asset.caption || "" });
+    setCountryAssetForm({ country: asset.country, imageUrl: asset.imageUrl, thumbnailUrl: asset.thumbnailUrl || "", caption: asset.caption || "" });
     setTab("countries");
   }
 
@@ -582,7 +589,7 @@ export default function AdminPortal() {
               <label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => { setGameSlugEdited(true); setGameForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. You can change it; punctuation is cleaned for you.</small></label>
               <label className="admin-field">Description<textarea value={gameForm.description} onChange={(e) => setGameForm({ ...gameForm, description: e.target.value })} required rows={3} /></label>
               <label className="admin-field">Category<input value={gameForm.category} onChange={(e) => setGameForm({ ...gameForm, category: e.target.value })} required /></label>
-              <ImageUploadField label="Game cover image" value={gameForm.coverImage} uploading={saving} onUpload={(file) => uploadImage(file, (coverImage) => setGameForm((current) => ({ ...current, coverImage })))} />
+              <ImageUploadField label="Game cover image" value={gameForm.coverImage} uploading={saving} onUpload={(file) => uploadImage(file, ({ url, thumbnailUrl }) => setGameForm((current) => ({ ...current, coverImage: url, thumbnailUrl: thumbnailUrl || "" })))} />
               {!editingGameId && <><div className="admin-form-section"><strong>Playable puzzle settings</strong><small>Igiti will split this image into the selected number of movable puzzle pieces.</small></div><div className="admin-form-two"><label className="admin-field">Number of pieces<input type="number" min="2" max="1000" value={gameForm.pieceCount} onChange={(e) => setGameForm({ ...gameForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Starting difficulty<select value={gameForm.difficulty} onChange={(e) => setGameForm((current) => ({ ...current, difficulty: e.target.value, allowedDifficulties: current.allowedDifficulties.includes(e.target.value) ? current.allowedDifficulties : [...current.allowedDifficulties, e.target.value] }))}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div><fieldset className="admin-difficulty-options"><legend>Difficulty levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={gameForm.allowedDifficulties.includes(level)} onChange={(event) => setGameForm((current) => ({ ...current, allowedDifficulties: event.target.checked ? [...current.allowedDifficulties, level] : current.allowedDifficulties.filter((item) => item !== level) }))} disabled={gameForm.allowedDifficulties.length === 1 && gameForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset><label className="admin-field">Fun facts — {String(gameForm.funFactsText || "").split("\n").map((fact) => fact.trim()).filter(Boolean).length} / {gameForm.pieceCount}<small>Enter exactly one fact per line. Each fact appears when its matching puzzle piece is correctly placed.</small><textarea value={gameForm.funFactsText} onChange={(e) => setGameForm({ ...gameForm, funFactsText: e.target.value })} maxLength={501000} rows={8} required placeholder={'Rwanda is known as the land of a thousand hills.\nLake Victoria is Africa’s largest lake.'} /></label><AccessPricingFields form={gameForm} setForm={setGameForm} /></>}
               <label className="admin-field">Publishing state<select value={gameForm.status} onChange={(e) => setGameForm({ ...gameForm, status: e.target.value })}><option value="DRAFT">Draft — hidden from players</option><option value="PUBLISHED">Published — visible to players</option><option value="ARCHIVED">Archived — hidden from players</option></select></label>
               <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving || !gameForm.coverImage}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : gameForm.status === "PUBLISHED" ? "Create & publish game" : "Create game draft"}</button>
@@ -599,7 +606,7 @@ export default function AdminPortal() {
                 {activeGameId === game.id && <form className="admin-form admin-puzzle-form" onSubmit={savePuzzle}><div className="admin-panel-heading"><h3>{editingPuzzleId ? "Edit puzzle" : "New puzzle"}</h3>{editingPuzzleId && <button type="button" className="admin-icon-button" onClick={() => { setEditingPuzzleId(null); setPuzzleForm(blankPuzzle); setPuzzleSlugEdited(false); }}><X size={15} /></button>}</div>
                   <label className="admin-field">Puzzle title<input value={puzzleForm.title} onChange={(e) => setPuzzleForm((current) => ({ ...current, title: e.target.value, slug: puzzleSlugEdited ? current.slug : toSlug(e.target.value) }))} required /></label>
                   <label className="admin-field">Slug<input value={puzzleForm.slug} onChange={(e) => { setPuzzleSlugEdited(true); setPuzzleForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. Punctuation is cleaned for you.</small></label>
-                  <ImageUploadField label="Puzzle image" value={puzzleForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setPuzzleForm((current) => ({ ...current, imageUrl })))} />
+                  <ImageUploadField label="Puzzle image" value={puzzleForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, ({ url, thumbnailUrl }) => setPuzzleForm((current) => ({ ...current, imageUrl: url, thumbnailUrl: thumbnailUrl || "" })))} />
                   <div className="admin-form-two"><label className="admin-field">Pieces<input type="number" min="2" max="1000" value={puzzleForm.pieceCount} onChange={(e) => setPuzzleForm({ ...puzzleForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Difficulty<select value={puzzleForm.difficulty} onChange={(e) => setPuzzleForm({ ...puzzleForm, difficulty: e.target.value })}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div>
                   <fieldset className="admin-difficulty-options"><legend>Levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={puzzleForm.allowedDifficulties.includes(level)} onChange={(event) => setPuzzleForm({ ...puzzleForm, allowedDifficulties: event.target.checked ? [...puzzleForm.allowedDifficulties, level] : puzzleForm.allowedDifficulties.filter((item) => item !== level) })} disabled={puzzleForm.allowedDifficulties.length === 1 && puzzleForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset>
                   <label className="admin-field">Fun facts — {puzzleForm.funFactsText.split("\n").map((fact) => fact.trim()).filter(Boolean).length} / {puzzleForm.pieceCount}<small>Enter exactly one fact per line. Each fact is assigned to one piece and appears when that piece is correctly placed.</small><textarea value={puzzleForm.funFactsText} onChange={(e) => setPuzzleForm({ ...puzzleForm, funFactsText: e.target.value })} maxLength={501000} rows={8} required placeholder={'Rwanda is known as the land of a thousand hills.\nLake Victoria is Africa’s largest lake.'} /></label>
@@ -620,7 +627,8 @@ export default function AdminPortal() {
 
         {tab === "countries" && adminSession?.role === "OWNER" && <div className="admin-content admin-game-layout">
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>{editingCountryAssetId ? "Update country card" : "Add country card"}</h2><p>Choose one visual per country. It will be used across that country’s two A-54 cards, stays in Firebase Storage, and is audited.</p></div>{editingCountryAssetId && <button className="admin-icon-button" onClick={() => { setEditingCountryAssetId(null); setCountryAssetForm(blankCountryAsset); }}><X size={16} /></button>}</div>
-            <form className="admin-form" onSubmit={saveCountryAsset}><label className="admin-field">Country<input value={countryAssetForm.country} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, country: e.target.value })} required /></label><ImageUploadField label="Country card image" value={countryAssetForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, (imageUrl) => setCountryAssetForm((current) => ({ ...current, imageUrl })))} /><label className="admin-field">Caption <small>(optional)</small><input value={countryAssetForm.caption} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, caption: e.target.value })} maxLength={280} /></label><button className="admin-button admin-button-primary admin-button-wide" disabled={saving || !countryAssetForm.imageUrl}><Save size={15} /> {editingCountryAssetId ? "Save country card" : "Add country card"}</button></form>
+            <button type="button" className="admin-button admin-button-light" onClick={backfillThumbnails} disabled={saving}><RefreshCw size={15} /> Optimize next existing images</button><small>Creates lightweight previews for two older Firebase uploads at a time without changing the originals.</small>
+            <form className="admin-form" onSubmit={saveCountryAsset}><label className="admin-field">Country<input value={countryAssetForm.country} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, country: e.target.value })} required /></label><ImageUploadField label="Country card image" value={countryAssetForm.imageUrl} uploading={saving} onUpload={(file) => uploadImage(file, ({ url, thumbnailUrl }) => setCountryAssetForm((current) => ({ ...current, imageUrl: url, thumbnailUrl: thumbnailUrl || "" })))} /><label className="admin-field">Caption <small>(optional)</small><input value={countryAssetForm.caption} onChange={(e) => setCountryAssetForm({ ...countryAssetForm, caption: e.target.value })} maxLength={280} /></label><button className="admin-button admin-button-primary admin-button-wide" disabled={saving || !countryAssetForm.imageUrl}><Save size={15} /> {editingCountryAssetId ? "Save country card" : "Add country card"}</button></form>
           </section>
           <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Country image catalogue</h2><p>{countryAssets.length} country image(s) available to game content.</p></div></div>{countryAssets.map((asset) => <article className="admin-list-row" key={asset.id}><img src={asset.imageUrl} alt="" /><div className="admin-list-copy"><strong>{asset.country}</strong><span>{asset.caption || "No caption"}</span></div><button className="admin-row-action" onClick={() => editCountryAsset(asset)}>Update</button></article>)}{!countryAssets.length && <p className="admin-empty">No country images have been added yet.</p>}</section>
         </div>}

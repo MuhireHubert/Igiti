@@ -14,6 +14,7 @@ model Game {
   description String     @db.Text
   category    String
   coverImage  String     @db.VarChar(2048)
+  thumbnailUrl String?   @db.VarChar(2048)
   status      GameStatus @default(DRAFT)
   publishedAt DateTime?
   createdAt   DateTime   @default(now())
@@ -31,6 +32,7 @@ model CountryAsset {
   id        String   @id @default(cuid())
   country   String   @unique @db.VarChar(120)
   imageUrl  String   @db.VarChar(2048)
+  thumbnailUrl String? @db.VarChar(2048)
   caption   String?  @db.VarChar(280)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -44,6 +46,7 @@ model Puzzle {
   slug       String
   title      String
   imageUrl   String     @db.VarChar(2048)
+  thumbnailUrl String? @db.VarChar(2048)
   pieceCount Int
   difficulty Difficulty
   sortOrder  Int        @default(0)
