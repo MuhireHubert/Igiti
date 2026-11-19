@@ -3,7 +3,6 @@ import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, HeartHandshake, Leaf, Sp
 import { Link } from "react-router-dom";
 import EngineVisual from "../components/EngineVisual.jsx";
 import { seededShuffle } from "../lib/gameShuffle.js";
-import { advanceGameWorld } from "../lib/gameWorld.js";
 
 const campaigns = [[
   { title: "Listen before leading", scene: "Families say nearby streams are drying up, food is less secure, and finding firewood takes longer. You have one meeting to decide where the work begins.", skill: "Community listening", icon: UsersRound, choices: [
@@ -101,8 +100,8 @@ export default function HeroQuest() {
     setStats((current) => ({ trust: clamp(current.trust + selected.effect.trust), roots: clamp(current.roots + selected.effect.roots), time: clamp(current.time + selected.effect.time) }));
     setHistory((items) => [...items, { title: active.title, selected: selected.label }]);
   }
-  function continueQuest() { advanceGameWorld("african-heroes"); setChoice(null); setChapter((value) => value + 1); }
-  function restart(nextCampaign = false) { if (nextCampaign) { advanceGameWorld("african-heroes"); setCampaignIndex((value) => (value + 1) % campaigns.length); } setChapter(0); setChoice(null); setHistory([]); setStats({ trust: 4, roots: 3, time: 7 }); }
+  function continueQuest() { setChoice(null); setChapter((value) => value + 1); }
+  function restart(nextCampaign = false) { if (nextCampaign) setCampaignIndex((value) => (value + 1) % campaigns.length); setChapter(0); setChoice(null); setHistory([]); setStats({ trust: 4, roots: 3, time: 7 }); }
 
   return <main className="hero-quest-page"><section className="hero-quest-shell" aria-labelledby="hero-quest-title">
     <Link className="hero-quest-back" to="/#games-under-test"><ArrowLeft size={16} /> Games under Test</Link>
