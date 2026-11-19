@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownRight, ArrowRight, BookOpen, Check, ChevronDown, Compass,
   Crown, Flame, Gamepad2, Globe2, Heart, Leaf, Menu, Puzzle, Search,
-  ShieldCheck, Sparkles, Trophy, X,
+  ShieldCheck, Sparkles, Trophy, X, ChefHat, Drum, Landmark, Languages,
+  Lightbulb, PawPrint, Route, Store, PartyPopper, UsersRound, Headphones,
 } from "lucide-react";
 import { getApiBaseUrl, getGames } from "./lib/api.js";
 import { deviceHeaders } from "./lib/device.js";
@@ -12,6 +13,18 @@ import { Link, useNavigate } from "react-router-dom";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
+const gamesUnderTest = [
+  { title: "African Heroes: Story Quest", mechanic: "Decision missions", icon: Landmark, phase: "Story prototype", description: "Make choices, solve clues, and unlock a collectible hero card for every completed chapter.", tags: ["Narrative", "Collectibles", "Classroom"] },
+  { title: "Taste of Africa", mechanic: "Recipe match", icon: ChefHat, phase: "Playtest queue", description: "Match dishes to countries and regions, assemble recipes, and discover the people and stories behind every plate.", tags: ["Family", "Visual", "Regional"] },
+  { title: "Music Map Challenge", mechanic: "Listen & locate", icon: Drum, phase: "Audio pilot", description: "Hear an instrument or rhythm, place it on the map, and take on call-and-response rounds.", tags: ["Audio", "Map", "Multiplayer"] },
+  { title: "African Wildlife Rangers", mechanic: "Conservation missions", icon: PawPrint, phase: "Playtest queue", description: "Identify habitats, match animals to ecosystems, and protect a virtual reserve as difficulty rises.", tags: ["Science", "Younger players", "Strategy"] },
+  { title: "Kingdoms & Civilizations Timeline", mechanic: "Build the timeline", icon: Landmark, phase: "School pilot", description: "Place kingdoms, cities, trade routes, and inventions in order across Africa’s rich history.", tags: ["History", "Timeline", "Schools"] },
+  { title: "Language Explorer", mechanic: "Hear, match, speak", icon: Languages, phase: "Audio pilot", description: "Match greetings and phrases, hear pronunciation, and identify languages through escalating rounds.", tags: ["Audio", "Language", "Practice"] },
+  { title: "African Inventors Lab", mechanic: "Solve & build", icon: Lightbulb, phase: "Concept test", description: "Build simple solutions for water, health, energy, transport, and agriculture through logic challenges.", tags: ["STEM", "Problem solving", "Schools"] },
+  { title: "Diaspora Journey", mechanic: "Map the connections", icon: Route, phase: "Research prototype", description: "Follow people, music, food, language, and history between Africa, the Caribbean, the Americas, Europe, and the Middle East.", tags: ["Map", "Timeline", "Group play"] },
+  { title: "Market Master", mechanic: "Trade & budget", icon: Store, phase: "School pilot", description: "Run a market stall, make wise trade decisions, and learn currencies, maths, and entrepreneurship.", tags: ["Maths", "Strategy", "Economy"] },
+  { title: "Festival Passport", mechanic: "Travel & collect", icon: PartyPopper, phase: "Visual prototype", description: "Travel through festivals, fashion, architecture, dance, and celebrations to earn country passport stamps.", tags: ["Culture", "Collectibles", "Families"] },
+];
 const PuzzleGame = lazy(() => import("./components/PuzzleGame.jsx"));
 const CardGame = lazy(() => import("./components/CardGame.jsx"));
 
@@ -229,6 +242,33 @@ function App() {
               {visibleGames.length === 0 && <div className="empty-state"><Search size={26} /><h3>No stories found</h3><p>Try another search or clear one of your filters.</p><button className="text-action" onClick={() => { setCategory("All stories"); setDifficulty("All levels"); setSearch(""); }}>Clear filters <ArrowRight size={15} /></button></div>}
             </div>
           <div className="library-foot"><span>More stories are on their way.</span><span>Designed in Africa <span className="africa-heart">♥</span> for everyone.</span></div>
+        </section>
+
+        <section className="test-lab" id="games-under-test" aria-labelledby="test-lab-title">
+          <div className="test-lab-heading">
+            <div><span className="eyebrow"><span className="eyebrow-dot" /> GAMES UNDER TEST</span><h2 id="test-lab-title">The next Igiti games are being <em>built to play.</em></h2><p>These are purpose-built prototypes—not filler. Each one has one strong core mechanic, culturally grounded content, and a clear route from family play to classroom use.</p></div>
+            <div className="test-lab-status"><span>10</span><strong>new game concepts</strong><small>Testing before release keeps each collection meaningful.</small></div>
+          </div>
+          <div className="igiti-formula" aria-label="The Igiti game design formula">
+            <div><Gamepad2 size={20} /><strong>One core mechanic</strong><span>Every game asks one satisfying thing of the player.</span></div>
+            <div><Globe2 size={20} /><strong>Beautiful country visuals</strong><span>Places, people, and stories are never generic decoration.</span></div>
+            <div><Headphones size={20} /><strong>Audio with purpose</strong><span>Music and language are learned by listening, not just reading.</span></div>
+            <div><UsersRound size={20} /><strong>Grow together</strong><span>Difficulty, collections, multiplayer, and classroom assignments scale the experience.</span></div>
+          </div>
+          <div className="test-game-grid">
+            {gamesUnderTest.map((game, index) => {
+              const Icon = game.icon;
+              return <article className="test-game-card" key={game.title}>
+                <div className="test-game-top"><span className="test-game-number">{String(index + 1).padStart(2, "0")}</span><span className="test-game-phase">{game.phase}</span></div>
+                <span className="test-game-icon"><Icon size={26} /></span>
+                <span className="test-game-mechanic">{game.mechanic}</span>
+                <h3>{game.title}</h3><p>{game.description}</p>
+                <div className="test-game-tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+                <span className="test-game-note">In guided testing · not yet in subscriptions</span>
+              </article>;
+            })}
+          </div>
+          <p className="test-lab-footnote">We will release games only after content review, playtesting, accessibility checks, and secure access setup. Early concepts do not affect existing paid access or school assignments.</p>
         </section>
 
         <section className="manifesto" id="how-it-works">
