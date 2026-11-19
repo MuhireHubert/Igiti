@@ -14,12 +14,12 @@ import { Link, useNavigate } from "react-router-dom";
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
 const gamesUnderTest = [
-  { title: "African Heroes: Story Quest", mechanic: "Decision missions", icon: Landmark, phase: "Story prototype", description: "Make choices, solve clues, and unlock a collectible hero card for every completed chapter.", tags: ["Narrative", "Collectibles", "Classroom"] },
-  { title: "Taste of Africa", mechanic: "Recipe match", icon: ChefHat, phase: "Playtest queue", description: "Match dishes to countries and regions, assemble recipes, and discover the people and stories behind every plate.", tags: ["Family", "Visual", "Regional"] },
-  { title: "Music Map Challenge", mechanic: "Listen & locate", icon: Drum, phase: "Audio pilot", description: "Hear an instrument or rhythm, place it on the map, and take on call-and-response rounds.", tags: ["Audio", "Map", "Multiplayer"] },
-  { title: "African Wildlife Rangers", mechanic: "Conservation missions", icon: PawPrint, phase: "Playtest queue", description: "Identify habitats, match animals to ecosystems, and protect a virtual reserve as difficulty rises.", tags: ["Science", "Younger players", "Strategy"] },
+  { id: "african-heroes", title: "African Heroes: Story Quest", mechanic: "Decision missions", icon: Landmark, phase: "Play now", description: "Make choices, solve clues, and unlock a collectible hero card for every completed chapter.", tags: ["Narrative", "Collectibles", "Classroom"] },
+  { id: "taste-of-africa", title: "Taste of Africa", mechanic: "Recipe match", icon: ChefHat, phase: "Play now", description: "Match dishes to countries and regions, assemble recipes, and discover the people and stories behind every plate.", tags: ["Family", "Visual", "Regional"] },
+  { id: "music-map", title: "Music Map Challenge", mechanic: "Listen & locate", icon: Drum, phase: "Play now", description: "Hear a short cue, place it on the map, and take on call-and-response rounds.", tags: ["Audio", "Map", "Multiplayer"] },
+  { id: "wildlife-rangers", title: "African Wildlife Rangers", mechanic: "Conservation missions", icon: PawPrint, phase: "Play now", description: "Identify habitats, match animals to ecosystems, and protect a virtual reserve as difficulty rises.", tags: ["Science", "Younger players", "Strategy"] },
   { title: "Kingdoms & Civilizations Timeline", mechanic: "Build the timeline", icon: Landmark, phase: "School pilot", description: "Place kingdoms, cities, trade routes, and inventions in order across Africa’s rich history.", tags: ["History", "Timeline", "Schools"] },
-  { title: "Language Explorer", mechanic: "Hear, match, speak", icon: Languages, phase: "Audio pilot", description: "Match greetings and phrases, hear pronunciation, and identify languages through escalating rounds.", tags: ["Audio", "Language", "Practice"] },
+  { id: "language-explorer", title: "Language Explorer", mechanic: "Hear, match, speak", icon: Languages, phase: "Play now", description: "Match greetings and phrases, hear pronunciation, and identify languages through escalating rounds.", tags: ["Audio", "Language", "Practice"] },
   { title: "African Inventors Lab", mechanic: "Solve & build", icon: Lightbulb, phase: "Concept test", description: "Build simple solutions for water, health, energy, transport, and agriculture through logic challenges.", tags: ["STEM", "Problem solving", "Schools"] },
   { title: "Diaspora Journey", mechanic: "Map the connections", icon: Route, phase: "Research prototype", description: "Follow people, music, food, language, and history between Africa, the Caribbean, the Americas, Europe, and the Middle East.", tags: ["Map", "Timeline", "Group play"] },
   { title: "Market Master", mechanic: "Trade & budget", icon: Store, phase: "School pilot", description: "Run a market stall, make wise trade decisions, and learn currencies, maths, and entrepreneurship.", tags: ["Maths", "Strategy", "Economy"] },
@@ -264,7 +264,7 @@ function App() {
                 <span className="test-game-mechanic">{game.mechanic}</span>
                 <h3>{game.title}</h3><p>{game.description}</p>
                 <div className="test-game-tags">{game.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                <span className="test-game-note">In guided testing · not yet in subscriptions</span>
+                {game.id ? <Link className="test-game-open" to={`/games-under-test/${game.id}`}>Open playable prototype <ArrowRight size={15} /></Link> : <span className="test-game-note">Next concept · not yet in subscriptions</span>}
               </article>;
             })}
           </div>
