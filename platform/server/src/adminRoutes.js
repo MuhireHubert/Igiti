@@ -2,6 +2,8 @@ import express from "express";
 import admin from "firebase-admin";
 import multer from "multer";
 import { randomUUID } from "node:crypto";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import prisma from "./db.js";
 import { z } from "zod";
 
@@ -11,17 +13,6 @@ const adminEmails = new Set([process.env.ADMIN_EMAILS, process.env.OWNER_EMAILS,
   .map((value) => value.trim().toLowerCase())
   .filter(Boolean));
 const roleRank = { PLAYER: 0, STUDENT: 0, TEACHER: 1, SCHOOL: 2, MODERATOR: 3, CONTENT_MANAGER: 4, ADMIN: 5, OWNER: 6 };
-const imageUpload = multer({
-  storage: multer.memoryStorage(),
-  // Artwork supplied for the A-54 deck and puzzles can be high resolution.
-  // Keep one-file, in-memory uploads bounded while allowing high-resolution
-  // originals that content editors work with.
-  limits: { fileSize: 200 * 1024 * 1024, files: 1 },
-  fileFilter: (_req, file, callback) => {
-    callback(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype));
-  },
-});
-
 function hasValidImageSignature(buffer, mimeType) {
   if (!buffer || buffer.length < 12) return false;
   if (mimeType === "image/jpeg") return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
@@ -32,6 +23,75 @@ function hasValidImageSignature(buffer, mimeType) {
 function extensionFor(mimeType) {
   return mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
 }
+
+function createImageStorage() {
+  return {
+    async _handleFile(_req, file, callback) {
+      if (!process.env.FIREBASE_STORAGE_BUCKET) {
+        callback(Object.assign(new Error("Image uploads are not configured yet."), { code: "FIREBASE_STORAGE_NOT_CONFIGURED" }));
+        return;
+      }
+      const bucket = admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET);
+      const token = randomUUID();
+      const objectName = `igiti-play/country-cards/${Date.now()}-${randomUUID()}.${extensionFor(file.mimetype)}`;
+      const object = bucket.file(objectName);
+      let bytes = 0;
+      let signature = Buffer.alloc(0);
+      const inspectImage = new Transform({
+        transform(chunk, _encoding, done) {
+          bytes += chunk.length;
+          if (signature.length < 12) signature = Buffer.concat([signature, chunk.subarray(0, 12 - signature.length)]);
+          done(null, chunk);
+        },
+        flush(done) {
+          done(hasValidImageSignature(signature, file.mimetype)
+            ? undefined
+            : Object.assign(new Error("Upload a valid JPG, PNG, or WebP image."), { code: "INVALID_IMAGE_SIGNATURE" }));
+        },
+      });
+      const destination = object.createWriteStream({
+        resumable: true,
+        contentType: file.mimetype,
+        metadata: {
+          cacheControl: "public,max-age=31536000,immutable",
+          metadata: { firebaseStorageDownloadTokens: token },
+        },
+      });
+      try {
+        await pipeline(file.stream, inspectImage, destination);
+        const encodedName = encodeURIComponent(objectName);
+        callback(null, {
+          objectName,
+          size: bytes,
+          contentType: file.mimetype,
+          url: `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedName}?alt=media&token=${token}`,
+        });
+      } catch (error) {
+        await object.delete({ ignoreNotFound: true }).catch(() => {});
+        callback(error);
+      }
+    },
+    async _removeFile(_req, file, callback) {
+      if (!file?.objectName || !process.env.FIREBASE_STORAGE_BUCKET) return callback(null);
+      try {
+        await admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET).file(file.objectName).delete({ ignoreNotFound: true });
+        callback(null);
+      } catch (error) {
+        callback(error);
+      }
+    },
+  };
+}
+
+const imageUpload = multer({
+  // Stream directly to Firebase Storage. Holding a 200 MB image in RAM would
+  // starve normal gameplay requests on the single Render instance.
+  storage: createImageStorage(),
+  limits: { fileSize: 200 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    callback(null, ["image/jpeg", "image/png", "image/webp"].includes(file.mimetype));
+  },
+});
 
 function requireRole(minimumRole) {
   return (req, res, next) => {
@@ -108,31 +168,25 @@ router.use(requireAdmin);
 // not on Render's ephemeral filesystem, so country-card artwork survives deploys.
 router.post("/media/images", requireRole("OWNER"), (req, res, next) => {
   imageUpload.single("file")(req, res, (error) => {
-    if (error) return res.status(400).json({ error: error.code === "LIMIT_FILE_SIZE" ? "Image must be 200 MB or smaller." : "Upload one JPG, PNG, or WebP image." });
+    if (error) {
+      const message = error.code === "LIMIT_FILE_SIZE"
+        ? "Image must be 200 MB or smaller."
+        : error.code === "FIREBASE_STORAGE_NOT_CONFIGURED"
+          ? error.message
+          : error.code === "INVALID_IMAGE_SIGNATURE"
+            ? error.message
+            : "Upload one valid JPG, PNG, or WebP image.";
+      return res.status(400).json({ error: message });
+    }
     return next();
   });
 }, async (req, res, next) => {
-  if (!process.env.FIREBASE_STORAGE_BUCKET) return res.status(503).json({ error: "Image uploads are not configured yet. Set FIREBASE_STORAGE_BUCKET on the API service." });
-  if (!req.file || !hasValidImageSignature(req.file.buffer, req.file.mimetype)) {
+  if (!req.file?.url || !req.file.objectName) {
     return res.status(400).json({ error: "Upload a valid JPG, PNG, or WebP image." });
   }
   try {
-    const bucket = admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET);
-    const token = randomUUID();
-    const objectName = `igiti-play/country-cards/${Date.now()}-${randomUUID()}.${extensionFor(req.file.mimetype)}`;
-    const object = bucket.file(objectName);
-    await object.save(req.file.buffer, {
-      resumable: false,
-      contentType: req.file.mimetype,
-      metadata: {
-        cacheControl: "public,max-age=31536000,immutable",
-        metadata: { firebaseStorageDownloadTokens: token },
-      },
-    });
-    const encodedName = encodeURIComponent(objectName);
-    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedName}?alt=media&token=${token}`;
-    await recordAudit(req.adminUser.id, "media.image_uploaded", "FirebaseStorage", objectName, { mimeType: req.file.mimetype, bytes: req.file.size });
-    return res.status(201).json({ data: { url, path: objectName, contentType: req.file.mimetype, size: req.file.size } });
+    await recordAudit(req.adminUser.id, "media.image_uploaded", "FirebaseStorage", req.file.objectName, { mimeType: req.file.contentType, bytes: req.file.size });
+    return res.status(201).json({ data: { url: req.file.url, path: req.file.objectName, contentType: req.file.contentType, size: req.file.size } });
   } catch (error) {
     return next(error);
   }
