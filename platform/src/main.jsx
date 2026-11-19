@@ -5,10 +5,12 @@ import "./styles.css";
 
 const analyticsEndpoint = (import.meta.env.VITE_API_BASE_URL || "https://igiti-play-api-staging.onrender.com").replace(/\/$/, "");
 const width = window.innerWidth;
-void fetch(`${analyticsEndpoint}/v1/analytics/events`, {
+const sendAnalytics = () => void fetch(`${analyticsEndpoint}/v1/analytics/events`, {
   method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
   body: JSON.stringify({ source: "play", path: window.location.pathname, deviceType: width < 768 ? "mobile" : width < 1024 ? "tablet" : "desktop" }),
 }).catch(() => undefined);
+if ("requestIdleCallback" in window) window.requestIdleCallback(sendAnalytics, { timeout: 3000 });
+else window.setTimeout(sendAnalytics, 1500);
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

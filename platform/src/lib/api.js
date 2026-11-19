@@ -1,6 +1,9 @@
 // Vercel proxies this path to the staging API. Keeping the explicit variable
 // first allows other hosts to opt into a different API without changing code.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
+let cachedGames = null;
+let cachedGamesAt = 0;
+const GAMES_CACHE_MS = 60_000;
 
 const previewGames = [
   {
@@ -40,6 +43,7 @@ const previewGames = [
 
 export async function getGames({ signal } = {}) {
   if (!API_BASE) return { data: previewGames, source: "preview" };
+  if (cachedGames && Date.now() - cachedGamesAt < GAMES_CACHE_MS) return cachedGames;
 
   const response = await fetch(`${API_BASE}/v1/games`, {
     headers: { Accept: "application/json" },
@@ -84,7 +88,10 @@ export async function getGames({ signal } = {}) {
       requiresPurchase: Boolean(puzzle.requiresPurchase),
     }));
   });
-  return { data: games, source: "api" };
+  const result = { data: games, source: "api" };
+  cachedGames = result;
+  cachedGamesAt = Date.now();
+  return result;
 }
 
 export async function getGameById(id, options) {

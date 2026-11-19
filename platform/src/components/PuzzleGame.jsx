@@ -73,6 +73,7 @@ export default function PuzzleGame({ game, onBack }) {
   const [dragging, setDragging] = useState(null);
   const [cloudReady, setCloudReady] = useState(!cloudEligible);
   const [cloudStatus, setCloudStatus] = useState("local");
+  const [cloudSaveTick, setCloudSaveTick] = useState(0);
   const solvedCount = pieces.reduce((count, piece, slot) => count + (piece === slot ? 1 : 0), 0);
   const complete = solvedCount === pieceCount;
   const timeExpired = Boolean(timeLimit && seconds >= timeLimit && !complete);
@@ -81,6 +82,8 @@ export default function PuzzleGame({ game, onBack }) {
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const factSlotsRef = useRef(null);
   const suppressNextFactRef = useRef(false);
+  const elapsedStartedAtRef = useRef(Date.now() - seconds * 1000);
+  const latestProgressRef = useRef({ pieces, moves, seconds, hintsUsed, timeLimit, complete: false });
   const perPieceFacts = useMemo(() => Array.isArray(game.funFacts) ? game.funFacts.filter(Boolean) : [], [game.funFacts]);
   const boardStyle = useMemo(() => ({
     "--puzzle-columns": columns,
@@ -96,6 +99,10 @@ export default function PuzzleGame({ game, onBack }) {
       // The puzzle remains playable if browser storage is disabled or full.
     }
   }, [saveKey, pieces, moves, seconds, hintsUsed, timeLimit]);
+
+  useEffect(() => {
+    latestProgressRef.current = { pieces, moves, seconds, hintsUsed, timeLimit, complete };
+  }, [pieces, moves, seconds, hintsUsed, timeLimit, complete]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +132,9 @@ export default function PuzzleGame({ game, onBack }) {
           suppressNextFactRef.current = true;
           setPieces(state.pieces);
           setMoves(Number.isFinite(state.moves) ? state.moves : 0);
-          setSeconds(Number.isFinite(saved.elapsedSeconds) ? saved.elapsedSeconds : (Number.isFinite(state.seconds) ? state.seconds : 0));
+          const restoredSeconds = Number.isFinite(saved.elapsedSeconds) ? saved.elapsedSeconds : (Number.isFinite(state.seconds) ? state.seconds : 0);
+          elapsedStartedAtRef.current = Date.now() - restoredSeconds * 1000;
+          setSeconds(restoredSeconds);
           setHintsUsed(Number.isFinite(state.hintsUsed) ? state.hintsUsed : 0);
           setTimeLimit(Number.isFinite(state.timeLimit) ? state.timeLimit : 0);
         }
@@ -142,8 +151,15 @@ export default function PuzzleGame({ game, onBack }) {
 
   useEffect(() => {
     if (!cloudEligible || !cloudReady || !user) return undefined;
+    const interval = window.setInterval(() => setCloudSaveTick((current) => current + 1), 15_000);
+    return () => window.clearInterval(interval);
+  }, [cloudEligible, cloudReady, user]);
+
+  useEffect(() => {
+    if (!cloudEligible || !cloudReady || !user) return undefined;
     const timeout = window.setTimeout(async () => {
       try {
+        const snapshot = latestProgressRef.current;
         setCloudStatus("syncing");
         const token = await user.getIdToken();
         const response = await fetch(`${apiBase}/v1/me/progress/${game.id}`, {
@@ -155,9 +171,9 @@ export default function PuzzleGame({ game, onBack }) {
             ...deviceHeaders(),
           },
           body: JSON.stringify({
-            state: { pieces, moves, seconds, hintsUsed, timeLimit },
-            elapsedSeconds: seconds,
-            completed: complete,
+            state: { pieces: snapshot.pieces, moves: snapshot.moves, seconds: snapshot.seconds, hintsUsed: snapshot.hintsUsed, timeLimit: snapshot.timeLimit },
+            elapsedSeconds: snapshot.seconds,
+            completed: snapshot.complete,
           }),
         });
         if (!response.ok) throw new Error("Cloud progress could not be saved.");
@@ -167,11 +183,13 @@ export default function PuzzleGame({ game, onBack }) {
       }
     }, 900);
     return () => window.clearTimeout(timeout);
-  }, [cloudEligible, cloudReady, user, apiBase, game.id, pieces, moves, seconds, hintsUsed, timeLimit, complete]);
+  }, [cloudEligible, cloudReady, user, apiBase, game.id, pieces, moves, hintsUsed, timeLimit, complete, cloudSaveTick]);
 
   useEffect(() => {
     if (complete || timeExpired) return undefined;
-    const interval = window.setInterval(() => setSeconds((current) => current + 1), 1000);
+    const tick = () => setSeconds(Math.floor((Date.now() - elapsedStartedAtRef.current) / 1000));
+    tick();
+    const interval = window.setInterval(tick, 500);
     return () => window.clearInterval(interval);
   }, [complete, timeExpired]);
 
@@ -209,6 +227,7 @@ export default function PuzzleGame({ game, onBack }) {
     setSelected(null);
     setDragging(null);
     setMoves(0);
+    elapsedStartedAtRef.current = Date.now();
     setSeconds(0);
     setTimeLimit(nextTimeLimit);
     setHintsUsed(0);
