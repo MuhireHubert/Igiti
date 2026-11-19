@@ -13,6 +13,7 @@ const TestGames = lazy(() => import("./pages/TestGames.jsx"));
 const HeroQuest = lazy(() => import("./pages/HeroQuest.jsx"));
 const CollectionEngines = lazy(() => import("./pages/CollectionEngines.jsx"));
 const AudioEngines = lazy(() => import("./pages/AudioEngines.jsx"));
+const RemainingEngines = lazy(() => import("./pages/RemainingEngines.jsx"));
 
 function PageLoader() {
   return <main className="page-loader" aria-live="polite">Loading Igiti Play…</main>;
@@ -46,6 +47,11 @@ export default function Router() {
         <Route path="/games-under-test/wildlife-rangers" element={<DeferredPage><CollectionEngines /></DeferredPage>} />
         <Route path="/games-under-test/music-map" element={<DeferredPage><AudioEngines /></DeferredPage>} />
         <Route path="/games-under-test/language-explorer" element={<DeferredPage><AudioEngines /></DeferredPage>} />
+        <Route path="/games-under-test/kingdoms-timeline" element={<DeferredPage><RemainingEngines /></DeferredPage>} />
+        <Route path="/games-under-test/inventors-lab" element={<DeferredPage><RemainingEngines /></DeferredPage>} />
+        <Route path="/games-under-test/diaspora-journey" element={<DeferredPage><RemainingEngines /></DeferredPage>} />
+        <Route path="/games-under-test/market-master" element={<DeferredPage><RemainingEngines /></DeferredPage>} />
+        <Route path="/games-under-test/festival-passport" element={<DeferredPage><RemainingEngines /></DeferredPage>} />
         <Route path="/games-under-test/:gameId" element={<DeferredPage><TestGames /></DeferredPage>} />
         <Route path="/how-to-play" element={<DeferredPage><HowToPlayPage /></DeferredPage>} />
         <Route path="/admin" element={<DeferredPage><AdminPortal /></DeferredPage>} />
