@@ -99,6 +99,7 @@ export default function AdminPortal() {
   const [settingValue, setSettingValue] = useState("{}");
   const [entitlementForm, setEntitlementForm] = useState({ playerId: "", resource: "", expiresAt: "" });
   const [gameForm, setGameForm] = useState(blankGame);
+  const [gameStep, setGameStep] = useState(1);
   const [editingGameId, setEditingGameId] = useState(null);
   const [gameSlugEdited, setGameSlugEdited] = useState(false);
   const [activeGameId, setActiveGameId] = useState(null);
@@ -249,6 +250,7 @@ export default function AdminPortal() {
   function startNewGame() {
     setEditingGameId(null);
     setGameForm(blankGame);
+    setGameStep(1);
     setGameSlugEdited(false);
     setTab("games");
   }
@@ -258,6 +260,7 @@ export default function AdminPortal() {
     setGameForm({ ...blankGame, slug: game.slug, title: game.title, description: game.description, category: game.category, coverImage: game.coverImage, thumbnailUrl: game.thumbnailUrl || "", playImageUrl: game.playImageUrl || "", status: game.status });
     setGameSlugEdited(true);
     setActiveGameId(game.id);
+    setGameStep(1);
     setTab("games");
   }
 
@@ -287,6 +290,11 @@ export default function AdminPortal() {
       setEditingGameId(null);
       setGameSlugEdited(false);
     }, editingGameId ? "Game updated." : "Game created with its playable puzzle.");
+  }
+
+  function goToGameStep(step) {
+    setGameStep(step);
+    window.setTimeout(() => document.getElementById(`game-composer-step-${step}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
   }
 
   async function changeGameStatus(game, status) {
@@ -585,14 +593,39 @@ export default function AdminPortal() {
           <section className="admin-panel">
             <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Upload a playable game"}</h2><p>{editingGameId ? "Control the public title, story, cover and publishing state." : "Choose the image, number of pieces, difficulty and access price in one step."}</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); setGameSlugEdited(false); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
             <form className="admin-form" onSubmit={saveGame}>
+              <nav className="admin-stepper" aria-label="Game publishing steps">
+                {[
+                  [1, "Details", "Name and describe it"],
+                  [2, "Artwork", "Add the cover image"],
+                  [3, "Gameplay", "Set pieces and access"],
+                  [4, "Review", "Check and publish"],
+                ].map(([step, label, help]) => <button key={step} type="button" className={gameStep === step ? "active" : gameStep > step ? "complete" : ""} onClick={() => goToGameStep(step)}><span>{gameStep > step ? "✓" : step}</span><strong>{label}</strong><small>{help}</small></button>)}
+              </nav>
+              <section id="game-composer-step-1" className="admin-composer-step" hidden={gameStep !== 1}>
+                <div className="admin-composer-heading"><span>Step 1 of 4</span><h3>Game details</h3><p>Give players a clear title and a short reason to play. The web address is created automatically.</p></div>
               <label className="admin-field">Title<input value={gameForm.title} onChange={(e) => setGameForm((current) => ({ ...current, title: e.target.value, slug: gameSlugEdited ? current.slug : toSlug(e.target.value) }))} required minLength={2} maxLength={140} /></label>
-              <label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => { setGameSlugEdited(true); setGameForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. You can change it; punctuation is cleaned for you.</small></label>
               <label className="admin-field">Description<textarea value={gameForm.description} onChange={(e) => setGameForm({ ...gameForm, description: e.target.value })} required rows={3} /></label>
               <label className="admin-field">Category<input value={gameForm.category} onChange={(e) => setGameForm({ ...gameForm, category: e.target.value })} required /></label>
+                <details className="admin-advanced"><summary>Advanced: edit web address</summary><label className="admin-field">URL slug<input value={gameForm.slug} onChange={(e) => { setGameSlugEdited(true); setGameForm((current) => ({ ...current, slug: toSlug(e.target.value) })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required /><small>Created automatically from the title. Punctuation is cleaned for you.</small></label></details>
+                <div className="admin-step-actions"><span>Required: title, description and category</span><button type="button" className="admin-button admin-button-primary" onClick={() => goToGameStep(2)}>Continue to artwork <ArrowLeft size={15} className="admin-flip-icon" /></button></div>
+              </section>
+              <section id="game-composer-step-2" className="admin-composer-step" hidden={gameStep !== 2}>
+                <div className="admin-composer-heading"><span>Step 2 of 4</span><h3>Artwork</h3><p>Use one strong landscape or portrait image. Igiti creates lighter player-ready versions automatically.</p></div>
               <ImageUploadField label="Game cover image" value={gameForm.coverImage} uploading={saving} onUpload={(file) => uploadImage(file, ({ url, thumbnailUrl, playImageUrl }) => setGameForm((current) => ({ ...current, coverImage: url, thumbnailUrl: thumbnailUrl || "", playImageUrl: playImageUrl || "" })))} />
+                <div className="admin-step-actions"><button type="button" className="admin-button admin-button-light" onClick={() => goToGameStep(1)}>Back</button><button type="button" className="admin-button admin-button-primary" onClick={() => goToGameStep(3)} disabled={!gameForm.coverImage}>Continue to gameplay <ArrowLeft size={15} className="admin-flip-icon" /></button></div>
+              </section>
+              <section id="game-composer-step-3" className="admin-composer-step" hidden={gameStep !== 3}>
+                <div className="admin-composer-heading"><span>Step 3 of 4</span><h3>Gameplay and access</h3><p>{editingGameId ? "This game already has its own puzzles. Manage their pieces, facts and access from the library beside this form." : "Choose the challenge, add one learning fact for each piece, then decide who can play."}</p></div>
               {!editingGameId && <><div className="admin-form-section"><strong>Playable puzzle settings</strong><small>Igiti will split this image into the selected number of movable puzzle pieces.</small></div><div className="admin-form-two"><label className="admin-field">Number of pieces<input type="number" min="2" max="1000" value={gameForm.pieceCount} onChange={(e) => setGameForm({ ...gameForm, pieceCount: e.target.value })} required /></label><label className="admin-field">Starting difficulty<select value={gameForm.difficulty} onChange={(e) => setGameForm((current) => ({ ...current, difficulty: e.target.value, allowedDifficulties: current.allowedDifficulties.includes(e.target.value) ? current.allowedDifficulties : [...current.allowedDifficulties, e.target.value] }))}><option value="RELAXED">Relaxed</option><option value="CURIOUS">Curious</option><option value="CHALLENGING">Challenging</option><option value="EXPERT">Expert</option></select></label></div><fieldset className="admin-difficulty-options"><legend>Difficulty levels players may choose</legend>{["RELAXED", "CURIOUS", "CHALLENGING", "EXPERT"].map((level) => <label key={level}><input type="checkbox" checked={gameForm.allowedDifficulties.includes(level)} onChange={(event) => setGameForm((current) => ({ ...current, allowedDifficulties: event.target.checked ? [...current.allowedDifficulties, level] : current.allowedDifficulties.filter((item) => item !== level) }))} disabled={gameForm.allowedDifficulties.length === 1 && gameForm.allowedDifficulties.includes(level)} /> {level.charAt(0) + level.slice(1).toLowerCase()}</label>)}</fieldset><label className="admin-field">Fun facts — {String(gameForm.funFactsText || "").split("\n").map((fact) => fact.trim()).filter(Boolean).length} / {gameForm.pieceCount}<small>Enter exactly one fact per line. Each fact appears when its matching puzzle piece is correctly placed.</small><textarea value={gameForm.funFactsText} onChange={(e) => setGameForm({ ...gameForm, funFactsText: e.target.value })} maxLength={501000} rows={8} required placeholder={'Rwanda is known as the land of a thousand hills.\nLake Victoria is Africa’s largest lake.'} /></label><AccessPricingFields form={gameForm} setForm={setGameForm} /></>}
+              {editingGameId && <div className="admin-review-note"><strong>Already playable.</strong> Select this game from the library and choose <em>Manage puzzles</em> to change its puzzle, facts, pricing or availability.</div>}
+                <div className="admin-step-actions"><button type="button" className="admin-button admin-button-light" onClick={() => goToGameStep(2)}>Back</button><button type="button" className="admin-button admin-button-primary" onClick={() => goToGameStep(4)}>Review game <ArrowLeft size={15} className="admin-flip-icon" /></button></div>
+              </section>
+              <section id="game-composer-step-4" className="admin-composer-step" hidden={gameStep !== 4}>
+                <div className="admin-composer-heading"><span>Step 4 of 4</span><h3>Review before publishing</h3><p>Confirm what players will see. You can go back to edit any section before saving.</p></div>
+                <div className="admin-game-review"><img src={gameForm.thumbnailUrl || gameForm.coverImage} alt="" /><div><strong>{gameForm.title || "Untitled game"}</strong><span>{gameForm.category || "No category"}</span><p>{gameForm.description || "Add a description so players know what they will learn."}</p><small>{editingGameId ? "Existing game" : `${gameForm.pieceCount || 0} pieces · ${gameForm.difficulty?.toLowerCase() || "difficulty not set"} · ${String(gameForm.funFactsText || "").split("\n").filter((fact) => fact.trim()).length} facts`}</small></div></div>
               <label className="admin-field">Publishing state<select value={gameForm.status} onChange={(e) => setGameForm({ ...gameForm, status: e.target.value })}><option value="DRAFT">Draft — hidden from players</option><option value="PUBLISHED">Published — visible to players</option><option value="ARCHIVED">Archived — hidden from players</option></select></label>
-              <button className="admin-button admin-button-primary admin-button-wide" type="submit" disabled={saving || !gameForm.coverImage}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : gameForm.status === "PUBLISHED" ? "Create & publish game" : "Create game draft"}</button>
+                <div className="admin-step-actions"><button type="button" className="admin-button admin-button-light" onClick={() => goToGameStep(3)}>Back</button><button className="admin-button admin-button-primary" type="submit" disabled={saving || !gameForm.coverImage}><Save size={16} /> {saving ? "Saving…" : editingGameId ? "Save game changes" : gameForm.status === "PUBLISHED" ? "Create & publish game" : "Create game draft"}</button></div>
+              </section>
             </form>
           </section>
           <section className="admin-panel">
