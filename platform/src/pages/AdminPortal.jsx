@@ -591,7 +591,7 @@ export default function AdminPortal() {
 
         {tab === "games" && <div className="admin-content admin-game-layout">
           <section className="admin-panel">
-            <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Upload a playable game"}</h2><p>{editingGameId ? "Control the public title, story, cover and publishing state." : "Choose the image, number of pieces, difficulty and access price in one step."}</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); setGameSlugEdited(false); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
+            <div className="admin-panel-heading"><div><h2>{editingGameId ? "Edit game" : "Upload a playable game"}</h2><p>{editingGameId ? "Control the public title, story, cover and publishing state." : "Complete four focused steps, review the result, then publish when you are ready."}</p></div>{editingGameId && <button className="admin-icon-button" onClick={() => { setEditingGameId(null); setGameForm(blankGame); setGameSlugEdited(false); setGameStep(1); }} aria-label="Cancel edit"><X size={16} /></button>}</div>
             <form className="admin-form" onSubmit={saveGame}>
               <nav className="admin-stepper" aria-label="Game publishing steps">
                 {[
