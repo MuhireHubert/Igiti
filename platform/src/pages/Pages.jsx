@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Gamepad2, Leaf, Puzzle, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Gamepad2, Puzzle, ShieldCheck, Sparkles } from "lucide-react";
 import { getApiBaseUrl, getGameById, getGames } from "../lib/api.js";
 import { deviceHeaders } from "../lib/device.js";
 import PuzzleGame from "../components/PuzzleGame.jsx";
@@ -10,7 +10,7 @@ import CardGame from "../components/CardGame.jsx";
 const a54Game = { id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck with eight ways to play and learn Africa.", pieces: 108, difficulty: "All modes", image: "/images/a54-card-game-thumbnail.png" };
 
 function PageHeader() {
-  return <header className="page-header"><Link to="/" className="brand"><span className="brand-mark"><Leaf size={21} /></span><span className="brand-name">igiti<span>play</span></span></Link><Link className="back-link" to="/"><ArrowLeft size={15} /> Home</Link></header>;
+  return <header className="page-header"><Link to="/" className="brand" aria-label="Igiti Play home"><span className="brand-lockup"><img src="/igiti-logo-primary.svg" alt="Igiti" /><span>Play</span></span></Link><Link className="back-link" to="/"><ArrowLeft size={15} /> Home</Link></header>;
 }
 
 function PageFooter() {

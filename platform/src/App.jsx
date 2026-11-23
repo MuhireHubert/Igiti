@@ -38,9 +38,8 @@ function DeferredGame({ children }) {
 
 function Brand() {
   return (
-    <Link className="brand" to="/games" aria-label="Browse Igiti Play games">
-      <span className="brand-mark"><Leaf size={21} strokeWidth={2.4} /></span>
-      <span className="brand-name">igiti<span>play</span></span>
+    <Link className="brand" to="/games" aria-label="Igiti Play home">
+      <span className="brand-lockup"><img src="/igiti-logo-primary.svg" alt="Igiti" /><span>Play</span></span>
     </Link>
   );
 }
