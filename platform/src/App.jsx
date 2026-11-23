@@ -46,13 +46,13 @@ function Brand() {
 
 function InstallIgitiPlay() {
   const [installPrompt, setInstallPrompt] = useState(null);
-  const [showIosHelp, setShowIosHelp] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [installed, setInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
   const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
   useEffect(() => {
     const onBeforeInstall = (event) => { event.preventDefault(); setInstallPrompt(event); };
-    const onInstalled = () => { setInstalled(true); setInstallPrompt(null); setShowIosHelp(false); };
+    const onInstalled = () => { setInstalled(true); setInstallPrompt(null); setShowInstallHelp(false); };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
     return () => { window.removeEventListener("beforeinstallprompt", onBeforeInstall); window.removeEventListener("appinstalled", onInstalled); };
@@ -65,11 +65,11 @@ function InstallIgitiPlay() {
       setInstallPrompt(null);
       return;
     }
-    if (isIos) setShowIosHelp((current) => !current);
+    setShowInstallHelp((current) => !current);
   }
 
   if (installed) return null;
-  return <div className="install-play-wrap"><button className="install-play" type="button" onClick={install} aria-expanded={showIosHelp}><Download size={14} /> Install app</button>{showIosHelp && <div className="install-play-help" role="status"><Share size={15} /><span>In Safari, tap <strong>Share</strong>, then choose <strong>Add to Home Screen</strong>.</span></div>}</div>;
+  return <div className="install-play-wrap"><button className="install-play" type="button" onClick={install} aria-expanded={showInstallHelp}><Download size={14} /> Install app</button>{showInstallHelp && <div className="install-play-help" role="status">{isIos ? <><Share size={15} /><span>In Safari, tap <strong>Share</strong>, then choose <strong>Add to Home Screen</strong>.</span></> : <><Download size={15} /><span>In Chrome or Edge, open the browser menu and choose <strong>Install Igiti Play</strong> (or <strong>Apps → Install this site</strong>).</span></>}</div>}</div>;
 }
 
 function Header() {

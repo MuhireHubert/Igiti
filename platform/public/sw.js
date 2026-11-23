@@ -1,4 +1,4 @@
-const CACHE_NAME = "igiti-play-shell-v5";
+const CACHE_NAME = "igiti-play-shell-v6";
 const APP_SHELL = ["/", "/games", "/manifest.webmanifest", "/igiti-logo-inverted.svg"];
 
 self.addEventListener("install", (event) => {
