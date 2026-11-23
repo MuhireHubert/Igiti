@@ -1,5 +1,5 @@
-const CACHE_NAME = "igiti-play-shell-v4";
-const APP_SHELL = ["/", "/games", "/manifest.webmanifest", "/igiti-play.svg", "/igiti-logo-primary.jpg"];
+const CACHE_NAME = "igiti-play-shell-v5";
+const APP_SHELL = ["/", "/games", "/manifest.webmanifest", "/igiti-logo-inverted.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
