@@ -3,7 +3,7 @@ import {
   ArrowDownRight, ArrowRight, BookOpen, Check, ChevronDown, Compass,
   Crown, Flame, Gamepad2, Globe2, Heart, Leaf, Menu, Puzzle, Search,
   ShieldCheck, Sparkles, Trophy, X, ChefHat, Drum, Landmark, Languages,
-  Lightbulb, PawPrint, Route, Store, PartyPopper, UsersRound, Headphones,
+  Lightbulb, PawPrint, Route, Store, PartyPopper, UsersRound, Headphones, Download, Share,
 } from "lucide-react";
 import { getApiBaseUrl, getGames } from "./lib/api.js";
 import { deviceHeaders } from "./lib/device.js";
@@ -45,6 +45,34 @@ function Brand() {
   );
 }
 
+function InstallIgitiPlay() {
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showIosHelp, setShowIosHelp] = useState(false);
+  const [installed, setInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+  useEffect(() => {
+    const onBeforeInstall = (event) => { event.preventDefault(); setInstallPrompt(event); };
+    const onInstalled = () => { setInstalled(true); setInstallPrompt(null); setShowIosHelp(false); };
+    window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => { window.removeEventListener("beforeinstallprompt", onBeforeInstall); window.removeEventListener("appinstalled", onInstalled); };
+  }, []);
+
+  async function install() {
+    if (installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      setInstallPrompt(null);
+      return;
+    }
+    if (isIos) setShowIosHelp((current) => !current);
+  }
+
+  if (installed) return null;
+  return <div className="install-play-wrap"><button className="install-play" type="button" onClick={install} aria-expanded={showIosHelp}><Download size={14} /> Install app</button>{showIosHelp && <div className="install-play-help" role="status"><Share size={15} /><span>In Safari, tap <strong>Share</strong>, then choose <strong>Add to Home Screen</strong>.</span></div>}</div>;
+}
+
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -58,6 +86,7 @@ function Header() {
         </nav>
         <div className="top-actions">
           <span className="member-note"><ShieldCheck size={15} /> Save your progress</span>
+          <InstallIgitiPlay />
           <PlayerAccount />
           <button className="icon-button mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen(!menuOpen)}>
             {menuOpen ? <X size={21} /> : <Menu size={21} />}

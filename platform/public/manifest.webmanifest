@@ -1,0 +1,15 @@
+{
+  "name": "Igiti Play",
+  "short_name": "Igiti Play",
+  "description": "African stories worth playing.",
+  "id": "/",
+  "start_url": "/games",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101225",
+  "theme_color": "#101225",
+  "orientation": "any",
+  "icons": [
+    { "src": "/igiti-play-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

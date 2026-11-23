@@ -12,6 +12,10 @@ const sendAnalytics = () => void fetch(`${analyticsEndpoint}/v1/analytics/events
 if ("requestIdleCallback" in window) window.requestIdleCallback(sendAnalytics, { timeout: 3000 });
 else window.setTimeout(sendAnalytics, 1500);
 
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => undefined));
+}
+
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <Router />
