@@ -208,6 +208,8 @@ function App() {
     const query = search.trim().toLowerCase();
     return categoryMatches && difficultyMatches && (!query || `${game.title} ${game.description} ${game.category}`.toLowerCase().includes(query));
   })), [libraryGames, category, difficulty, search]);
+  const freeGames = useMemo(() => visibleGames.filter(isFreeGame), [visibleGames]);
+  const premiumGames = useMemo(() => visibleGames.filter((game) => !isFreeGame(game)), [visibleGames]);
 
   return (
     <div id="home" className="app-shell">
@@ -218,19 +220,19 @@ function App() {
           <div className="hero-pattern" aria-hidden="true" />
           <div className="hero-copy">
             <span className="eyebrow"><span className="eyebrow-dot" /> IGITI PLAY · PRESS START</span>
-            <h1>Africa is your<br />next <em>level.</em></h1>
-            <p className="hero-lede">Pick a puzzle, race the clock, and unlock a new way to see Africa—one smart move at a time.</p>
+            <h1>Explore Africa<br />through <em>play.</em></h1>
+            <p className="hero-lede">Fun games for curious children and families—meet amazing animals, discover places, and bring every story to life.</p>
             <div className="hero-actions">
-              <Link className="button button-primary" to="/games">Start playing <ArrowRight size={17} /></Link>
-              <Link className="button button-outline" to="/how-to-play"><span className="play-mini">▶</span> Learn the rules</Link>
+              <Link className="button button-primary" to="/games">Play free games <ArrowRight size={17} /></Link>
+              <Link className="button button-outline" to="/how-to-play"><span className="play-mini">▶</span> How it works</Link>
             </div>
             <div className="hero-proof"><div className="proof-avatars"><span>⚡</span><span>🧩</span><span>🏆</span></div><span>Puzzles, scores, saves, and more quests ahead</span></div>
           </div>
           <div className="hero-visual">
             <div className="hero-image-frame"><img src="https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=1400&q=90" alt="The landscapes and rich natural beauty of Africa" /></div>
-            <div className="floating-note note-top"><span className="note-icon"><Globe2 size={18} /></span><span><b>Quest mode</b><small>Explore every region</small></span></div>
-            <div className="floating-note note-bottom"><span className="note-icon note-green"><Trophy size={18} /></span><span><b>Level up</b><small>Track every win</small></span></div>
-            <div className="hero-stamp"><span>READY</span><strong>▶</strong><span>PLAYER ONE</span></div>
+            <div className="floating-note note-top"><span className="note-icon">🐘</span><span><b>Animal quests</b><small>Meet Africa's wildlife</small></span></div>
+            <div className="floating-note note-bottom"><span className="note-icon note-green">🧩</span><span><b>Picture puzzles</b><small>Learn with every piece</small></span></div>
+            <div className="hero-stamp"><span>READY</span><strong>▶</strong><span>LET'S PLAY</span></div>
           </div>
           <Link className="scroll-cue" to="/games">BROWSE THE COLLECTION <ChevronDown size={14} /></Link>
         </section>
@@ -253,15 +255,16 @@ function App() {
 
         <section className="library-section" id="library">
           <div className="section-heading">
-            <div><span className="eyebrow">CHOOSE YOUR ADVENTURE</span><h2>What will you <em>discover?</em></h2><p>Free games come first—then find animals, landmarks, maps, and big stories to explore.</p></div>
-            <div className="collection-count"><strong>{visibleGames.length.toString().padStart(2, "0")}</strong><span>PUZZLES READY</span></div>
+            <div><span className="eyebrow">YOUR GAME LIBRARY</span><h2>Choose an African <em>adventure.</em></h2><p>Start free, follow your curiosity, then take on bigger challenges whenever you are ready.</p></div>
+            <div className="collection-count"><strong>{visibleGames.length.toString().padStart(2, "0")}</strong><span>GAMES TO EXPLORE</span></div>
           </div>
 
           <div className="discovery-picks" aria-label="Explore game themes">
-            <span>Start with what you love</span>
+            <span>Browse by topic</span>
             <button type="button" onClick={() => setSearch("animal")}>🐘 Amazing animals</button>
-            <button type="button" onClick={() => setSearch("landmark")}>🏛️ Famous places</button>
-            <button type="button" onClick={() => setSearch("ocean")}>🌊 Oceans & coasts</button>
+            <button type="button" onClick={() => setSearch("landmark")}>🏛️ Landmarks</button>
+            <button type="button" onClick={() => setSearch("map")}>🗺️ Maps & geography</button>
+            <button type="button" onClick={() => setCategory("Nature")}>🌿 Nature</button>
             {search && <button type="button" className="discovery-clear" onClick={() => setSearch("")}>Show every game</button>}
           </div>
 
@@ -280,11 +283,19 @@ function App() {
 
           {loadError && <p className="inline-error" role="status">{loadError} Showing the preview collection where available.</p>}
           {source === "preview" && <p className="preview-note"><span /> Preview collection · Connect the API to load published games</p>}
-          <div className="game-grid">
-              {visibleGames.map((game) => <GameCard key={game.id} game={game} onSelect={(item) => navigate(`/games/${item.id}`)} />)}
+          {freeGames.length > 0 && <section className="game-shelf game-shelf-free" aria-labelledby="free-games-title">
+            <div className="game-shelf-heading"><div><span className="shelf-icon">🎮</span><div><span className="eyebrow">START HERE</span><h3 id="free-games-title">Free to <em>play.</em></h3><p>Try these games right away—no payment needed.</p></div></div><span className="shelf-count">{freeGames.length} FREE GAME{freeGames.length === 1 ? "" : "S"}</span></div>
+            <div className="game-grid">{freeGames.map((game) => <GameCard key={game.id} game={game} onSelect={(item) => navigate(`/games/${item.id}`)} />)}</div>
+          </section>}
+          <section className="game-shelf" aria-labelledby="all-games-title">
+            <div className="game-shelf-heading"><div><span className="shelf-icon">👑</span><div><span className="eyebrow">KEEP EXPLORING</span><h3 id="all-games-title">More games, more <em>stories.</em></h3><p>Unlock puzzles and card challenges for your next adventure.</p></div></div>{premiumGames.length > 0 && <span className="shelf-count">MEMBERS' PICKS</span>}</div>
+            <div className="game-grid">
+              {premiumGames.map((game) => <GameCard key={game.id} game={game} onSelect={(item) => navigate(`/games/${item.id}`)} />)}
               {visibleGames.length === 0 && <div className="empty-state"><Search size={26} /><h3>No stories found</h3><p>Try another search or clear one of your filters.</p><button className="text-action" onClick={() => { setCategory("All stories"); setDifficulty("All levels"); setSearch(""); }}>Clear filters <ArrowRight size={15} /></button></div>}
             </div>
+          </section>
           <div className="library-foot"><span>More stories are on their way.</span><span>Designed in Africa <span className="africa-heart">♥</span> for everyone.</span></div>
+          <section className="family-invite"><div className="family-invite-icon">👨‍👩‍👧‍👦</div><div><span className="eyebrow">FOR PARENTS & EDUCATORS</span><h3>A safe, joyful space to learn together.</h3><p>Use Igiti Play at home or in class to build curiosity, cultural connection, and confidence.</p></div><Link className="button button-outline" to="/how-to-play">See how Igiti works <ArrowRight size={16} /></Link></section>
         </section>
 
         <section className="test-lab" id="games-under-test" aria-labelledby="test-lab-title">
