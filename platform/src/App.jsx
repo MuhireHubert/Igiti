@@ -10,6 +10,8 @@ import { deviceHeaders } from "./lib/device.js";
 import PlayerAccount from "./components/PlayerAccount.jsx";
 import { usePlayerAuth } from "./lib/PlayerAuthContext.jsx";
 import { Link, useNavigate } from "react-router-dom";
+import { isFreeGame, orderGamesForDiscovery } from "./lib/gameDiscovery.js";
+import PlayChoiceDialog from "./components/PlayChoiceDialog.jsx";
 
 const categories = ["All stories", "Geography", "Wildlife", "Nature"];
 const filters = ["All levels", "Relaxed", "Curious", "Challenging"];
@@ -99,12 +101,14 @@ function Header() {
 
 function GameCard({ game, onSelect }) {
   const comingSoon = game.status === "coming-soon";
+  const free = isFreeGame(game);
   return (
     <article className={`game-card ${comingSoon ? "is-coming" : ""}`}>
       <button className="game-art" onClick={() => onSelect(game)} aria-label={`View ${game.title}`} disabled={comingSoon}>
         {game.image ? <img src={game.image} alt="" loading="lazy" /> : <span className="game-art-placeholder" aria-hidden="true">Igiti Play</span>}
         <span className="art-wash" />
         <span className="game-category">{game.category}</span>
+        {free && !comingSoon && <span className="free-label">Free to play</span>}
         {comingSoon ? <span className="coming-label">Coming soon</span> : <span className="play-bubble"><ArrowDownRight size={23} /></span>}
       </button>
       <div className="game-info">
@@ -123,6 +127,8 @@ function GamePreview({ game, onBack }) {
   const { user } = usePlayerAuth();
   const navigate = useNavigate();
   const [playing, setPlaying] = useState(false);
+  const [playChoice, setPlayChoice] = useState(false);
+  const [startTogether, setStartTogether] = useState(false);
   const [accessMessage, setAccessMessage] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(false);
   const [cataloguePolicy, setCataloguePolicy] = useState(null);
@@ -138,7 +144,7 @@ function GamePreview({ game, onBack }) {
   }, []);
   async function startPuzzle() {
     if (!cataloguePolicy) { setAccessMessage("Checking access. Please try again in a moment."); return; }
-    if (!requiresPurchase) { setPlaying(true); return; }
+    if (!requiresPurchase) { setPlayChoice(true); return; }
     if (!user) { setAccessMessage("Sign in, then purchase access before playing this paid game."); return; }
     setCheckingAccess(true);
     setAccessMessage("");
@@ -147,12 +153,12 @@ function GamePreview({ game, onBack }) {
       const response = await fetch(`${getApiBaseUrl()}/v1/me/puzzles/${game.id}/access`, { headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...deviceHeaders() } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "We couldn't check access to this game.");
-      if (payload.data?.permitted) { setPlaying(true); return; }
+      if (payload.data?.permitted) { setPlayChoice(true); return; }
       setAccessMessage(`This game requires purchase. ${payload.data?.offer?.title || "Open your workspace to complete secure Pesapal checkout."}`);
     } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
   }
   if (game.kind === "card") return <DeferredGame><CardGame onBack={onBack} /></DeferredGame>;
-  if (playing) return <DeferredGame><PuzzleGame game={game} onBack={() => setPlaying(false)} /></DeferredGame>;
+  if (playing) return <DeferredGame><PuzzleGame game={game} startTogether={startTogether} onBack={() => setPlaying(false)} /></DeferredGame>;
   return (
     <section className="detail-panel" aria-live="polite">
       <button className="back-link" onClick={onBack}>← Back to the library</button>
@@ -170,6 +176,7 @@ function GamePreview({ game, onBack }) {
           {requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>View plans and secure checkout <ArrowRight size={16} /></button>}
         </div>
       </div>
+      {playChoice && <PlayChoiceDialog gameTitle={game.title} onClose={() => setPlayChoice(false)} onSolo={() => { setStartTogether(false); setPlayChoice(false); setPlaying(true); }} onTogether={() => { setStartTogether(true); setPlayChoice(false); setPlaying(true); }} />}
     </section>
   );
 }
@@ -195,12 +202,12 @@ function App() {
   const libraryGames = useMemo(() => [{
     id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck: two cards for every African country, with eight ways to play.", difficulty: "All modes", pieces: 108, image: "/images/a54-card-game-thumbnail.png", status: "available",
   }, ...games], [games]);
-  const visibleGames = useMemo(() => libraryGames.filter((game) => {
+  const visibleGames = useMemo(() => orderGamesForDiscovery(libraryGames.filter((game) => {
     const categoryMatches = category === "All stories" || game.category === category;
     const difficultyMatches = difficulty === "All levels" || game.difficulty === difficulty;
     const query = search.trim().toLowerCase();
     return categoryMatches && difficultyMatches && (!query || `${game.title} ${game.description} ${game.category}`.toLowerCase().includes(query));
-  }), [libraryGames, category, difficulty, search]);
+  })), [libraryGames, category, difficulty, search]);
 
   return (
     <div id="home" className="app-shell">
@@ -246,8 +253,16 @@ function App() {
 
         <section className="library-section" id="library">
           <div className="section-heading">
-            <div><span className="eyebrow">GAME LIBRARY</span><h2>Pick your next <em>challenge.</em></h2><p>Choose a board, set your pace, and go for the perfect solve.</p></div>
+            <div><span className="eyebrow">CHOOSE YOUR ADVENTURE</span><h2>What will you <em>discover?</em></h2><p>Free games come first—then find animals, landmarks, maps, and big stories to explore.</p></div>
             <div className="collection-count"><strong>{visibleGames.length.toString().padStart(2, "0")}</strong><span>PUZZLES READY</span></div>
+          </div>
+
+          <div className="discovery-picks" aria-label="Explore game themes">
+            <span>Start with what you love</span>
+            <button type="button" onClick={() => setSearch("animal")}>🐘 Amazing animals</button>
+            <button type="button" onClick={() => setSearch("landmark")}>🏛️ Famous places</button>
+            <button type="button" onClick={() => setSearch("ocean")}>🌊 Oceans & coasts</button>
+            {search && <button type="button" className="discovery-clear" onClick={() => setSearch("")}>Show every game</button>}
           </div>
 
           <div className="library-tools">

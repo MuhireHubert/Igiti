@@ -6,6 +6,8 @@ import { deviceHeaders } from "../lib/device.js";
 import PuzzleGame from "../components/PuzzleGame.jsx";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import CardGame from "../components/CardGame.jsx";
+import { isFreeGame, orderGamesForDiscovery } from "../lib/gameDiscovery.js";
+import PlayChoiceDialog from "../components/PlayChoiceDialog.jsx";
 
 const a54Game = { id: "a54-card-game", kind: "card", title: "A-54: Africa Card Game", category: "Card game", description: "A 108-card deck with eight ways to play and learn Africa.", pieces: 108, difficulty: "All modes", image: "/images/a54-card-game-thumbnail.png" };
 
@@ -29,9 +31,11 @@ export function GamesPage() {
     getGames({ signal: controller.signal }).then((result) => setGames(result.data)).catch((err) => { if (err.name !== "AbortError") setError(err.message); });
     return () => controller.abort();
   }, []);
-  return <PageLayout eyebrow="THE IGITI COLLECTION" title={<>A world of stories.<br /><em>Piece by piece.</em></>} subtitle="Browse the collection and find your next little adventure.">
+  const collection = orderGamesForDiscovery([a54Game, ...games]);
+  return <PageLayout eyebrow="CHOOSE YOUR ADVENTURE" title={<>What will you<br /><em>discover today?</em></>} subtitle="Start with a free game, spot amazing animals, find famous places, and build your next big story.">
     {error && <p className="inline-error">{error}</p>}
-    <div className="subpage-game-grid">{[a54Game, ...games].map((game) => <Link to={`/games/${game.id}`} className="subpage-game" key={game.id}><img src={game.image} alt="" /><div><span>{game.category} · {game.pieces || "New"} pieces</span><h2>{game.title}</h2><p>{game.description}</p><strong>View game <ArrowRight size={15} /></strong></div></Link>)}</div>
+    <p className="collection-start-note">✨ <strong>Free games first:</strong> choose one and start playing right away.</p>
+    <div className="subpage-game-grid">{collection.map((game) => <Link to={`/games/${game.id}`} className="subpage-game" key={game.id}><img src={game.image} alt="" /><div><span>{isFreeGame(game) ? "FREE TO PLAY · " : ""}{game.category} · {game.pieces || "New"} pieces</span><h2>{game.title}</h2><p>{game.description}</p><strong>{isFreeGame(game) ? "Play for free" : "View game"} <ArrowRight size={15} /></strong></div></Link>)}</div>
     {games.length === 0 && !error && <p className="page-empty">The collection is being prepared. Please check back soon.</p>}
   </PageLayout>;
 }
@@ -43,6 +47,8 @@ export function GamePage() {
   const [game, setGame] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [playChoice, setPlayChoice] = useState(false);
+  const [startTogether, setStartTogether] = useState(false);
   const [cataloguePolicy, setCataloguePolicy] = useState(null);
   const [accessMessage, setAccessMessage] = useState("");
   const [checkingAccess, setCheckingAccess] = useState(false);
@@ -65,7 +71,7 @@ export function GamePage() {
   const requiresPurchase = Boolean(game?.requiresPurchase || (game?.price?.access !== "FREE" && (Number(game?.price?.monthlyAmountMinor ?? game?.price?.amountMinor ?? 0) > 0 || Number(game?.price?.yearlyAmountMinor ?? 0) > 0)));
   async function startPuzzle() {
     if (!cataloguePolicy) { setAccessMessage("Checking access. Please try again in a moment."); return; }
-    if (!requiresPurchase) { setPlaying(true); return; }
+    if (!requiresPurchase) { setPlayChoice(true); return; }
     if (!user) { setAccessMessage("This game is included with a subscription. Sign in, then visit subscription plans to unlock it."); return; }
     setCheckingAccess(true); setAccessMessage("");
     try {
@@ -82,15 +88,31 @@ export function GamePage() {
         response = await accessRequest();
         payload = await response.json().catch(() => ({}));
       }
-      if (payload.data?.permitted) { setPlaying(true); return; }
+      if (payload.data?.permitted) { setPlayChoice(true); return; }
       setAccessMessage(`Payment has not been verified for this account yet. ${payload.data?.offer?.title || "Open your subscription plans to choose access."}`);
     } catch (error) { setAccessMessage(error.message); } finally { setCheckingAccess(false); }
   }
   if (game?.kind === "card") return <><PageHeader /><CardGame onBack={() => navigate("/games")} /><PageFooter /></>;
   return <PageLayout eyebrow="YOUR NEXT ADVENTURE" title={game ? game.title : "A story in the making"} subtitle={game ? game.description : "Explore the growing world of Igiti Play."}>
-    {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : game && (playing
-      ? <PuzzleGame game={game} onBack={() => setPlaying(false)} />
-      : <div className="subpage-detail"><img src={game.image} alt="" /><div className="subpage-detail-copy"><span className="eyebrow">{game.category} · IGITI ORIGINAL</span><h2>Make room for curiosity.</h2><p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p><div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div><div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div>{accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}{requiresPurchase && <p className="game-price">Included with an active subscription</p>}<button className="button button-primary" onClick={startPuzzle} disabled={!cataloguePolicy || checkingAccess}>{!cataloguePolicy || checkingAccess ? "Checking access…" : requiresPurchase ? "View subscription plans" : "Play for free"} <ArrowRight size={16} /></button>{requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>Visit subscription plans <ArrowRight size={16} /></button>}</div></div>)}
+    {loaded && !game ? <p className="page-empty">We couldn't find that game. <Link to="/games">Return to the collection.</Link></p> : null}
+    {game && playing ? <PuzzleGame game={game} startTogether={startTogether} onBack={() => setPlaying(false)} /> : null}
+    {game && !playing && <>
+      <div className="subpage-detail">
+        <img src={game.image} alt="" />
+        <div className="subpage-detail-copy">
+          <span className="eyebrow">{game.category} · IGITI ORIGINAL</span>
+          <h2>Make room for curiosity.</h2>
+          <p>Every puzzle is an invitation to notice more, learn something new, and connect with the stories behind the picture.</p>
+          <div className="detail-stats"><span><Puzzle size={16} /> {game.pieces || "Multiple"} pieces</span><span><Compass size={16} /> {game.difficulty}</span><span><BookOpen size={16} /> Learn as you play</span></div>
+          <div className="notice"><Sparkles size={17} /><span>Arrange the picture pieces, track your time and moves, and use the picture guide. Progress saves automatically in this browser; account-based cloud saves are the next integration step.</span></div>
+          {accessMessage && <p className="inline-error" role="alert">{accessMessage}</p>}
+          {requiresPurchase && <p className="game-price">Included with an active subscription</p>}
+          <button className="button button-primary" onClick={startPuzzle} disabled={!cataloguePolicy || checkingAccess}>{!cataloguePolicy || checkingAccess ? "Checking access…" : requiresPurchase ? "View subscription plans" : "Play for free"} <ArrowRight size={16} /></button>
+          {requiresPurchase && <button className="text-action game-checkout-link" onClick={() => navigate("/workspace")}>Visit subscription plans <ArrowRight size={16} /></button>}
+        </div>
+      </div>
+      {playChoice && <PlayChoiceDialog gameTitle={game.title} onClose={() => setPlayChoice(false)} onSolo={() => { setStartTogether(false); setPlayChoice(false); setPlaying(true); }} onTogether={() => { setStartTogether(true); setPlayChoice(false); setPlaying(true); }} />}
+    </>}
   </PageLayout>;
 }
 

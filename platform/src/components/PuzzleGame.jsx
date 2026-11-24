@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Eye, Layers3, Lightbulb, Map, RotateCcw, Shuffle, Timer, Volume2, VolumeX, Zap } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Eye, Layers3, Lightbulb, Map, RotateCcw, Shuffle, Timer, UsersRound, Volume2, VolumeX, Zap } from "lucide-react";
 import { getApiBaseUrl } from "../lib/api.js";
 import { usePlayerAuth } from "../lib/PlayerAuthContext.jsx";
 import { deviceHeaders } from "../lib/device.js";
@@ -52,7 +52,7 @@ const islandCountries = new Set(["Cabo Verde", "Comoros", "Madagascar", "Mauriti
 const discoveryRegions = ["All", "North", "West", "Central", "East", "South", "Island Countries"];
 function igitiRegion(country) { return islandCountries.has(country.country) ? "Island Countries" : country.region === "Southern" ? "South" : country.region; }
 
-export default function PuzzleGame({ game, onBack }) {
+export default function PuzzleGame({ game, onBack, startTogether = false }) {
   const { user } = usePlayerAuth();
   const apiBase = getApiBaseUrl();
   const cloudEligible = Boolean(user && apiBase && game.gameId && game.puzzleSlug);
@@ -88,6 +88,7 @@ export default function PuzzleGame({ game, onBack }) {
   const [customMinutes, setCustomMinutes] = useState(15);
   const [mapLayer, setMapLayer] = useState("regions");
   const [mapRegion, setMapRegion] = useState("All");
+  const [showTeamPlay, setShowTeamPlay] = useState(startTogether);
   const [showFunFact, setShowFunFact] = useState(false);
   // A swap can correctly place both tiles. Keep every unlocked fact in order
   // so "Keep playing" reveals the second one instead of losing it.
@@ -357,7 +358,11 @@ export default function PuzzleGame({ game, onBack }) {
       </div>
       {showReference && <><figure className="puzzle-large-reference"><img src={game.image} alt={`Large reference image for ${game.title}`} /><figcaption><strong>Full picture guide</strong><span>Use this larger view to study the detail before placing your next piece.</span></figcaption></figure><p className="puzzle-reference-note">Picture guides stay beside and below the board while you build. Hide them for a harder challenge—the board will expand to use the full space.</p></>}
       <section className="puzzle-map-explorer" aria-label="Interactive Africa map layers"><div><span className="eyebrow"><Map size={14} /> DISCOVERY LAYERS</span><h3>Explore the places behind the picture</h3><p>Switch between Igiti regions and capital cities, then narrow the board to the area you want to discover.</p></div><div className="puzzle-map-controls"><div>{[["regions", "Regions"], ["capitals", "Capitals"]].map(([layer, label]) => <button key={layer} className={mapLayer === layer ? "active" : ""} onClick={() => setMapLayer(layer)}><Layers3 size={13} /> {label}</button>)}</div><div>{discoveryRegions.map((region) => <button key={region} className={mapRegion === region ? "active" : ""} onClick={() => setMapRegion(region)}>{region}</button>)}</div></div><div className="puzzle-map-countries">{countries.filter((country) => mapRegion === "All" || igitiRegion(country) === mapRegion).map((country) => <article key={country.country}><strong>{mapLayer === "capitals" ? country.capital : country.country}</strong><span>{mapLayer === "capitals" ? country.country : igitiRegion(country)}</span></article>)}</div></section>
-      <MultiplayerRoom mode={{ id: "puzzle", title: "Puzzle challenge" }} locked={false} />
+      <section className="puzzle-team-entry" aria-label="Team play">
+        <div><span className="eyebrow"><UsersRound size={14} /> TEAM PLAY</span><h3>Want to play together?</h3><p>Host or join a private challenge with a six-character room code—great for friends and classrooms.</p></div>
+        <button className="button button-outline" onClick={() => setShowTeamPlay((showing) => !showing)}>{showTeamPlay ? "Hide team room" : "Play together"}</button>
+      </section>
+      {showTeamPlay && <MultiplayerRoom mode={{ id: "puzzle", title: "Puzzle challenge" }} locked={false} />}
       {timeExpired && <div className="puzzle-time-expired" role="status"><Timer size={23} /><div><strong>Time attack complete.</strong><p>You placed {solvedCount} of {pieceCount} pieces. Try again to beat the clock.</p></div><button onClick={() => resetPuzzle(timeLimit)}>Try again</button></div>}
       {complete && <div className="puzzle-complete" role="status"><CheckCircle2 size={25} /><div><strong>Beautifully done!</strong><p>You completed the picture in {formatTime(seconds)} with {moves} moves.</p></div><button onClick={resetPuzzle}>Play again</button></div>}
       {(activeFunFact || showFunFact) && <div className="puzzle-fact-overlay" role="presentation"><section className="puzzle-fact-popup" role="dialog" aria-modal="true" aria-labelledby="puzzle-fact-title"><Lightbulb size={24} /><span className="eyebrow">{activeFunFact ? (funFactQueue.length > 1 ? `CORRECT PIECE · ${funFactQueue.length} FACTS READY` : "CORRECT PIECE · FACT UNLOCKED") : "PUZZLE COMPLETE · FACT UNLOCKED"}</span><h3 id="puzzle-fact-title">Did you know?</h3><p>{activeFunFact || game.funFact}</p><button className="button button-primary" onClick={() => { if (activeFunFact) setFunFactQueue((queue) => queue.slice(1)); setShowFunFact(false); }}>Keep playing</button></section></div>}
